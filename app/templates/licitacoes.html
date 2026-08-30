@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block titulo %}Licitações — Radar{% endblock %}
 {% block conteudo %}
-<h2 class="font-bold text-lg mb-3">Licitações ({{ total }})</h2>
+<h2 class="font-bold text-lg mb-1">Meu radar ({{ total }})</h2>
+<p class="text-xs text-slate-500 mb-3">Aqui ficam as licitações que os seus
+  <a href="/perfis" class="text-blue-700 underline">perfis</a> coletaram
+  (hoje: os estados configurados neles). Para buscar em <b>qualquer estado,
+  cidade ou órgão do Brasil</b>, use a tela
+  <a href="/pesquisar" class="text-blue-700 underline">🌐 Pesquisar PNCP</a>.</p>
 
 <form method="get" action="/licitacoes"
       class="bg-white rounded-xl border border-slate-200 p-3 mb-4
@@ -136,8 +141,18 @@
     </tr>
     <tr><td colspan="7" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
     {% else %}
-    <tr><td colspan="7" class="px-3 py-6 text-center text-slate-500">
-      Nada encontrado com esses filtros.</td></tr>
+    <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">
+      <p class="mb-3">Nada no seu radar com esses filtros
+        {% if filtros.uf %}— seus perfis não monitoram {{ filtros.uf }}{% endif %}.</p>
+      <a href="/pesquisar?{% if filtros.q %}q={{ filtros.q }}&{% endif %}{% if filtros.uf %}ufs={{ filtros.uf }}&{% endif %}status=abertas"
+         class="inline-block bg-blue-600 text-white px-5 py-2.5 rounded-lg
+                font-semibold hover:bg-blue-700">
+        🌐 Buscar {{ 'em ' ~ filtros.uf if filtros.uf else 'no Brasil inteiro' }}
+        ao vivo no PNCP →</a>
+      <p class="mt-3 text-xs">Dica: para o radar passar a vigiar
+        {{ filtros.uf or 'outro estado' }} todo dia, adicione-o num
+        <a href="/perfis" class="text-blue-700 underline">perfil</a>.</p>
+    </td></tr>
     {% endfor %}
   </tbody>
 </table>
