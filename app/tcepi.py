@@ -107,6 +107,8 @@ def _mapear(linha_html):
             (f"https://sistemas.tce.pi.gov.br/muralic/detalhelicitacao.xhtml"
              f"?id={m_id.group(1)}" if m_id else None),
         "link_pncp": None,
+        "situacao": c[14] or None,
+        "objeto_norm": normalizar(c[9]),
         "payload_json": json.dumps({"colunas": c}, ensure_ascii=False),
     }
 

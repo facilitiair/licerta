@@ -12,6 +12,7 @@
     <p><b>Encerramento:</b>
        {{ (lic.data_encerramento_proposta or '—')[:16].replace('T',' ') }}</p>
     <p><b>SRP:</b> {{ 'sim' if lic.srp else 'não' }}</p>
+    <p><b>Situação no portal:</b> {{ lic.situacao or '—' }}</p>
     <p><b>Coletado em:</b> {{ lic.coletado_em.strftime('%d/%m/%Y %H:%M') }}</p>
     <p><b>Valor estimado:</b>
        {{ 'R$ {:,.2f}'.format(lic.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.')
@@ -35,7 +36,9 @@
                flex gap-3 flex-wrap items-end">
     <span class="text-xs text-slate-500 w-full">
       Perfil: <b>{{ m.perfil.nome }}</b> · match em
-      {{ m.data_match.strftime('%d/%m/%Y') }}</span>
+      {{ m.data_match.strftime('%d/%m/%Y') }}
+      {% if m.termos %} · casou pelas palavras:
+        <b class="text-purple-700">{{ m.termos }}</b>{% endif %}</span>
     <label>Status<br>
       <select name="status" class="border border-slate-300 rounded-lg px-2 py-1">
         {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}

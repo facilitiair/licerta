@@ -24,7 +24,7 @@ from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
                  Municipio, PerfilBusca, PerfilMatch, Sessao, criar_tabelas)
 from .documentos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
-from .matcher import licitacao_casa_perfil
+from .matcher import licitacao_casa_perfil, normalizar
 from .seed import semear
 
 logging.basicConfig(level=logging.INFO,
@@ -460,6 +460,14 @@ def _consulta_licitacoes(s, filtros):
                     .filter(PerfilMatch.status == filtros["status"]).distinct())
     if filtros.get("uf"):
         consulta = consulta.filter(Licitacao.uf == filtros["uf"])
+    if filtros.get("municipio"):
+        consulta = consulta.filter(
+            Licitacao.municipio_nome.ilike(f"%{filtros['municipio']}%"))
+    if filtros.get("modalidade"):
+        consulta = consulta.filter(
+            Licitacao.modalidade_codigo == int(filtros["modalidade"]))
+    if filtros.get("situacao"):
+        consulta = consulta.filter(Licitacao.situacao == filtros["situacao"])
     if filtros.get("data_ini"):
         consulta = consulta.filter(
             Licitacao.data_encerramento_proposta >= filtros["data_ini"])
@@ -467,14 +475,18 @@ def _consulta_licitacoes(s, filtros):
         consulta = consulta.filter(
             Licitacao.data_encerramento_proposta <= filtros["data_fim"] + "T23:59")
     if filtros.get("q"):
-        consulta = consulta.filter(Licitacao.objeto.ilike(f"%{filtros['q']}%"))
+        # busca sem acentos, palavra a palavra: TODAS precisam aparecer
+        for palavra in normalizar(filtros["q"]).split():
+            consulta = consulta.filter(
+                Licitacao.objeto_norm.like(f"%{palavra}%"))
     coluna, desc = ORDENACOES_LISTA.get(filtros.get("ordenar") or "",
                                         ORDENACOES_LISTA["encerramento_asc"])
     return consulta.order_by(coluna.desc() if desc else coluna.asc())
 
 
 def _filtros_da_request(request):
-    campos = ("perfil_id", "status", "uf", "data_ini", "data_fim", "q", "ordenar")
+    campos = ("perfil_id", "status", "uf", "municipio", "modalidade",
+              "situacao", "data_ini", "data_fim", "q", "ordenar")
     return {c: request.query_params.get(c, "").strip() for c in campos}
 
 
@@ -493,12 +505,17 @@ async def licitacoes_lista(request: Request, pagina: int = 1):
                     perfil_id=int(filtros["perfil_id"])):
                 matches[m.licitacao_id] = m
         perfis = s.query(PerfilBusca).order_by(PerfilBusca.nome).all()
-        ufs = [u[0] for u in s.query(Licitacao.uf).distinct().order_by(Licitacao.uf)
-               if u[0]]
+        ufs = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA",
+               "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN",
+               "RO", "RR", "RS", "SC", "SE", "SP", "TO"]
+        modalidades = s.query(Modalidade).order_by(Modalidade.codigo).all()
+        situacoes = [x[0] for x in s.query(Licitacao.situacao).distinct()
+                     .order_by(Licitacao.situacao) if x[0]]
         return templates.TemplateResponse(request, "licitacoes.html", {
             "linhas": linhas, "total": total, "pagina": pagina,
             "paginas": max(1, -(-total // POR_PAGINA)), "filtros": filtros,
             "perfis": perfis, "ufs": ufs, "matches": matches,
+            "modalidades": modalidades, "situacoes": situacoes,
             # querystring só com os filtros (sem 'pagina'), para paginação/export
             "query": urlencode({k: v for k, v in filtros.items() if v}),
         })

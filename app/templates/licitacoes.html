@@ -15,20 +15,42 @@
       {% endfor %}
     </select>
   </label>
-  <label>Status<br>
+  <label>Minha triagem<br>
     <select name="status" class="border border-slate-300 rounded-lg px-2 py-1.5">
-      <option value="">— todos —</option>
+      <option value="">— todas —</option>
       {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
       <option value="{{ st }}" {{ 'selected' if filtros.status == st }}>
         {{ st.replace('_', ' ') }}</option>
       {% endfor %}
     </select>
   </label>
-  <label>UF<br>
-    <select name="uf" class="border border-slate-300 rounded-lg px-2 py-1.5">
+  <label>Situação no portal<br>
+    <select name="situacao" class="border border-slate-300 rounded-lg px-2 py-1.5">
       <option value="">— todas —</option>
+      {% for sit in situacoes %}
+      <option {{ 'selected' if filtros.situacao == sit }}>{{ sit }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Estado<br>
+    <select name="uf" class="border border-slate-300 rounded-lg px-2 py-1.5">
+      <option value="">— todos —</option>
       {% for uf in ufs %}
       <option {{ 'selected' if filtros.uf == uf }}>{{ uf }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Cidade<br>
+    <input type="text" name="municipio" value="{{ filtros.municipio }}"
+           placeholder="ex.: Teresina" size="12"
+           class="border border-slate-300 rounded-lg px-2 py-1.5">
+  </label>
+  <label>Modalidade<br>
+    <select name="modalidade" class="border border-slate-300 rounded-lg px-2 py-1.5">
+      <option value="">— todas —</option>
+      {% for m in modalidades %}
+      <option value="{{ m.codigo }}"
+        {{ 'selected' if filtros.modalidade == m.codigo|string }}>{{ m.nome }}</option>
       {% endfor %}
     </select>
   </label>
@@ -40,8 +62,10 @@
     <input type="date" name="data_fim" value="{{ filtros.data_fim }}"
            class="border border-slate-300 rounded-lg px-2 py-1.5">
   </label>
-  <label class="flex-1 min-w-40">Busca no objeto<br>
-    <input type="search" name="q" value="{{ filtros.q }}" placeholder="ex.: pavimentação"
+  <label class="flex-1 min-w-40">Busca no objeto
+    <span class="text-slate-400">(todas as palavras; acentos não importam)</span><br>
+    <input type="search" name="q" value="{{ filtros.q }}"
+           placeholder="ex.: pavimentacao asfaltica"
            class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
   </label>
   <input type="hidden" name="ordenar" value="{{ filtros.ordenar }}">
@@ -83,7 +107,11 @@
       <td class="px-3 py-2 whitespace-nowrap">
         {{ (l.data_encerramento_proposta or '—')[:16].replace('T', ' ') }}</td>
       <td class="px-3 py-2">{{ l.modalidade_nome }}
-        {% if l.srp %}<span class="text-xs text-blue-700">SRP</span>{% endif %}</td>
+        {% if l.srp %}<span class="text-xs text-blue-700">SRP</span>{% endif %}
+        {% if l.situacao %}<br><span class="text-[10px] px-1.5 rounded-full
+          {{ 'bg-red-100 text-red-700' if 'anulad' in l.situacao.lower()
+             or 'revogad' in l.situacao.lower() or 'suspens' in l.situacao.lower()
+             else 'bg-slate-100 text-slate-600' }}">{{ l.situacao }}</span>{% endif %}</td>
       <td class="px-3 py-2">{{ l.uf }}</td>
       <td class="px-3 py-2">{{ l.municipio_nome }}<br>
         <span class="text-xs text-slate-500">{{ (l.orgao_nome or '')[:50] }}</span></td>

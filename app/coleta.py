@@ -71,7 +71,13 @@ def _rodar_matcher(sessao_db, perfis):
             if (perfil.id, lic.id) in existentes:
                 continue
             if licitacao_casa_perfil(lic, perfil):
-                sessao_db.add(PerfilMatch(perfil_id=perfil.id, licitacao_id=lic.id))
+                # registra POR QUAIS palavras casou, para exibir na interface
+                _, termos = texto_casa(lic.objeto or "",
+                                       perfil.palavras_incluir,
+                                       perfil.palavras_excluir)
+                sessao_db.add(PerfilMatch(perfil_id=perfil.id,
+                                          licitacao_id=lic.id,
+                                          termos=", ".join(termos)))
                 novos_ids.append(lic.id)
     return novos_ids
 

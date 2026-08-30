@@ -11,6 +11,8 @@ from datetime import date, timedelta
 
 import requests
 
+from .matcher import normalizar
+
 log = logging.getLogger("radar.pncp")
 
 BASE = "https://pncp.gov.br/api/consulta"
@@ -85,6 +87,8 @@ def mapear_registro(r):
         "data_encerramento_proposta": r.get("dataEncerramentoProposta"),
         "link_sistema_origem": r.get("linkSistemaOrigem"),
         "link_pncp": montar_link_pncp(r.get("numeroControlePNCP")),
+        "situacao": r.get("situacaoCompraNome"),
+        "objeto_norm": normalizar(r.get("objetoCompra") or ""),
         "payload_json": json.dumps(r, ensure_ascii=False),
     }
 

@@ -56,6 +56,8 @@ class Licitacao(Base):
     data_encerramento_proposta = Column(String, index=True)
     link_sistema_origem = Column(String)
     link_pncp = Column(String)
+    situacao = Column(String)                  # Divulgada, Retificada, Suspensa...
+    objeto_norm = Column(Text)                 # objeto sem acentos p/ busca livre
     payload_json = Column(Text)                # resposta bruta completa
     fonte = Column(String, default="pncp")     # 'pncp' | 'tcepi'
     coletado_em = Column(DateTime, default=datetime.now)
@@ -73,6 +75,7 @@ class PerfilMatch(Base):
     lido = Column(Boolean, default=False, nullable=False)
     favorito = Column(Boolean, default=False, nullable=False)
     status = Column(String, default="novo", nullable=False)
+    termos = Column(String, default="")        # quais palavras do perfil casaram
     anotacao = Column(Text, default="")
     perfil = relationship("PerfilBusca", back_populates="matches")
     licitacao = relationship("Licitacao", back_populates="matches")
@@ -148,10 +151,17 @@ def criar_tabelas():
 
 def _migrar():
     """Migrações leves para bancos criados em fases anteriores."""
+    pendencias = {
+        "licitacoes": [("fonte", "TEXT DEFAULT 'pncp'"), ("situacao", "TEXT"),
+                       ("objeto_norm", "TEXT")],
+        "perfil_matches": [("termos", "TEXT DEFAULT ''")],
+    }
     with engine.connect() as con:
-        colunas = [linha[1] for linha in
-                   con.exec_driver_sql("PRAGMA table_info(licitacoes)")]
-        if "fonte" not in colunas:
-            con.exec_driver_sql(
-                "ALTER TABLE licitacoes ADD COLUMN fonte TEXT DEFAULT 'pncp'")
-            con.commit()
+        for tabela, novas in pendencias.items():
+            colunas = [linha[1] for linha in
+                       con.exec_driver_sql(f"PRAGMA table_info({tabela})")]
+            for nome, tipo in novas:
+                if nome not in colunas:
+                    con.exec_driver_sql(
+                        f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+        con.commit()

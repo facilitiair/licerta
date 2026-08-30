@@ -30,7 +30,7 @@ def semear():
         # Perfil de exemplo (SPEC §9, Fase 1)
         if sessao.query(PerfilBusca).count() == 0:
             sessao.add(PerfilBusca(
-                nome="AC — Piauí",
+                nome="Ar-condicionado — Piauí",
                 ufs=["PI"],
                 modalidades=[6, 8],
                 palavras_incluir=["ar condicionado", "climatização",
