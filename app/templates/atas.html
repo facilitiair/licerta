@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titulo %}Atas — Radar{% endblock %}
+{% block conteudo %}
+<h2 class="font-bold text-lg mb-1">Atas de registro de preços ({{ total }})</h2>
+<p class="text-xs text-slate-500 mb-3">Atas vigentes cujo objeto casa com as
+  palavras-chave dos seus perfis — candidatas a adesão ("carona").
+  A varredura é diária, sobre as atas publicadas/alteradas no PNCP.</p>
+
+<form method="get" action="/atas" class="bg-white rounded-xl border
+      border-slate-200 p-3 mb-4 flex gap-3 flex-wrap items-center text-sm">
+  <input type="search" name="q" value="{{ q }}" placeholder="buscar no objeto..."
+         class="flex-1 min-w-40 border border-slate-300 rounded-lg px-3 py-2">
+  <label class="flex items-center gap-2">
+    <input type="checkbox" name="adesao" value="1" {{ 'checked' if adesao }}>
+    só com possibilidade de adesão
+  </label>
+  <button class="bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold">
+    Filtrar</button>
+</form>
+
+<div class="space-y-2">
+  {% for a in linhas %}
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <p class="text-xs text-slate-500">
+      Ata {{ a.numero_ata }}/{{ a.ano_ata }} · {{ a.orgao_nome }}
+      {% if a.possibilidade_adesao %}
+        <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded-full
+                     font-semibold">permite adesão</span>{% endif %}
+      · perfis: {{ a.perfis_casados|join(', ') }}
+    </p>
+    <p class="text-sm my-1">{{ (a.objeto or '')[:350] }}</p>
+    <p class="text-xs">
+      Vigência: {{ a.vigencia_inicio }} até
+      <b>{{ a.vigencia_fim }}</b>
+      {% if a.link_pncp %}
+        · <a href="{{ a.link_pncp }}" target="_blank"
+             class="text-blue-700 underline">ver compra no PNCP</a>{% endif %}
+    </p>
+  </div>
+  {% else %}
+  <p class="text-slate-500 text-sm">Nenhuma ata compatível ainda — elas
+    aparecem conforme a coleta diária roda. As palavras-chave usadas são as
+    dos seus perfis ativos.</p>
+  {% endfor %}
+</div>
+
+{% if paginas > 1 %}
+<div class="flex justify-center gap-3 mt-4 text-sm">
+  {% if pagina > 1 %}
+    <a href="?q={{ q }}&adesao={{ adesao }}&pagina={{ pagina - 1 }}"
+       class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">← Anterior</a>
+  {% endif %}
+  <span class="py-1.5 text-slate-500">página {{ pagina }} de {{ paginas }}</span>
+  {% if pagina < paginas %}
+    <a href="?q={{ q }}&adesao={{ adesao }}&pagina={{ pagina + 1 }}"
+       class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">Próxima →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -12,15 +12,17 @@ from urllib.parse import urlencode
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
+                               Response)
 from fastapi.templating import Jinja2Templates
 
 from . import alerta as alerta_mod
 from . import envcfg
 from .coleta import coleta_em_andamento, coletar_em_background
-from .config import config
-from .db import (ColetaLog, Licitacao, Modalidade, Municipio, PerfilBusca,
-                 PerfilMatch, Sessao, criar_tabelas)
+from .config import PASTA_DADOS, config
+from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
+                 Municipio, PerfilBusca, PerfilMatch, Sessao, criar_tabelas)
+from .documentos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
 from .matcher import licitacao_casa_perfil
 from .seed import semear
@@ -424,8 +426,67 @@ async def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
         for m in matches:            # abrir o detalhe marca como lido
             m.lido = True
         s.commit()
+        arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
         return templates.TemplateResponse(request, "_licitacao_detalhe.html",
-                                          {"lic": lic, "matches": matches})
+                                          {"lic": lic, "matches": matches,
+                                           "arquivos": arquivos})
+    finally:
+        s.close()
+
+
+@app.post("/licitacoes/{lic_id}/baixar", response_class=HTMLResponse)
+async def licitacao_baixar_docs(request: Request, lic_id: int):
+    """Busca e baixa agora os documentos publicados desta licitação."""
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        baixar_arquivos(s, lic)
+        arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
+        return templates.TemplateResponse(request, "_arquivos.html",
+                                          {"lic": lic, "arquivos": arquivos})
+    finally:
+        s.close()
+
+
+@app.get("/arquivos/{arquivo_id}")
+async def arquivo_download(arquivo_id: int):
+    """Entrega um documento já baixado (PDF do edital etc.)."""
+    s = Sessao()
+    try:
+        arq = s.get(ArquivoEdital, arquivo_id)
+        if not arq:
+            return HTMLResponse("Arquivo não encontrado.", status_code=404)
+        caminho = os.path.join(PASTA_DADOS, arq.caminho_local)
+        if not os.path.exists(caminho):
+            return HTMLResponse("Arquivo sumiu do disco.", status_code=404)
+        return FileResponse(caminho, filename=os.path.basename(caminho))
+    finally:
+        s.close()
+
+
+# ----------------------------------------------------------------------- atas
+@app.get("/atas", response_class=HTMLResponse)
+async def atas_lista(request: Request, q: str = "", adesao: str = "",
+                     pagina: int = 1):
+    s = Sessao()
+    try:
+        hoje = datetime.now().strftime("%Y-%m-%d")
+        consulta = (s.query(Ata).filter(Ata.cancelado.is_(False))
+                    .filter(Ata.vigencia_fim >= hoje))
+        if q:
+            consulta = consulta.filter(Ata.objeto.ilike(f"%{q}%"))
+        if adesao:
+            consulta = consulta.filter(Ata.possibilidade_adesao.is_(True))
+        total = consulta.count()
+        linhas = (consulta.order_by(Ata.vigencia_fim)
+                  .offset((pagina - 1) * POR_PAGINA).limit(POR_PAGINA).all())
+        return templates.TemplateResponse(request, "atas.html", {
+            "linhas": linhas, "total": total, "pagina": pagina,
+            "paginas": max(1, -(-total // POR_PAGINA)),
+            "q": q, "adesao": adesao,
+        })
     finally:
         s.close()
 

@@ -57,6 +57,7 @@ class Licitacao(Base):
     link_sistema_origem = Column(String)
     link_pncp = Column(String)
     payload_json = Column(Text)                # resposta bruta completa
+    fonte = Column(String, default="pncp")     # 'pncp' | 'tcepi'
     coletado_em = Column(DateTime, default=datetime.now)
     matches = relationship("PerfilMatch", back_populates="licitacao",
                            cascade="all, delete-orphan")
@@ -90,6 +91,43 @@ class ColetaLog(Base):
     detalhe_erro = Column(Text, default="")
 
 
+class Ata(Base):
+    """Atas de registro de preços vigentes que casaram com algum perfil (Fase 3)."""
+    __tablename__ = "atas"
+    id = Column(Integer, primary_key=True)
+    numero_controle_ata = Column(String, unique=True, nullable=False, index=True)
+    numero_controle_compra = Column(String, index=True)
+    numero_ata = Column(String)
+    ano_ata = Column(Integer)
+    objeto = Column(Text)
+    orgao_cnpj = Column(String)
+    orgao_nome = Column(String)
+    unidade_nome = Column(String)
+    data_assinatura = Column(String)
+    vigencia_inicio = Column(String)
+    vigencia_fim = Column(String, index=True)
+    possibilidade_adesao = Column(Boolean, default=False)
+    cancelado = Column(Boolean, default=False)
+    perfis_casados = Column(JSON, default=list)   # nomes dos perfis que casaram
+    link_pncp = Column(String)
+    payload_json = Column(Text)
+    coletado_em = Column(DateTime, default=datetime.now)
+
+
+class ArquivoEdital(Base):
+    """PDFs de edital baixados automaticamente da API de documentos (Fase 3)."""
+    __tablename__ = "arquivos_edital"
+    id = Column(Integer, primary_key=True)
+    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"), nullable=False,
+                          index=True)
+    titulo = Column(String)
+    tipo = Column(String)
+    url_origem = Column(String)
+    caminho_local = Column(String)      # relativo à pasta data/
+    baixado_em = Column(DateTime, default=datetime.now)
+    licitacao = relationship("Licitacao")
+
+
 class Modalidade(Base):
     __tablename__ = "modalidades"
     codigo = Column(Integer, primary_key=True)
@@ -105,3 +143,15 @@ class Municipio(Base):
 
 def criar_tabelas():
     Base.metadata.create_all(engine)
+    _migrar()
+
+
+def _migrar():
+    """Migrações leves para bancos criados em fases anteriores."""
+    with engine.connect() as con:
+        colunas = [linha[1] for linha in
+                   con.exec_driver_sql("PRAGMA table_info(licitacoes)")]
+        if "fonte" not in colunas:
+            con.exec_driver_sql(
+                "ALTER TABLE licitacoes ADD COLUMN fonte TEXT DEFAULT 'pncp'")
+            con.commit()

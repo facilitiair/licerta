@@ -27,6 +27,8 @@
          class="text-blue-700 underline">🔗 Sistema de origem</a>{% endif %}
   </p>
 
+  <div id="arqs{{ lic.id }}">{% include "_arquivos.html" %}</div>
+
   {% for m in matches %}
   <form hx-post="/matches/{{ m.id }}" hx-target="#salvo{{ m.id }}"
         class="border border-slate-200 rounded-lg p-3 bg-white

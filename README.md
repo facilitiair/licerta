@@ -80,6 +80,22 @@ gravadas casariam, sem salvar.
 
 Render e VPS funcionam igual: é um contêiner Docker comum na porta 8000.
 
+## 6.1 Atas, editais em PDF e Mural TCE-PI (Fase 3)
+
+- **Atas** (menu "Atas"): atas de registro de preços vigentes cujo objeto casa
+  com as palavras dos seus perfis — candidatas a adesão/carona. A coleta
+  diária varre as atas publicadas/alteradas no PNCP (a primeira vez olha 30
+  dias para trás; depois, incremental).
+- **PDFs de edital**: quando uma licitação nova casa com um perfil, o app
+  baixa automaticamente os documentos publicados (edital e anexos) para
+  `data/editais/`. No detalhe da licitação há o botão
+  "Buscar documentos no PNCP" para baixar na hora.
+- **Mural TCE-PI**: se algum perfil cobrir o Piauí, a coleta também varre o
+  Mural de Licitações do TCE-PI (prefeituras que atrasam a publicação
+  nacional). Registros próprios aparecem com fonte "tcepi"; duplicados do
+  PNCP são descartados. Se o site do TCE mudar, o erro aparece em /logs e o
+  resto segue normal.
+
 ## 7. Backup
 
 Todo o seu histórico está num único arquivo: **`data/radar.db`**.

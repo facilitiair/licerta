@@ -122,6 +122,71 @@ def propostas_abertas(modalidade, uf=None, dias_futuro=90, sessao=None):
         pagina += 1
 
 
+def _link_compra(numero_controle_compra):
+    """A página da compra no portal também lista as atas vinculadas."""
+    return montar_link_pncp(numero_controle_compra)
+
+
+def mapear_ata(r):
+    return {
+        "numero_controle_ata": r.get("numeroControlePNCPAta"),
+        "numero_controle_compra": r.get("numeroControlePNCPCompra"),
+        "numero_ata": r.get("numeroAtaRegistroPreco"),
+        "ano_ata": r.get("anoAta"),
+        "objeto": r.get("objetoContratacao"),
+        "orgao_cnpj": r.get("cnpjOrgao"),
+        "orgao_nome": r.get("nomeOrgao"),
+        "unidade_nome": r.get("nomeUnidadeOrgao"),
+        "data_assinatura": r.get("dataAssinatura"),
+        "vigencia_inicio": r.get("vigenciaInicio"),
+        "vigencia_fim": r.get("vigenciaFim"),
+        "possibilidade_adesao": bool(r.get("possibilidadeAdesao")),
+        "cancelado": bool(r.get("cancelado")),
+        "link_pncp": _link_compra(r.get("numeroControlePNCPCompra")),
+        "payload_json": json.dumps(r, ensure_ascii=False),
+    }
+
+
+def atas_atualizadas(dias_retro=2, sessao=None):
+    """Atas alteradas nos últimos N dias (varredura incremental diária).
+
+    O endpoint /v1/atas não filtra por UF, então o recorte por interesse
+    é feito localmente, pelas palavras dos perfis.
+    """
+    sessao = sessao or requests.Session()
+    hoje = date.today()
+    params_base = {
+        "dataInicial": (hoje - timedelta(days=dias_retro)).strftime("%Y%m%d"),
+        "dataFinal": hoje.strftime("%Y%m%d"),
+        "tamanhoPagina": TAMANHO_PAGINA,
+    }
+    pagina, total_paginas = 1, 1
+    while pagina <= total_paginas:
+        resp = _get(sessao, f"{BASE}/v1/atas/atualizacao",
+                    dict(params_base, pagina=pagina))
+        if resp.status_code == 204:
+            return
+        resp.raise_for_status()
+        dados = resp.json()
+        total_paginas = dados.get("totalPaginas") or 1
+        for registro in dados.get("data") or []:
+            yield mapear_ata(registro)
+        pagina += 1
+
+
+def listar_arquivos_compra(cnpj, ano, sequencial, sessao=None):
+    """Documentos publicados da compra (edital, anexos...) — API do portal."""
+    sessao = sessao or requests.Session()
+    url = (f"https://pncp.gov.br/pncp-api/v1/orgaos/{cnpj}"
+           f"/compras/{ano}/{sequencial}/arquivos")
+    resp = sessao.get(url, params={"pagina": 1, "tamanhoPagina": 20},
+                      timeout=TIMEOUT, headers={"User-Agent": "Mozilla/5.0"})
+    if not resp.ok:
+        return []
+    dados = resp.json()
+    return dados if isinstance(dados, list) else []
+
+
 def baixar_municipios_ibge():
     """Lista oficial de municípios do IBGE (SPEC §3.4). Uma vez, na instalação."""
     r = requests.get(

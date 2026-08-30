@@ -1,0 +1,84 @@
+"""Download automático dos PDFs de edital (Fase 3).
+
+Baixa os documentos da API do PNCP para data/editais/<licitacao_id>/ e
+registra em arquivos_edital. Melhor esforço: falha de um arquivo não
+interrompe nada.
+"""
+import logging
+import os
+import re
+
+import requests
+
+from .config import PASTA_DADOS
+from .db import ArquivoEdital
+from .pncp import listar_arquivos_compra
+
+log = logging.getLogger("radar.documentos")
+
+PASTA_EDITAIS = os.path.join(PASTA_DADOS, "editais")
+MAX_ARQUIVOS_POR_LICITACAO = 5
+MAX_TAMANHO = 60 * 1024 * 1024   # 60 MB por arquivo
+
+
+def _sequencial(numero_controle):
+    try:
+        return int(numero_controle.split("-")[2].split("/")[0])
+    except (ValueError, AttributeError, IndexError):
+        return None
+
+
+def _nome_seguro(texto, padrao):
+    nome = re.sub(r"[^\w.\-]+", "_", texto or "").strip("_")
+    return (nome or padrao)[:80]
+
+
+def baixar_arquivos(sessao_db, lic):
+    """Baixa os documentos de uma licitação do PNCP. Retorna qtd baixada."""
+    if lic.fonte != "pncp" or not (lic.orgao_cnpj and lic.ano_compra):
+        return 0
+    seq = _sequencial(lic.numero_controle_pncp)
+    if not seq:
+        return 0
+    ja_baixados = {a.url_origem for a in
+                   sessao_db.query(ArquivoEdital).filter_by(licitacao_id=lic.id)}
+    docs = listar_arquivos_compra(lic.orgao_cnpj, lic.ano_compra, seq)
+    pasta = os.path.join(PASTA_EDITAIS, str(lic.id))
+    baixados = 0
+    for doc in docs[:MAX_ARQUIVOS_POR_LICITACAO]:
+        url = doc.get("url") or doc.get("uri")
+        if not url or not doc.get("statusAtivo", True):
+            continue
+        # A API devolve URLs com portas internas (pncp.gov.br:51797) que não
+        # aceitam conexão externa — o mesmo caminho funciona na porta padrão.
+        url = re.sub(r"^(https://pncp\.gov\.br):\d+", r"\1", url)
+        if url in ja_baixados:
+            continue
+        try:
+            resp = requests.get(url, timeout=(10, 60), stream=True,
+                                headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            os.makedirs(pasta, exist_ok=True)
+            tipo = doc.get("tipoDocumentoNome") or "Documento"
+            titulo = _nome_seguro(doc.get("titulo"),
+                                  f"doc{doc.get('sequencialDocumento', 1)}")
+            extensao = ".pdf" if "pdf" in resp.headers.get(
+                "content-type", "").lower() else ""
+            caminho = os.path.join(pasta, f"{titulo}{extensao}")
+            tamanho = 0
+            with open(caminho, "wb") as f:
+                for parte in resp.iter_content(1024 * 256):
+                    tamanho += len(parte)
+                    if tamanho > MAX_TAMANHO:
+                        raise RuntimeError("arquivo maior que o limite")
+                    f.write(parte)
+            sessao_db.add(ArquivoEdital(
+                licitacao_id=lic.id, titulo=doc.get("titulo") or titulo,
+                tipo=tipo, url_origem=url,
+                caminho_local=os.path.relpath(caminho, PASTA_DADOS)))
+            baixados += 1
+        except Exception as e:  # noqa: BLE001 — segue para o próximo arquivo
+            log.warning("Falha ao baixar %s: %s", url, e)
+    if baixados:
+        sessao_db.commit()
+    return baixados
