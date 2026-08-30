@@ -1,0 +1,42 @@
+<div class="grid md:grid-cols-4 gap-3">
+  {% for col in colunas %}
+  <div class="bg-slate-200/60 rounded-2xl p-2 min-h-40">
+    <p class="text-xs font-bold px-2 py-1.5">{{ col.rotulo }}
+      <span class="text-slate-500 font-normal">({{ col.cartoes|length }})</span></p>
+    <div class="space-y-2">
+      {% for c in col.cartoes %}
+      {% set m = c.m %}{% set lic = m.licitacao %}
+      <div class="bg-white rounded-xl border border-slate-200 p-3 text-xs shadow-sm">
+        <p class="text-[10px] text-slate-500">
+          {{ lic.municipio_nome }}/{{ lic.uf }} · {{ m.perfil.nome }}
+          {% if m.favorito %}⭐{% endif %}</p>
+        <p class="my-1 leading-snug">{{ (lic.objeto or '')[:110] }}</p>
+        <p class="text-[11px]">
+          💰 {{ 'R$ {:,.0f}'.format(lic.valor_total_estimado).replace(',', '.')
+                if lic.valor_total_estimado else 'n/i' }}
+          · <span class="{{ 'text-red-600 font-bold' if c.dias is not none and c.dias <= 3 }}">
+              ⏱ {{ c.dias if c.dias is not none else '?' }} d</span>
+          {% if lic.link_pncp or lic.link_sistema_origem %}
+          · <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
+               class="text-blue-700 underline">edital</a>{% endif %}
+        </p>
+        <div class="flex gap-1 mt-2 flex-wrap">
+          {% for destino, seta in [('novo', '🟡'), ('analisando', '🔵'),
+                                   ('vou_participar', '🟢'), ('descartado', '⚪')] %}
+            {% if destino != col.status %}
+            <button hx-post="/funil/mover/{{ m.id }}/{{ destino }}"
+                    hx-target="#board" hx-swap="innerHTML"
+                    title="mover para {{ destino.replace('_', ' ') }}"
+                    class="border border-slate-200 rounded-md px-1.5 py-0.5
+                           hover:bg-slate-50">{{ seta }}</button>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <p class="text-[11px] text-slate-400 px-2 pb-2">vazio</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>

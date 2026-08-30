@@ -124,26 +124,120 @@ async def logout():
     return resposta
 
 
-# --------------------------------------------------------------------- painel
+# ------------------------------------------------------------------ dashboard
+def _dias_ate(data_iso):
+    try:
+        alvo = datetime.strptime(data_iso[:10], "%Y-%m-%d")
+        return (alvo - datetime.now()).days + 1
+    except (ValueError, TypeError):
+        return None
+
+
 @app.get("/", response_class=HTMLResponse)
 async def painel(request: Request):
     s = Sessao()
     try:
-        perfis = s.query(PerfilBusca).order_by(PerfilBusca.nome).all()
-        cartoes = []
-        for p in perfis:
-            novos = (s.query(PerfilMatch)
-                     .filter_by(perfil_id=p.id, lido=False).count())
-            total = s.query(PerfilMatch).filter_by(perfil_id=p.id).count()
-            cartoes.append({"perfil": p, "novos": novos, "total": total})
+        def conta(status):
+            return s.query(PerfilMatch).filter_by(status=status).count()
+
+        hoje = datetime.now().strftime("%Y-%m-%d")
+        ativos = (s.query(PerfilMatch).join(Licitacao)
+                  .filter(PerfilMatch.status != "descartado",
+                          Licitacao.data_encerramento_proposta >= hoje)
+                  .order_by(Licitacao.data_encerramento_proposta))
+        urgentes = [m for m in ativos
+                    if (_dias_ate(m.licitacao.data_encerramento_proposta) or 99) <= 7]
+        proximos = [{"lic": m.licitacao, "status": m.status,
+                     "dias": _dias_ate(m.licitacao.data_encerramento_proposta)}
+                    for m in ativos.limit(8)]
+        kpis = {"novas": conta("novo"), "analisando": conta("analisando"),
+                "participar": conta("vou_participar"), "urgentes": len(urgentes)}
         ultima = (s.query(ColetaLog).filter_by(sucesso=True)
                   .order_by(ColetaLog.fim.desc()).first())
-        ultimas20 = (s.query(Licitacao)
-                     .order_by(Licitacao.coletado_em.desc()).limit(20).all())
+        ultimas = (s.query(Licitacao)
+                   .order_by(Licitacao.coletado_em.desc()).limit(8).all())
         return templates.TemplateResponse(request, "painel.html", {
-            "cartoes": cartoes, "ultima_coleta": ultima,
-            "ultimas": ultimas20, "coletando": coleta_em_andamento(),
+            "kpis": kpis, "proximos": proximos, "ultima_coleta": ultima,
+            "ultimas": ultimas, "coletando": coleta_em_andamento(),
+            "hora_coleta": config.HORA_COLETA,
         })
+    finally:
+        s.close()
+
+
+# ---------------------------------------------------------- funil (kanban)
+COLUNAS_FUNIL = [("novo", "🟡 Novas"), ("analisando", "🔵 Em análise"),
+                 ("vou_participar", "🟢 Vou participar"),
+                 ("descartado", "⚪ Descartadas")]
+
+
+def _contexto_funil(s):
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    colunas = []
+    for status, rotulo in COLUNAS_FUNIL:
+        consulta = (s.query(PerfilMatch).join(Licitacao)
+                    .filter(PerfilMatch.status == status)
+                    .order_by(Licitacao.data_encerramento_proposta))
+        if status != "descartado":     # descartadas antigas não interessam
+            consulta = consulta.filter(
+                Licitacao.data_encerramento_proposta >= hoje)
+        matches = consulta.limit(40).all()
+        cartoes = [{"m": m, "dias": _dias_ate(
+            m.licitacao.data_encerramento_proposta)} for m in matches]
+        colunas.append({"status": status, "rotulo": rotulo, "cartoes": cartoes})
+    return {"colunas": colunas}
+
+
+@app.get("/funil", response_class=HTMLResponse)
+async def funil(request: Request):
+    s = Sessao()
+    try:
+        return templates.TemplateResponse(request, "funil.html",
+                                          _contexto_funil(s))
+    finally:
+        s.close()
+
+
+@app.post("/funil/mover/{match_id}/{status}", response_class=HTMLResponse)
+async def funil_mover(request: Request, match_id: int, status: str):
+    s = Sessao()
+    try:
+        m = s.get(PerfilMatch, match_id)
+        if m and status in ("novo", "analisando", "vou_participar", "descartado"):
+            m.status = status
+            m.lido = True
+            s.commit()
+        return templates.TemplateResponse(request, "_funil_board.html",
+                                          _contexto_funil(s))
+    finally:
+        s.close()
+
+
+# --------------------------------------------------------------------- agenda
+@app.get("/agenda", response_class=HTMLResponse)
+async def agenda(request: Request):
+    s = Sessao()
+    try:
+        hoje = datetime.now().strftime("%Y-%m-%d")
+        matches = (s.query(PerfilMatch).join(Licitacao)
+                   .filter(PerfilMatch.status != "descartado",
+                           Licitacao.data_encerramento_proposta >= hoje)
+                   .order_by(Licitacao.data_encerramento_proposta).all())
+        dias = {}
+        for m in matches:
+            chave = m.licitacao.data_encerramento_proposta[:10]
+            dias.setdefault(chave, []).append(m)
+        semana = ["segunda", "terça", "quarta", "quinta", "sexta",
+                  "sábado", "domingo"]
+        agenda_dias = []
+        for d, ms in dias.items():
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            agenda_dias.append({
+                "data": d,
+                "rotulo": f"{dt.strftime('%d/%m/%Y')} ({semana[dt.weekday()]})",
+                "dias_ate": _dias_ate(d), "matches": ms})
+        return templates.TemplateResponse(request, "agenda.html",
+                                          {"agenda_dias": agenda_dias})
     finally:
         s.close()
 

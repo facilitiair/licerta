@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Agenda — Radar{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">Agenda de disputas</h1>
+<p class="text-xs text-slate-500 mb-4">Encerramentos de proposta das
+  oportunidades ativas (tudo que não foi descartado), dia a dia.</p>
+
+{% for dia in agenda_dias %}
+<section class="mb-5">
+  <h2 class="font-bold text-sm mb-2
+      {{ 'text-red-600' if dia.dias_ate is not none and dia.dias_ate <= 3
+         else 'text-slate-700' }}">
+    📅 {{ dia.rotulo }}
+    {% if dia.dias_ate == 1 %}— AMANHÃ{% elif dia.dias_ate == 0 %}— HOJE{% else %}
+      — em {{ dia.dias_ate }} dias{% endif %}
+  </h2>
+  <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+    {% for m in dia.matches %}
+    {% set lic = m.licitacao %}
+    <div class="px-4 py-3 text-sm flex flex-wrap gap-x-4 gap-y-1 items-center">
+      <b class="text-xs">{{ (lic.data_encerramento_proposta or '')[11:16] or '—' }}</b>
+      <span class="px-1.5 rounded-full text-[10px] font-semibold
+        {{ {'novo':'bg-amber-100 text-amber-800',
+            'analisando':'bg-blue-100 text-blue-800',
+            'vou_participar':'bg-green-100 text-green-800'}
+           .get(m.status, 'bg-slate-100') }}">{{ m.status.replace('_',' ') }}</span>
+      <span class="flex-1 min-w-60">{{ (lic.objeto or '')[:140] }}</span>
+      <span class="text-xs text-slate-500">{{ lic.municipio_nome }}/{{ lic.uf }} ·
+        {{ 'R$ {:,.0f}'.format(lic.valor_total_estimado).replace(',', '.')
+           if lic.valor_total_estimado else 'n/i' }}</span>
+      {% if lic.link_pncp or lic.link_sistema_origem %}
+      <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
+         class="text-blue-700 underline text-xs">abrir</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+<p class="text-slate-500 text-sm">Nada na agenda — mova oportunidades no
+  <a href="/funil" class="text-blue-700 underline">funil</a> ou aguarde a
+  próxima coleta.</p>
+{% endfor %}
+{% endblock %}

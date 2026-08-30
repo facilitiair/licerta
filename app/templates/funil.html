@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titulo %}Funil — Radar{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">Funil de oportunidades</h1>
+<p class="text-xs text-slate-500 mb-4">Triagem das licitações que casaram com
+  seus perfis: use os botões coloridos para mover cada cartão
+  (🟡 nova · 🔵 analisando · 🟢 vou participar · ⚪ descartar).</p>
+<div id="board">{% include "_funil_board.html" %}</div>
+{% endblock %}

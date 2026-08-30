@@ -1,70 +1,89 @@
 {% extends "base.html" %}
 {% block conteudo %}
-<div class="flex items-center gap-4 flex-wrap mb-4">
-  <div class="text-sm text-slate-500">
-    Última coleta bem-sucedida:
-    <b class="text-slate-700">
+<div class="flex items-center gap-4 flex-wrap mb-5">
+  <div>
+    <h1 class="text-xl font-bold">Dashboard</h1>
+    <p class="text-xs text-slate-500">Última coleta:
       {{ ultima_coleta.fim.strftime('%d/%m/%Y %H:%M') if ultima_coleta else 'nunca' }}
-    </b>
+      · próxima automática às {{ '%02d:%02d' % hora_coleta }}</p>
   </div>
   <div class="ml-auto flex items-center gap-3">
     <span id="statusColeta">
       {% if coletando %}{% include "_coleta_status.html" %}{% endif %}
     </span>
     <button hx-post="/coletar" hx-target="#statusColeta" hx-swap="innerHTML"
-            class="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm
-                   font-semibold hover:bg-blue-800">
+            class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm
+                   font-semibold hover:bg-blue-700 shadow-sm">
       🔄 Coletar agora
     </button>
   </div>
 </div>
 
-<h2 class="font-bold text-lg mb-2">Perfis de busca</h2>
-<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-  {% for c in cartoes %}
-  <a href="/perfis/{{ c.perfil.id }}"
-     class="bg-white rounded-xl border border-slate-200 p-4 hover:shadow
-            {{ '' if c.perfil.ativo else 'opacity-50' }}">
-    <div class="flex items-start justify-between">
-      <span class="font-semibold">{{ c.perfil.nome }}</span>
-      {% if c.novos %}
-        <span class="bg-amber-100 text-amber-800 text-xs font-bold
-                     px-2 py-0.5 rounded-full">{{ c.novos }} novas</span>
-      {% endif %}
-    </div>
-    <p class="text-xs text-slate-500 mt-1">
-      {{ c.total }} licitação(ões) no total ·
-      {{ 'ativo' if c.perfil.ativo else 'inativo' }}
-      {{ '· notifica' if c.perfil.notificar else '' }}
-    </p>
+<!-- Indicadores -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+  {% macro kpi(rotulo, valor, cor, rota) -%}
+  <a href="{{ rota }}" class="bg-white rounded-2xl border border-slate-200 p-4
+        hover:shadow transition-shadow">
+    <p class="text-3xl font-bold {{ cor }}">{{ valor }}</p>
+    <p class="text-xs text-slate-500 mt-1">{{ rotulo }}</p>
   </a>
-  {% else %}
-  <p class="text-slate-500 text-sm">Nenhum perfil ainda —
-    <a href="/perfis/novo" class="text-blue-700 underline">crie o primeiro</a>.</p>
-  {% endfor %}
+  {%- endmacro %}
+  {{ kpi('novas para triagem', kpis.novas, 'text-amber-600', '/funil') }}
+  {{ kpi('em análise', kpis.analisando, 'text-blue-600', '/funil') }}
+  {{ kpi('vou participar', kpis.participar, 'text-green-600', '/funil') }}
+  {{ kpi('encerram em 7 dias', kpis.urgentes, 'text-red-600', '/agenda') }}
 </div>
 
-<h2 class="font-bold text-lg mb-2">Últimas 20 licitações captadas</h2>
-<div class="space-y-2">
-  {% for l in ultimas %}
-  <div class="bg-white rounded-xl border border-slate-200 p-4">
-    <p class="text-xs text-slate-500">
-      {{ l.modalidade_nome }} · {{ l.municipio_nome }}/{{ l.uf }} ·
-      {{ l.orgao_nome }} {{ '· SRP' if l.srp else '' }}
-    </p>
-    <p class="text-sm my-1">{{ (l.objeto or '')[:300] }}</p>
-    <p class="text-xs">
-      💰 {{ 'R$ {:,.2f}'.format(l.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.')
-            if l.valor_total_estimado else 'valor não informado' }}
-      · ⏱️ encerra {{ (l.data_encerramento_proposta or 'ver edital')[:16].replace('T', ' ') }}
-      {% if l.link_pncp %}
-        · <a href="{{ l.link_pncp }}" target="_blank"
-             class="text-blue-700 underline">abrir no PNCP</a>
-      {% endif %}
-    </p>
-  </div>
-  {% else %}
-  <p class="text-slate-500 text-sm">Banco vazio — clique em "Coletar agora".</p>
-  {% endfor %}
+<div class="grid lg:grid-cols-2 gap-6">
+  <!-- Próximos encerramentos -->
+  <section>
+    <div class="flex items-center mb-2">
+      <h2 class="font-bold">⏱️ Próximos encerramentos</h2>
+      <a href="/agenda" class="ml-auto text-xs text-blue-700 underline">agenda completa</a>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+      {% for m in proximos %}
+      <div class="px-4 py-3">
+        <p class="text-xs">
+          <b class="{{ 'text-red-600' if m.dias <= 3 else 'text-slate-700' }}">
+            {{ m.lic.data_encerramento_proposta[:16].replace('T', ' ') }}
+            ({{ m.dias }} d)</b>
+          · {{ m.lic.municipio_nome }}/{{ m.lic.uf }}
+          <span class="px-1.5 rounded-full text-[10px] font-semibold
+            {{ {'novo':'bg-amber-100 text-amber-800',
+                'analisando':'bg-blue-100 text-blue-800',
+                'vou_participar':'bg-green-100 text-green-800'}
+               .get(m.status, 'bg-slate-100') }}">{{ m.status.replace('_',' ') }}</span>
+        </p>
+        <p class="text-sm mt-0.5">{{ (m.lic.objeto or '')[:110] }}</p>
+      </div>
+      {% else %}
+      <p class="px-4 py-6 text-sm text-slate-500">Nenhum prazo próximo.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Últimas captadas -->
+  <section>
+    <div class="flex items-center mb-2">
+      <h2 class="font-bold">🆕 Últimas captadas</h2>
+      <a href="/licitacoes" class="ml-auto text-xs text-blue-700 underline">ver todas</a>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+      {% for l in ultimas %}
+      <div class="px-4 py-3">
+        <p class="text-xs text-slate-500">{{ l.modalidade_nome }} ·
+          {{ l.municipio_nome }}/{{ l.uf }} ·
+          {{ 'R$ {:,.0f}'.format(l.valor_total_estimado).replace(',', '.')
+             if l.valor_total_estimado else 'valor n/i' }}
+          {% if l.fonte == 'tcepi' %}<span class="text-purple-700">· TCE-PI</span>{% endif %}
+        </p>
+        <p class="text-sm mt-0.5">{{ (l.objeto or '')[:110] }}</p>
+      </div>
+      {% else %}
+      <p class="px-4 py-6 text-sm text-slate-500">Banco vazio — colete agora.</p>
+      {% endfor %}
+    </div>
+  </section>
 </div>
 {% endblock %}
