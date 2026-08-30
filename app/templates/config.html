@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block titulo %}Configurações — Radar{% endblock %}
+{% block conteudo %}
+<h2 class="font-bold text-lg mb-3">Configurações</h2>
+{% if salvo %}
+<p class="bg-green-50 border border-green-200 text-green-800 rounded-lg
+          px-4 py-2 text-sm mb-4">✔ Configurações salvas e aplicadas
+  (horários reajustados sem reiniciar).</p>
+{% endif %}
+
+<form method="post" action="/config" class="space-y-5">
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <h3 class="font-semibold">Acesso</h3>
+    <label class="block text-sm max-w-sm">Senha do painel
+      <span class="text-slate-500">(vazia = sem login)</span>
+      <input type="password" name="APP_SENHA" value="{{ valores.APP_SENHA }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+    </label>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <h3 class="font-semibold">Telegram (alerta principal)</h3>
+    <p class="text-xs text-slate-500">Como criar o bot e achar o chat_id:
+      veja a seção 3 do README.</p>
+    <div class="grid sm:grid-cols-2 gap-3 text-sm">
+      <label>Token do bot
+        <input name="TELEGRAM_BOT_TOKEN" value="{{ valores.TELEGRAM_BOT_TOKEN }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+      </label>
+      <label>Chat ID
+        <input name="TELEGRAM_CHAT_ID" value="{{ valores.TELEGRAM_CHAT_ID }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+      </label>
+    </div>
+    <span hx-post="/config/testar" hx-vals='{"canal": "telegram"}'
+          hx-target="#resTeleg" hx-swap="innerHTML"
+          class="inline-block border border-blue-700 text-blue-700 px-3 py-1.5
+                 rounded-lg text-sm cursor-pointer hover:bg-blue-50">
+      ✉ Enviar mensagem de teste</span>
+    <span id="resTeleg"></span>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <h3 class="font-semibold">E-mail (opcional)</h3>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="hidden" name="EMAIL_ATIVO" value="false">
+      <input type="checkbox" name="EMAIL_ATIVO" value="true"
+             {{ 'checked' if valores.EMAIL_ATIVO == 'true' }}>
+      Enviar o alerta diário também por e-mail
+    </label>
+    <div class="grid sm:grid-cols-3 gap-3 text-sm">
+      <label>Servidor SMTP
+        <input name="SMTP_HOST" value="{{ valores.SMTP_HOST }}"
+               placeholder="smtp.gmail.com"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Porta
+        <input name="SMTP_PORT" value="{{ valores.SMTP_PORT }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Usuário
+        <input name="SMTP_USER" value="{{ valores.SMTP_USER }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Senha (senha de app, no Gmail)
+        <input type="password" name="SMTP_PASSWORD" value="{{ valores.SMTP_PASSWORD }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Destinatário
+        <input name="EMAIL_DESTINO" value="{{ valores.EMAIL_DESTINO }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    </div>
+    <span hx-post="/config/testar" hx-vals='{"canal": "email"}'
+          hx-target="#resEmail" hx-swap="innerHTML"
+          class="inline-block border border-blue-700 text-blue-700 px-3 py-1.5
+                 rounded-lg text-sm cursor-pointer hover:bg-blue-50">
+      ✉ Enviar e-mail de teste</span>
+    <span id="resEmail"></span>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <h3 class="font-semibold mb-2">Rotina diária</h3>
+    <div class="grid sm:grid-cols-3 gap-3 text-sm max-w-xl">
+      <label>Hora da coleta
+        <input name="HORA_COLETA" value="{{ valores.HORA_COLETA }}"
+               placeholder="06:00"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Hora do alerta
+        <input name="HORA_ALERTA" value="{{ valores.HORA_ALERTA }}"
+               placeholder="07:00"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Janela futura (dias)
+        <input name="DIAS_JANELA_FUTURA" value="{{ valores.DIAS_JANELA_FUTURA }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">Fuso: {{ valores.TZ }}
+      (mude a chave TZ no arquivo .env se precisar).</p>
+  </div>
+
+  <button class="bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold
+                 hover:bg-blue-800">💾 Salvar configurações</button>
+</form>
+{% endblock %}

@@ -1,0 +1,63 @@
+<div class="p-4 text-sm space-y-3">
+  <div class="grid sm:grid-cols-2 gap-x-8 gap-y-1">
+    <p><b>Nº controle PNCP:</b> {{ lic.numero_controle_pncp }}</p>
+    <p><b>Processo:</b> {{ lic.processo or '—' }}</p>
+    <p><b>Compra:</b> {{ lic.numero_compra }}/{{ lic.ano_compra }}</p>
+    <p><b>Órgão:</b> {{ lic.orgao_nome }} ({{ lic.orgao_cnpj }})</p>
+    <p><b>Unidade:</b> {{ lic.unidade_nome or '—' }}</p>
+    <p><b>Local:</b> {{ lic.municipio_nome }}/{{ lic.uf }}
+       (IBGE {{ lic.municipio_ibge }})</p>
+    <p><b>Publicação:</b> {{ (lic.data_publicacao_pncp or '—')[:16].replace('T',' ') }}</p>
+    <p><b>Abertura:</b> {{ (lic.data_abertura_proposta or '—')[:16].replace('T',' ') }}</p>
+    <p><b>Encerramento:</b>
+       {{ (lic.data_encerramento_proposta or '—')[:16].replace('T',' ') }}</p>
+    <p><b>SRP:</b> {{ 'sim' if lic.srp else 'não' }}</p>
+    <p><b>Coletado em:</b> {{ lic.coletado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p><b>Valor estimado:</b>
+       {{ 'R$ {:,.2f}'.format(lic.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.')
+          if lic.valor_total_estimado else 'não informado' }}</p>
+  </div>
+  <p class="whitespace-pre-wrap"><b>Objeto completo:</b> {{ lic.objeto }}</p>
+  <p class="flex gap-4">
+    {% if lic.link_pncp %}
+      <a href="{{ lic.link_pncp }}" target="_blank"
+         class="text-blue-700 underline">🔗 Página no PNCP</a>{% endif %}
+    {% if lic.link_sistema_origem %}
+      <a href="{{ lic.link_sistema_origem }}" target="_blank"
+         class="text-blue-700 underline">🔗 Sistema de origem</a>{% endif %}
+  </p>
+
+  {% for m in matches %}
+  <form hx-post="/matches/{{ m.id }}" hx-target="#salvo{{ m.id }}"
+        class="border border-slate-200 rounded-lg p-3 bg-white
+               flex gap-3 flex-wrap items-end">
+    <span class="text-xs text-slate-500 w-full">
+      Perfil: <b>{{ m.perfil.nome }}</b> · match em
+      {{ m.data_match.strftime('%d/%m/%Y') }}</span>
+    <label>Status<br>
+      <select name="status" class="border border-slate-300 rounded-lg px-2 py-1">
+        {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
+        <option value="{{ st }}" {{ 'selected' if m.status == st }}>
+          {{ st.replace('_', ' ') }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="flex items-center gap-1 pb-1.5">
+      <input type="checkbox" name="favorito" {{ 'checked' if m.favorito }}> ⭐ favorito
+    </label>
+    <label class="flex-1 min-w-48">Anotação<br>
+      <input name="anotacao" value="{{ m.anotacao or '' }}"
+             placeholder="suas observações..."
+             class="w-full border border-slate-300 rounded-lg px-2 py-1">
+    </label>
+    <button class="bg-blue-700 text-white px-3 py-1.5 rounded-lg">Salvar</button>
+    <span id="salvo{{ m.id }}"></span>
+  </form>
+  {% endfor %}
+
+  <details class="text-xs">
+    <summary class="cursor-pointer text-slate-500">JSON bruto da API</summary>
+    <pre class="bg-slate-900 text-green-200 rounded-lg p-3 overflow-x-auto
+                mt-1">{{ lic.payload_json }}</pre>
+  </details>
+</div>

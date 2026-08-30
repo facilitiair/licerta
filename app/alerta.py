@@ -1,6 +1,9 @@
-"""Alerta diário via Telegram (SPEC §6): um resumo por dia, agrupado por perfil."""
+"""Alerta diário via Telegram + e-mail opcional (SPEC §6)."""
+import html
 import logging
+import smtplib
 from datetime import date
+from email.mime.text import MIMEText
 
 import requests
 
@@ -100,16 +103,49 @@ def enviar_telegram(texto):
     return True
 
 
+def _texto_para_html(texto):
+    """Mesma estrutura do Telegram, em HTML simples para o e-mail."""
+    corpo = html.escape(texto).replace("\n", "<br>\n")
+    return (f'<html><body style="font-family:Segoe UI,Arial,sans-serif;'
+            f'max-width:720px;font-size:14px;line-height:1.5">{corpo}'
+            f"</body></html>")
+
+
+def enviar_email(texto):
+    """Envia o alerta por SMTP. Só age se EMAIL_ATIVO=true (SPEC §6)."""
+    if not config.EMAIL_ATIVO:
+        return False
+    if not (config.SMTP_HOST and config.SMTP_USER and config.EMAIL_DESTINO):
+        log.warning("EMAIL_ATIVO=true mas SMTP incompleto no .env")
+        return False
+    try:
+        msg = MIMEText(_texto_para_html(texto), "html", "utf-8")
+        msg["Subject"] = f"Radar de Licitações — {date.today().strftime('%d/%m/%Y')}"
+        msg["From"] = config.SMTP_USER
+        msg["To"] = config.EMAIL_DESTINO
+        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            smtp.send_message(msg)
+        return True
+    except Exception:  # noqa: BLE001
+        log.exception("Falha ao enviar alerta por e-mail")
+        return False
+
+
 def enviar_alerta_diario(host="http://localhost:8000"):
     """Job das HORA_ALERTA: envia o resumo e marca os matches como notificados."""
     sessao_db = Sessao()
     try:
         texto, matches = montar_mensagem(sessao_db, host)
-        if enviar_telegram(texto):
+        ok_telegram = enviar_telegram(texto)
+        ok_email = enviar_email(texto)
+        if ok_telegram or ok_email:
             for m in matches:
                 m.notificado = True
             sessao_db.commit()
-            log.info("Alerta enviado: %s matches notificados", len(matches))
+            log.info("Alerta enviado (telegram=%s, email=%s): %s matches",
+                     ok_telegram, ok_email, len(matches))
     except Exception:  # noqa: BLE001 — o agendador nunca pode cair
         log.exception("Erro ao enviar alerta diário")
     finally:

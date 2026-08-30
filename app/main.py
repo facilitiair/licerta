@@ -8,17 +8,20 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from urllib.parse import urlencode
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from . import alerta as alerta_mod
+from . import envcfg
 from .coleta import coleta_em_andamento, coletar_em_background
 from .config import config
 from .db import (ColetaLog, Licitacao, Modalidade, Municipio, PerfilBusca,
                  PerfilMatch, Sessao, criar_tabelas)
+from .exportar import gerar_csv, gerar_xlsx
 from .matcher import licitacao_casa_perfil
 from .seed import semear
 
@@ -52,6 +55,15 @@ def _job_alerta():
 async def vida(app_):
     criar_tabelas()
     semear()
+    # Coletas que ficaram "em andamento" (processo reiniciado no meio) são fechadas
+    s = Sessao()
+    try:
+        s.query(ColetaLog).filter(ColetaLog.fim.is_(None)).update(
+            {"fim": datetime.now(), "sucesso": False,
+             "detalhe_erro": "coleta interrompida por reinício do aplicativo"})
+        s.commit()
+    finally:
+        s.close()
     h, m = config.HORA_COLETA
     agendador.add_job(_job_coleta, "cron", hour=h, minute=m, id="coleta")
     h, m = config.HORA_ALERTA
@@ -321,6 +333,188 @@ async def municipios_busca(request: Request, uf: str = "", q: str = ""):
                                           {"municipios": municipios})
     finally:
         s.close()
+
+
+# ----------------------------------------------------------------- licitações
+ORDENACOES_LISTA = {
+    "encerramento_asc": (Licitacao.data_encerramento_proposta, False),
+    "encerramento_desc": (Licitacao.data_encerramento_proposta, True),
+    "publicacao_desc": (Licitacao.data_publicacao_pncp, True),
+    "publicacao_asc": (Licitacao.data_publicacao_pncp, False),
+    "valor_desc": (Licitacao.valor_total_estimado, True),
+    "valor_asc": (Licitacao.valor_total_estimado, False),
+    "uf_asc": (Licitacao.uf, False),
+    "modalidade_asc": (Licitacao.modalidade_nome, False),
+}
+POR_PAGINA = 50
+
+
+def _consulta_licitacoes(s, filtros):
+    """Monta a consulta a partir dos filtros da tela (também usada na exportação)."""
+    consulta = s.query(Licitacao)
+    if filtros.get("perfil_id"):
+        consulta = consulta.join(
+            PerfilMatch, (PerfilMatch.licitacao_id == Licitacao.id) &
+                         (PerfilMatch.perfil_id == int(filtros["perfil_id"])))
+        if filtros.get("status"):
+            consulta = consulta.filter(PerfilMatch.status == filtros["status"])
+    elif filtros.get("status"):
+        consulta = (consulta.join(PerfilMatch,
+                                  PerfilMatch.licitacao_id == Licitacao.id)
+                    .filter(PerfilMatch.status == filtros["status"]).distinct())
+    if filtros.get("uf"):
+        consulta = consulta.filter(Licitacao.uf == filtros["uf"])
+    if filtros.get("data_ini"):
+        consulta = consulta.filter(
+            Licitacao.data_encerramento_proposta >= filtros["data_ini"])
+    if filtros.get("data_fim"):
+        consulta = consulta.filter(
+            Licitacao.data_encerramento_proposta <= filtros["data_fim"] + "T23:59")
+    if filtros.get("q"):
+        consulta = consulta.filter(Licitacao.objeto.ilike(f"%{filtros['q']}%"))
+    coluna, desc = ORDENACOES_LISTA.get(filtros.get("ordenar") or "",
+                                        ORDENACOES_LISTA["encerramento_asc"])
+    return consulta.order_by(coluna.desc() if desc else coluna.asc())
+
+
+def _filtros_da_request(request):
+    campos = ("perfil_id", "status", "uf", "data_ini", "data_fim", "q", "ordenar")
+    return {c: request.query_params.get(c, "").strip() for c in campos}
+
+
+@app.get("/licitacoes", response_class=HTMLResponse)
+async def licitacoes_lista(request: Request, pagina: int = 1):
+    s = Sessao()
+    try:
+        filtros = _filtros_da_request(request)
+        consulta = _consulta_licitacoes(s, filtros)
+        total = consulta.count()
+        linhas = consulta.offset((pagina - 1) * POR_PAGINA).limit(POR_PAGINA).all()
+        # Status/favorito por licitação, para as badges (quando há perfil filtrado)
+        matches = {}
+        if filtros["perfil_id"]:
+            for m in s.query(PerfilMatch).filter_by(
+                    perfil_id=int(filtros["perfil_id"])):
+                matches[m.licitacao_id] = m
+        perfis = s.query(PerfilBusca).order_by(PerfilBusca.nome).all()
+        ufs = [u[0] for u in s.query(Licitacao.uf).distinct().order_by(Licitacao.uf)
+               if u[0]]
+        return templates.TemplateResponse(request, "licitacoes.html", {
+            "linhas": linhas, "total": total, "pagina": pagina,
+            "paginas": max(1, -(-total // POR_PAGINA)), "filtros": filtros,
+            "perfis": perfis, "ufs": ufs, "matches": matches,
+            # querystring só com os filtros (sem 'pagina'), para paginação/export
+            "query": urlencode({k: v for k, v in filtros.items() if v}),
+        })
+    finally:
+        s.close()
+
+
+@app.get("/licitacoes/{lic_id}/detalhe", response_class=HTMLResponse)
+async def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        consulta = s.query(PerfilMatch).filter_by(licitacao_id=lic_id)
+        if perfil_id:
+            consulta = consulta.filter_by(perfil_id=perfil_id)
+        matches = consulta.all()
+        for m in matches:            # abrir o detalhe marca como lido
+            m.lido = True
+        s.commit()
+        return templates.TemplateResponse(request, "_licitacao_detalhe.html",
+                                          {"lic": lic, "matches": matches})
+    finally:
+        s.close()
+
+
+@app.post("/matches/{match_id}", response_class=HTMLResponse)
+async def match_atualizar(match_id: int, status: str = Form(None),
+                          favorito: str = Form(None), anotacao: str = Form(None)):
+    s = Sessao()
+    try:
+        m = s.get(PerfilMatch, match_id)
+        if not m:
+            return HTMLResponse("Match não encontrado.", status_code=404)
+        if status in ("novo", "analisando", "vou_participar", "descartado"):
+            m.status = status
+        if favorito is not None:
+            m.favorito = favorito == "on"
+        if anotacao is not None:
+            m.anotacao = anotacao
+        s.commit()
+        return HTMLResponse('<span class="text-green-700 text-xs">✔ salvo</span>')
+    finally:
+        s.close()
+
+
+@app.get("/licitacoes/exportar")
+async def licitacoes_exportar(request: Request, formato: str = "csv"):
+    s = Sessao()
+    try:
+        linhas = _consulta_licitacoes(s, _filtros_da_request(request)).all()
+        if formato == "xlsx":
+            return Response(
+                gerar_xlsx(linhas),
+                media_type="application/vnd.openxmlformats-officedocument"
+                           ".spreadsheetml.sheet",
+                headers={"Content-Disposition":
+                         'attachment; filename="licitacoes.xlsx"'})
+        return Response(gerar_csv(linhas), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 'attachment; filename="licitacoes.csv"'})
+    finally:
+        s.close()
+
+
+# ----------------------------------------------------------------------- logs
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_coletas(request: Request):
+    s = Sessao()
+    try:
+        registros = (s.query(ColetaLog)
+                     .order_by(ColetaLog.inicio.desc()).limit(60).all())
+        return templates.TemplateResponse(request, "logs.html",
+                                          {"registros": registros})
+    finally:
+        s.close()
+
+
+# --------------------------------------------------------------------- config
+@app.get("/config", response_class=HTMLResponse)
+async def config_form(request: Request, salvo: int = 0):
+    return templates.TemplateResponse(request, "config.html", {
+        "valores": envcfg.valores_atuais(), "salvo": salvo, "resultado_teste": None,
+    })
+
+
+@app.post("/config")
+async def config_salvar(request: Request):
+    form = await request.form()
+    envcfg.salvar(dict(form))
+    # Reagenda os jobs com os novos horários, sem reiniciar
+    h, m = config.HORA_COLETA
+    agendador.reschedule_job("coleta", trigger="cron", hour=h, minute=m)
+    h, m = config.HORA_ALERTA
+    agendador.reschedule_job("alerta", trigger="cron", hour=h, minute=m)
+    return RedirectResponse("/config?salvo=1", status_code=303)
+
+
+@app.post("/config/testar", response_class=HTMLResponse)
+async def config_testar(request: Request, canal: str = Form("telegram")):
+    """Botão 'Enviar mensagem de teste' (SPEC §7)."""
+    texto = ("📡 Radar de Licitações — mensagem de teste.\n"
+             "Se você recebeu isto, o canal está configurado corretamente. ✅")
+    if canal == "email":
+        ok = alerta_mod.enviar_email(texto)
+    else:
+        ok = alerta_mod.enviar_telegram(texto)
+    cor = "text-green-700" if ok else "text-red-700"
+    msg = ("✔ Teste enviado — confira se chegou." if ok else
+           "✖ Falhou. Confira os dados e veja o terminal para detalhes.")
+    return HTMLResponse(f'<span class="{cor} text-sm font-semibold">{msg}</span>')
 
 
 # ------------------------------------------------------------------- execução

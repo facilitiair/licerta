@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block titulo %}Licitações — Radar{% endblock %}
+{% block conteudo %}
+<h2 class="font-bold text-lg mb-3">Licitações ({{ total }})</h2>
+
+<form method="get" action="/licitacoes"
+      class="bg-white rounded-xl border border-slate-200 p-3 mb-4
+             flex gap-2 flex-wrap items-end text-sm">
+  <label>Perfil<br>
+    <select name="perfil_id" class="border border-slate-300 rounded-lg px-2 py-1.5">
+      <option value="">— todos —</option>
+      {% for p in perfis %}
+      <option value="{{ p.id }}" {{ 'selected' if filtros.perfil_id == p.id|string }}>
+        {{ p.nome }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Status<br>
+    <select name="status" class="border border-slate-300 rounded-lg px-2 py-1.5">
+      <option value="">— todos —</option>
+      {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
+      <option value="{{ st }}" {{ 'selected' if filtros.status == st }}>
+        {{ st.replace('_', ' ') }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>UF<br>
+    <select name="uf" class="border border-slate-300 rounded-lg px-2 py-1.5">
+      <option value="">— todas —</option>
+      {% for uf in ufs %}
+      <option {{ 'selected' if filtros.uf == uf }}>{{ uf }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Encerra de<br>
+    <input type="date" name="data_ini" value="{{ filtros.data_ini }}"
+           class="border border-slate-300 rounded-lg px-2 py-1.5">
+  </label>
+  <label>até<br>
+    <input type="date" name="data_fim" value="{{ filtros.data_fim }}"
+           class="border border-slate-300 rounded-lg px-2 py-1.5">
+  </label>
+  <label class="flex-1 min-w-40">Busca no objeto<br>
+    <input type="search" name="q" value="{{ filtros.q }}" placeholder="ex.: pavimentação"
+           class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
+  </label>
+  <input type="hidden" name="ordenar" value="{{ filtros.ordenar }}">
+  <button class="bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold">Filtrar</button>
+  <a href="/licitacoes" class="text-slate-500 underline px-1">limpar</a>
+  <span class="ml-auto flex gap-2">
+    <a href="/licitacoes/exportar?formato=csv&{{ query }}"
+       class="border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50">⬇ CSV</a>
+    <a href="/licitacoes/exportar?formato=xlsx&{{ query }}"
+       class="border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50">⬇ XLSX</a>
+  </span>
+</form>
+
+{% macro cab(rotulo, chave) -%}
+  {%- set asc = chave ~ '_asc' -%}{%- set desc = chave ~ '_desc' -%}
+  {%- set proximo = desc if filtros.ordenar == asc else asc -%}
+  <a href="?{{ query | replace('ordenar=' ~ filtros.ordenar, '') }}&ordenar={{ proximo }}"
+     class="hover:underline">{{ rotulo }}
+    {{- ' ▲' if filtros.ordenar == asc else (' ▼' if filtros.ordenar == desc else '') }}</a>
+{%- endmacro %}
+
+<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+<table class="w-full text-sm">
+  <thead class="bg-slate-50 text-left text-xs text-slate-600">
+    <tr>
+      <th class="px-3 py-2">{{ cab('Encerra', 'encerramento') }}</th>
+      <th class="px-3 py-2">{{ cab('Modalidade', 'modalidade') }}</th>
+      <th class="px-3 py-2">{{ cab('UF', 'uf') }}</th>
+      <th class="px-3 py-2">Município / Órgão</th>
+      <th class="px-3 py-2 w-1/2">Objeto</th>
+      <th class="px-3 py-2 text-right">{{ cab('Valor', 'valor') }}</th>
+      <th class="px-3 py-2"></th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-100">
+    {% for l in linhas %}
+    {% set m = matches.get(l.id) %}
+    <tr class="hover:bg-blue-50/40 align-top">
+      <td class="px-3 py-2 whitespace-nowrap">
+        {{ (l.data_encerramento_proposta or '—')[:16].replace('T', ' ') }}</td>
+      <td class="px-3 py-2">{{ l.modalidade_nome }}
+        {% if l.srp %}<span class="text-xs text-blue-700">SRP</span>{% endif %}</td>
+      <td class="px-3 py-2">{{ l.uf }}</td>
+      <td class="px-3 py-2">{{ l.municipio_nome }}<br>
+        <span class="text-xs text-slate-500">{{ (l.orgao_nome or '')[:50] }}</span></td>
+      <td class="px-3 py-2">
+        {% if m %}
+          <span class="text-xs px-1.5 py-0.5 rounded-full mr-1
+            {{ {'novo': 'bg-amber-100 text-amber-800',
+                'analisando': 'bg-blue-100 text-blue-800',
+                'vou_participar': 'bg-green-100 text-green-800',
+                'descartado': 'bg-slate-200 text-slate-500'}[m.status] }}">
+            {{ m.status.replace('_', ' ') }}</span>
+          {% if m.favorito %}⭐{% endif %}
+        {% endif %}
+        {{ (l.objeto or '')[:220] }}</td>
+      <td class="px-3 py-2 text-right whitespace-nowrap">
+        {{ 'R$ {:,.0f}'.format(l.valor_total_estimado).replace(',', '.')
+           if l.valor_total_estimado else '—' }}</td>
+      <td class="px-3 py-2">
+        <button hx-get="/licitacoes/{{ l.id }}/detalhe?perfil_id={{ filtros.perfil_id or 0 }}"
+                hx-target="#det{{ l.id }}" hx-swap="innerHTML"
+                class="text-blue-700 underline text-xs">detalhe</button></td>
+    </tr>
+    <tr><td colspan="7" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
+    {% else %}
+    <tr><td colspan="7" class="px-3 py-6 text-center text-slate-500">
+      Nada encontrado com esses filtros.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if paginas > 1 %}
+<div class="flex justify-center gap-3 mt-4 text-sm">
+  {% if pagina > 1 %}
+    <a href="?{{ query }}&pagina={{ pagina - 1 }}"
+       class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">← Anterior</a>
+  {% endif %}
+  <span class="py-1.5 text-slate-500">página {{ pagina }} de {{ paginas }}</span>
+  {% if pagina < paginas %}
+    <a href="?{{ query }}&pagina={{ pagina + 1 }}"
+       class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">Próxima →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

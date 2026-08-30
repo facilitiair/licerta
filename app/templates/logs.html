@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}Logs — Radar{% endblock %}
+{% block conteudo %}
+<h2 class="font-bold text-lg mb-3">Histórico de coletas</h2>
+<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+<table class="w-full text-sm">
+  <thead class="bg-slate-50 text-left text-xs text-slate-600">
+    <tr>
+      <th class="px-3 py-2">Início</th>
+      <th class="px-3 py-2">Duração</th>
+      <th class="px-3 py-2">Resultado</th>
+      <th class="px-3 py-2">Novos matches</th>
+      <th class="px-3 py-2">Erros</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-100">
+    {% for r in registros %}
+    <tr class="align-top">
+      <td class="px-3 py-2 whitespace-nowrap">
+        {{ r.inicio.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+      <td class="px-3 py-2">
+        {{ '%.0fs' % (r.fim - r.inicio).total_seconds() if r.fim else 'em andamento...' }}</td>
+      <td class="px-3 py-2">
+        {% if not r.fim %}⏳
+        {% elif r.sucesso %}<span class="text-green-700 font-semibold">✔ sucesso</span>
+        {% else %}<span class="text-red-700 font-semibold">✖ com erros</span>{% endif %}</td>
+      <td class="px-3 py-2">{{ r.qtd_novas }}</td>
+      <td class="px-3 py-2">
+        {{ r.qtd_erros }}
+        {% if r.detalhe_erro %}
+        <details class="text-xs text-slate-600">
+          <summary class="cursor-pointer">detalhe</summary>
+          <pre class="whitespace-pre-wrap">{{ r.detalhe_erro }}</pre>
+        </details>
+        {% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">
+      Nenhuma coleta registrada ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
