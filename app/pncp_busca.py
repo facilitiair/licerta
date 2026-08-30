@@ -19,15 +19,25 @@ HEADERS = {
     "Referer": "https://pncp.gov.br/app/editais",
 }
 STATUS = {"abertas": "recebendo_proposta", "encerradas": "encerradas", "todas": ""}
+ORDENACOES = {"recentes": "-data", "antigas": "data", "relevancia": "relevancia"}
 
 
-def pesquisar(q="", uf="", status="abertas", pagina=1, tam_pagina=20):
-    params = {"tipos_documento": "edital", "ordenacao": "-data",
+def pesquisar(q="", uf="", status="abertas", pagina=1, tam_pagina=20,
+              ufs=None, modalidades=None, esferas=None, ordenacao="recentes"):
+    """Busca avançada. Listas (ufs/modalidades/esferas) usam o separador '|',
+    formato aceito pela API do portal (validado ao vivo: os totais somam)."""
+    params = {"tipos_documento": "edital",
+              "ordenacao": ORDENACOES.get(ordenacao, "-data"),
               "pagina": pagina, "tam_pagina": tam_pagina}
     if q:
         params["q"] = q
-    if uf:
-        params["ufs"] = uf
+    lista_ufs = list(ufs or ([] if not uf else [uf]))
+    if lista_ufs:
+        params["ufs"] = "|".join(lista_ufs)
+    if modalidades:
+        params["modalidades"] = "|".join(str(m) for m in modalidades)
+    if esferas:
+        params["esferas"] = "|".join(esferas)
     st = STATUS.get(status, "recebendo_proposta")
     if st:
         params["status"] = st

@@ -313,8 +313,21 @@ async def perfis_lista(request: Request):
 async def perfil_novo(request: Request):
     s = Sessao()
     try:
-        return templates.TemplateResponse(request, "perfil_form.html",
-                                          _contexto_form(request, s, None))
+        contexto = _contexto_form(request, s, None)
+        qp = request.query_params
+        if qp.get("q") or qp.getlist("ufs"):
+            # veio do botão "criar perfil desta busca" da pesquisa ao vivo
+            palavras = [t.strip() for t in qp.get("q", "").split(",")
+                        if t.strip()] or ([qp.get("q")] if qp.get("q") else [])
+            contexto["perfil"] = PerfilBusca(
+                nome=f"Busca: {qp.get('q', 'nova')}"[:60],
+                ufs=qp.getlist("ufs"),
+                modalidades=[int(m) for m in qp.getlist("modalidades")
+                             if m.isdigit()],
+                municipios_ibge=[], palavras_incluir=palavras,
+                palavras_excluir=[], somente_srp=False, modo_busca="e",
+                ordenacao="encerramento_asc", ativo=True, notificar=True)
+        return templates.TemplateResponse(request, "perfil_form.html", contexto)
     finally:
         s.close()
 
@@ -662,27 +675,66 @@ def _perfil_pesquisa_manual(s):
 
 
 @app.get("/pesquisar", response_class=HTMLResponse)
-async def pesquisar_pncp(request: Request, q: str = "", uf: str = "",
-                         status: str = "abertas", pagina: int = 1):
-    resultado, erro = {"total": 0, "itens": []}, None
-    if q or uf:
+async def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
+                         ordenacao: str = "recentes", pagina: int = 1,
+                         frase_exata: str = "", cidade: str = "",
+                         valor_min: str = "", valor_max: str = ""):
+    qp = request.query_params
+    f_ufs = qp.getlist("ufs")
+    f_mods = [m for m in qp.getlist("modalidades") if m.isdigit()]
+    f_esferas = [e for e in qp.getlist("esferas") if e in ("M", "E", "F", "D")]
+    consultou = bool(q or f_ufs or f_mods or f_esferas)
+    resultado, erro, filtrados_pagina = {"total": 0, "itens": []}, None, 0
+    if consultou:
+        termo = f'"{q}"' if (q and frase_exata and '"' not in q) else q
         try:
-            resultado = pncp_busca.pesquisar(q=q, uf=uf, status=status,
-                                             pagina=pagina)
+            resultado = pncp_busca.pesquisar(
+                q=termo, ufs=f_ufs, modalidades=f_mods, esferas=f_esferas,
+                status=status, ordenacao=ordenacao, pagina=pagina)
         except Exception as e:  # noqa: BLE001
             erro = f"PNCP indisponível no momento: {e}"
+        # refinamentos locais (a API não filtra cidade/valor): agem na página
+        def _passa(it):
+            if cidade and normalizar(cidade) not in \
+                    normalizar(it.get("municipio_nome") or ""):
+                return False
+            v = it.get("valor_total_estimado")
+            try:
+                if valor_min and (v is None or v < float(valor_min)):
+                    return False
+                if valor_max and v is not None and v > float(valor_max):
+                    return False
+            except ValueError:
+                pass
+            return True
+        if cidade or valor_min or valor_max:
+            antes = len(resultado["itens"])
+            resultado["itens"] = [i for i in resultado["itens"] if _passa(i)]
+            filtrados_pagina = antes - len(resultado["itens"])
     s = Sessao()
     try:
         salvos = {l[0] for l in s.query(Licitacao.numero_controle_pncp)}
+        modalidades = s.query(Modalidade).order_by(Modalidade.codigo).all()
     finally:
         s.close()
     for item in resultado["itens"]:
         item["ja_salvo"] = item["numero_controle_pncp"] in salvos
     return templates.TemplateResponse(request, "pesquisar.html", {
-        "q": q, "uf": uf, "status": status, "pagina": pagina,
+        "q": q, "status": status, "ordenacao": ordenacao, "pagina": pagina,
+        "frase_exata": frase_exata, "cidade": cidade,
+        "valor_min": valor_min, "valor_max": valor_max,
+        "f_ufs": f_ufs, "f_mods": f_mods, "f_esferas": f_esferas,
         "total": resultado["total"], "itens": resultado["itens"],
         "paginas": max(1, -(-resultado["total"] // 20)),
-        "erro": erro, "ufs": UFS_TODAS,
+        "erro": erro, "ufs": UFS_TODAS, "modalidades": modalidades,
+        "consultou": consultou, "filtrados_pagina": filtrados_pagina,
+        "query_base": "&".join(
+            [f"q={q}", f"status={status}", f"ordenacao={ordenacao}",
+             f"frase_exata={frase_exata}", f"cidade={cidade}",
+             f"valor_min={valor_min}", f"valor_max={valor_max}"] +
+            [f"ufs={u}" for u in f_ufs] +
+            [f"modalidades={m}" for m in f_mods] +
+            [f"esferas={e}" for e in f_esferas]),
     })
 
 

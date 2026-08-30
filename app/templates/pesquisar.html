@@ -2,34 +2,112 @@
 {% block titulo %}Pesquisar PNCP — Radar{% endblock %}
 {% block conteudo %}
 <h1 class="text-xl font-bold mb-1">🌐 Pesquisar no PNCP</h1>
-<p class="text-xs text-slate-500 mb-4">Busca <b>ao vivo</b> em todo o Brasil,
-  qualquer objeto — independente do que os seus perfis coletam. O que
-  interessar, salve no radar para entrar no funil e na agenda.</p>
+<p class="text-xs text-slate-500 mb-4">Busca <b>ao vivo</b> no portal nacional —
+  qualquer objeto, qualquer lugar do Brasil, independente dos seus perfis.</p>
 
-<form method="get" action="/pesquisar" class="bg-white rounded-xl border
-      border-slate-200 p-3 mb-4 flex gap-2 flex-wrap items-center text-sm">
-  <input type="search" name="q" value="{{ q }}" autofocus
-         placeholder="ex.: poço artesiano, merenda, ambulância, software..."
-         class="flex-1 min-w-52 border border-slate-300 rounded-lg px-3 py-2">
-  <select name="uf" class="border border-slate-300 rounded-lg px-2 py-2">
-    <option value="">Brasil inteiro</option>
-    {% for u in ufs %}<option {{ 'selected' if uf == u }}>{{ u }}</option>{% endfor %}
-  </select>
-  <select name="status" class="border border-slate-300 rounded-lg px-2 py-2">
-    <option value="abertas" {{ 'selected' if status == 'abertas' }}>Recebendo propostas</option>
-    <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
-    <option value="encerradas" {{ 'selected' if status == 'encerradas' }}>Encerradas</option>
-  </select>
-  <button class="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold
-                 hover:bg-blue-700">🔍 Pesquisar</button>
+<form method="get" action="/pesquisar"
+      class="bg-white rounded-2xl border border-slate-200 p-4 mb-4 space-y-4 text-sm">
+
+  <!-- Linha principal -->
+  <div class="flex gap-2 flex-wrap items-center">
+    <input type="search" name="q" value="{{ q }}" autofocus
+           placeholder="O que procura? ex.: perfuração de poço, climatização, merenda escolar..."
+           class="flex-1 min-w-64 border border-slate-300 rounded-lg px-3 py-2.5">
+    <button class="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold
+                   hover:bg-blue-700">🔍 Pesquisar</button>
+    <a href="/pesquisar" class="text-slate-500 underline text-xs">limpar tudo</a>
+  </div>
+  <div class="flex gap-5 flex-wrap items-center text-xs">
+    <label class="flex items-center gap-1.5">
+      <input type="checkbox" name="frase_exata" value="1"
+             {{ 'checked' if frase_exata }}>
+      frase exata (na ordem digitada)</label>
+    <label>Ordenar:
+      <select name="ordenacao" class="border border-slate-300 rounded-lg px-2 py-1">
+        <option value="recentes" {{ 'selected' if ordenacao=='recentes' }}>mais recentes</option>
+        <option value="relevancia" {{ 'selected' if ordenacao=='relevancia' }}>relevância</option>
+        <option value="antigas" {{ 'selected' if ordenacao=='antigas' }}>mais antigas</option>
+      </select></label>
+    <label>Situação:
+      <select name="status" class="border border-slate-300 rounded-lg px-2 py-1">
+        <option value="abertas" {{ 'selected' if status=='abertas' }}>recebendo propostas</option>
+        <option value="todas" {{ 'selected' if status=='todas' }}>todas</option>
+        <option value="encerradas" {{ 'selected' if status=='encerradas' }}>encerradas</option>
+      </select></label>
+  </div>
+
+  <!-- Estados -->
+  <details {{ 'open' if f_ufs }} class="border-t border-slate-100 pt-3">
+    <summary class="cursor-pointer font-semibold text-xs text-slate-600">
+      📍 Estados {{ '(' ~ f_ufs|join(', ') ~ ')' if f_ufs else '(Brasil inteiro)' }}
+    </summary>
+    <div class="grid grid-cols-5 sm:grid-cols-9 gap-1 mt-2 text-xs">
+      {% for u in ufs %}
+      <label class="flex items-center gap-1">
+        <input type="checkbox" name="ufs" value="{{ u }}"
+               {{ 'checked' if u in f_ufs }}> {{ u }}</label>
+      {% endfor %}
+    </div>
+  </details>
+
+  <!-- Modalidades e esfera -->
+  <details {{ 'open' if f_mods or f_esferas }} class="border-t border-slate-100 pt-3">
+    <summary class="cursor-pointer font-semibold text-xs text-slate-600">
+      ⚖️ Modalidades e esfera
+      {{ '(' ~ (f_mods|length + f_esferas|length) ~ ' filtro(s))' if f_mods or f_esferas else '(todas)' }}
+    </summary>
+    <div class="grid sm:grid-cols-3 gap-1 mt-2 text-xs">
+      {% for m in modalidades %}
+      <label class="flex items-center gap-1.5">
+        <input type="checkbox" name="modalidades" value="{{ m.codigo }}"
+               {{ 'checked' if m.codigo|string in f_mods }}> {{ m.nome }}</label>
+      {% endfor %}
+    </div>
+    <div class="flex gap-4 mt-3 text-xs">
+      <span class="font-semibold">Esfera:</span>
+      {% for cod, nome in [('M', 'Municipal'), ('E', 'Estadual'), ('F', 'Federal'), ('D', 'Distrital')] %}
+      <label class="flex items-center gap-1">
+        <input type="checkbox" name="esferas" value="{{ cod }}"
+               {{ 'checked' if cod in f_esferas }}> {{ nome }}</label>
+      {% endfor %}
+    </div>
+  </details>
+
+  <!-- Refinamentos locais -->
+  <details {{ 'open' if cidade or valor_min or valor_max }}
+           class="border-t border-slate-100 pt-3">
+    <summary class="cursor-pointer font-semibold text-xs text-slate-600">
+      🔬 Refinar: cidade e valor</summary>
+    <div class="flex gap-3 flex-wrap mt-2 text-xs items-end">
+      <label>Cidade contém<br>
+        <input type="text" name="cidade" value="{{ cidade }}" placeholder="ex.: Teresina"
+               class="border border-slate-300 rounded-lg px-2 py-1.5"></label>
+      <label>Valor mínimo (R$)<br>
+        <input type="text" name="valor_min" value="{{ valor_min }}" inputmode="numeric"
+               class="border border-slate-300 rounded-lg px-2 py-1.5 w-32"></label>
+      <label>Valor máximo (R$)<br>
+        <input type="text" name="valor_max" value="{{ valor_max }}" inputmode="numeric"
+               class="border border-slate-300 rounded-lg px-2 py-1.5 w-32"></label>
+      <span class="text-slate-400 pb-1.5">— aplicados sobre cada página de resultados</span>
+    </div>
+  </details>
 </form>
 
 {% if erro %}
 <p class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg
           px-4 py-2 text-sm mb-4">{{ erro }}</p>
-{% elif q or uf %}
-<p class="text-xs text-slate-500 mb-3">{{ '{:,}'.format(total).replace(',', '.') }}
-  edital(is) encontrado(s) — página {{ pagina }} de {{ paginas }}</p>
+{% elif consultou %}
+<div class="flex items-center gap-3 flex-wrap mb-3">
+  <p class="text-xs text-slate-500">
+    <b>{{ '{:,}'.format(total).replace(',', '.') }}</b> edital(is) —
+    página {{ pagina }} de {{ paginas }}
+    {% if filtrados_pagina %} · {{ filtrados_pagina }} oculto(s) nesta página
+      pelos refinamentos{% endif %}</p>
+  <a href="/perfis/novo?q={{ q }}{% for u in f_ufs %}&ufs={{ u }}{% endfor %}{% for m in f_mods %}&modalidades={{ m }}{% endfor %}"
+     class="ml-auto text-xs border border-purple-600 text-purple-700 px-3 py-1.5
+            rounded-lg hover:bg-purple-50 font-semibold">
+    🎯 Monitorar esta busca (criar perfil)</a>
+</div>
 {% endif %}
 
 <div class="space-y-2">
@@ -65,24 +143,27 @@
     </div>
   </div>
   {% else %}
-    {% if q or uf %}{% if not erro %}
-    <p class="text-slate-500 text-sm">Nada encontrado com esses critérios.</p>
-    {% endif %}{% else %}
-    <p class="text-slate-500 text-sm">Digite o que procura e pesquise —
-      a busca é feita na hora no portal nacional.</p>
+    {% if consultou and not erro %}
+    <p class="text-slate-500 text-sm">Nada encontrado com esses critérios
+      {% if filtrados_pagina %} nesta página (os refinamentos ocultaram tudo —
+      tente a próxima){% endif %}.</p>
+    {% elif not consultou %}
+    <p class="text-slate-500 text-sm">Monte sua busca acima e clique em
+      Pesquisar. Dica: achou uma busca boa? Use
+      <b>🎯 Monitorar esta busca</b> para o radar vigiá-la todo dia.</p>
     {% endif %}
   {% endfor %}
 </div>
 
-{% if paginas > 1 %}
+{% if consultou and paginas > 1 %}
 <div class="flex justify-center gap-3 mt-4 text-sm">
   {% if pagina > 1 %}
-  <a href="?q={{ q }}&uf={{ uf }}&status={{ status }}&pagina={{ pagina - 1 }}"
+  <a href="?{{ query_base }}&pagina={{ pagina - 1 }}"
      class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">← Anterior</a>
   {% endif %}
   <span class="py-1.5 text-slate-500">página {{ pagina }} de {{ paginas }}</span>
   {% if pagina < paginas %}
-  <a href="?q={{ q }}&uf={{ uf }}&status={{ status }}&pagina={{ pagina + 1 }}"
+  <a href="?{{ query_base }}&pagina={{ pagina + 1 }}"
      class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">Próxima →</a>
   {% endif %}
 </div>

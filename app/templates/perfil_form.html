@@ -4,7 +4,7 @@
 <h2 class="font-bold text-lg mb-4">{{ 'Editar perfil' if perfil else 'Novo perfil' }}</h2>
 
 <form id="formPerfil" method="post" action="/perfis/salvar" class="space-y-5">
-  {% if perfil %}<input type="hidden" name="perfil_id" value="{{ perfil.id }}">{% endif %}
+  {% if perfil and perfil.id %}<input type="hidden" name="perfil_id" value="{{ perfil.id }}">{% endif %}
 
   <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
     <label class="block">
