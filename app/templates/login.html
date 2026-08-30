@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar — Radar de Licitações</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center">
+  <form method="post" action="/login"
+        class="bg-white rounded-2xl shadow p-8 w-80 space-y-4">
+    <h1 class="text-xl font-bold text-center">📡 Radar de Licitações</h1>
+    {% if erro %}<p class="text-red-600 text-sm text-center">{{ erro }}</p>{% endif %}
+    <input type="password" name="senha" placeholder="Senha" autofocus
+           class="w-full border border-slate-300 rounded-lg px-3 py-2">
+    <button class="w-full bg-blue-700 text-white rounded-lg py-2 font-semibold
+                   hover:bg-blue-800">Entrar</button>
+  </form>
+</body>
+</html>

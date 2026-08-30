@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Perfis — Radar de Licitações{% endblock %}
+{% block conteudo %}
+<div class="flex items-center mb-4">
+  <h2 class="font-bold text-lg">Perfis de busca</h2>
+  <a href="/perfis/novo" class="ml-auto bg-blue-700 text-white px-4 py-2
+        rounded-lg text-sm font-semibold hover:bg-blue-800">+ Novo perfil</a>
+</div>
+<div class="space-y-3">
+  {% for p in perfis %}
+  <div class="bg-white rounded-xl border border-slate-200 p-4
+              {{ '' if p.ativo else 'opacity-60' }}">
+    <div class="flex items-center gap-3 flex-wrap">
+      <span class="font-semibold">{{ p.nome }}</span>
+      <span class="text-xs px-2 py-0.5 rounded-full
+            {{ 'bg-green-100 text-green-800' if p.ativo else 'bg-slate-200 text-slate-600' }}">
+        {{ 'ativo' if p.ativo else 'inativo' }}</span>
+      {% if p.notificar %}<span class="text-xs px-2 py-0.5 rounded-full
+            bg-blue-100 text-blue-800">alerta diário</span>{% endif %}
+    </div>
+    <p class="text-xs text-slate-500 mt-1">
+      {{ p.ufs|join(', ') if p.ufs else 'Brasil inteiro' }}
+      · {{ p.modalidades|length or 'todas as' }} modalidade(s)
+      · incluir: {{ p.palavras_incluir|join(', ') or '(qualquer objeto)' }}
+      {% if p.palavras_excluir %} · excluir: {{ p.palavras_excluir|join(', ') }}{% endif %}
+    </p>
+    <div class="flex gap-2 mt-3 text-sm">
+      <a href="/perfis/{{ p.id }}" class="px-3 py-1 border border-slate-300
+            rounded-lg hover:bg-slate-50">✏️ Editar</a>
+      <form method="post" action="/perfis/{{ p.id }}/toggle">
+        <button class="px-3 py-1 border border-slate-300 rounded-lg
+              hover:bg-slate-50">{{ '⏸ Desativar' if p.ativo else '▶ Ativar' }}</button>
+      </form>
+      <form method="post" action="/perfis/{{ p.id }}/duplicar">
+        <button class="px-3 py-1 border border-slate-300 rounded-lg
+              hover:bg-slate-50">📋 Duplicar</button>
+      </form>
+      <form method="post" action="/perfis/{{ p.id }}/excluir"
+            onsubmit="return confirm('Excluir o perfil {{ p.nome }}? Os matches dele também serão removidos.')">
+        <button class="px-3 py-1 border border-red-300 text-red-700
+              rounded-lg hover:bg-red-50">🗑 Excluir</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="text-slate-500 text-sm">Nenhum perfil cadastrado.</p>
+  {% endfor %}
+</div>
+{% endblock %}

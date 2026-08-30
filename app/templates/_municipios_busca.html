@@ -1,0 +1,9 @@
+{% for m in municipios %}
+  <button type="button"
+          class="block w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50"
+          onclick="adicionarMunicipio('{{ m.codigo_ibge }}', '{{ m.nome }}/{{ m.uf }}')">
+    {{ m.nome }} / {{ m.uf }}
+  </button>
+{% else %}
+  <p class="px-3 py-1.5 text-sm text-slate-400">Nenhum município encontrado.</p>
+{% endfor %}

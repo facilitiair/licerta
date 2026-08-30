@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<div class="flex items-center gap-4 flex-wrap mb-4">
+  <div class="text-sm text-slate-500">
+    Última coleta bem-sucedida:
+    <b class="text-slate-700">
+      {{ ultima_coleta.fim.strftime('%d/%m/%Y %H:%M') if ultima_coleta else 'nunca' }}
+    </b>
+  </div>
+  <div class="ml-auto flex items-center gap-3">
+    <span id="statusColeta">
+      {% if coletando %}{% include "_coleta_status.html" %}{% endif %}
+    </span>
+    <button hx-post="/coletar" hx-target="#statusColeta" hx-swap="innerHTML"
+            class="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm
+                   font-semibold hover:bg-blue-800">
+      🔄 Coletar agora
+    </button>
+  </div>
+</div>
+
+<h2 class="font-bold text-lg mb-2">Perfis de busca</h2>
+<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+  {% for c in cartoes %}
+  <a href="/perfis/{{ c.perfil.id }}"
+     class="bg-white rounded-xl border border-slate-200 p-4 hover:shadow
+            {{ '' if c.perfil.ativo else 'opacity-50' }}">
+    <div class="flex items-start justify-between">
+      <span class="font-semibold">{{ c.perfil.nome }}</span>
+      {% if c.novos %}
+        <span class="bg-amber-100 text-amber-800 text-xs font-bold
+                     px-2 py-0.5 rounded-full">{{ c.novos }} novas</span>
+      {% endif %}
+    </div>
+    <p class="text-xs text-slate-500 mt-1">
+      {{ c.total }} licitação(ões) no total ·
+      {{ 'ativo' if c.perfil.ativo else 'inativo' }}
+      {{ '· notifica' if c.perfil.notificar else '' }}
+    </p>
+  </a>
+  {% else %}
+  <p class="text-slate-500 text-sm">Nenhum perfil ainda —
+    <a href="/perfis/novo" class="text-blue-700 underline">crie o primeiro</a>.</p>
+  {% endfor %}
+</div>
+
+<h2 class="font-bold text-lg mb-2">Últimas 20 licitações captadas</h2>
+<div class="space-y-2">
+  {% for l in ultimas %}
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <p class="text-xs text-slate-500">
+      {{ l.modalidade_nome }} · {{ l.municipio_nome }}/{{ l.uf }} ·
+      {{ l.orgao_nome }} {{ '· SRP' if l.srp else '' }}
+    </p>
+    <p class="text-sm my-1">{{ (l.objeto or '')[:300] }}</p>
+    <p class="text-xs">
+      💰 {{ 'R$ {:,.2f}'.format(l.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.')
+            if l.valor_total_estimado else 'valor não informado' }}
+      · ⏱️ encerra {{ (l.data_encerramento_proposta or 'ver edital')[:16].replace('T', ' ') }}
+      {% if l.link_pncp %}
+        · <a href="{{ l.link_pncp }}" target="_blank"
+             class="text-blue-700 underline">abrir no PNCP</a>
+      {% endif %}
+    </p>
+  </div>
+  {% else %}
+  <p class="text-slate-500 text-sm">Banco vazio — clique em "Coletar agora".</p>
+  {% endfor %}
+</div>
+{% endblock %}

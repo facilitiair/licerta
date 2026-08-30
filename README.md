@@ -1,61 +1,111 @@
-# 📡 Radar de Editais
+# 📡 Radar de Licitações
 
-Aplicativo local para **pesquisar e monitorar licitações públicas** de qualquer
-estado e qualquer objeto, com radar automático, dashboard e digest por e-mail.
+Aplicativo pessoal que monitora licitações públicas do Brasil inteiro pela API
+oficial do **PNCP**, com perfis de busca configuráveis, coleta automática
+diária e alerta no **Telegram**. Construído conforme o `SPEC.md`.
 
-## O que ele faz
+> O PNCP agrega por lei as licitações de todos os portais (Compras.gov.br,
+> Licitanet, BLL, BNC, Portal de Compras Públicas, sistemas próprios de
+> prefeituras...). Cada licitação mostra o link do sistema de origem.
 
-| Parte | O quê |
-|---|---|
-| **Pesquisar** (dashboard) | Busca livre no PNCP: qualquer palavra, Brasil inteiro, com "salvar no radar" |
-| **Radar** (`radar.py`) | Coleta diária do PNCP + Mural TCE-PI, filtra pelo seu perfil e grava novidades |
-| **Meu radar** (dashboard) | Lista o que o radar achou; marque interesse, visto ou descarte |
-| **Configurações** (dashboard) | Estados, cidades, categorias/termos, exclusões, modalidades, valor mínimo, e-mail |
-| **Digest** | E-mail diário com as novidades (ou HTML em `digests/` se e-mail desativado) |
+---
 
-## Como usar
+## 1. Como instalar (Windows, Mac ou Linux)
 
-```powershell
+1. Instale o Python 3.11 ou mais novo: https://python.org/downloads
+   (no Windows, marque "Add Python to PATH" na instalação).
+2. Baixe esta pasta (ou `git clone`), abra o terminal dentro dela e rode:
+
+```
 pip install -r requirements.txt
-python app.py        # dashboard em http://localhost:8765
-python radar.py      # coleta manual (o agendador roda isso sozinho)
+copy .env.example .env        (no Mac/Linux: cp .env.example .env)
 ```
 
-## Fontes de dados
-
-- **PNCP** — API pública de consulta (radar) e API de busca textual (aba Pesquisar).
-  Rate-limit tratado com pausa e backoff automático.
-- **Mural de Licitações TCE-PI** — raspagem best-effort da aplicação JSF.
-  Se o TCE mudar o site, o radar avisa no log e segue só com o PNCP.
-
-## Configuração
-
-Tudo em `config.yaml` (editável também pela aba Configurações do dashboard):
-
-- `ufs: []` = Brasil inteiro; `municipios: []` = todas as cidades
-- `categorias:` vazio = **tudo interessa** (radar sem filtro de objeto)
-- E-mail: use uma *senha de app* do Gmail (myaccount.google.com/apppasswords)
-  e marque `habilitado: true`
-
-## Agendamento
-
-Tarefa do Windows `RadarEditais` roda `python radar.py` todo dia às 08:00
-(criada por `instalar_tarefa.ps1`; remova com
-`schtasks /delete /tn RadarEditais /f`). O PC precisa estar ligado no horário —
-a tarefa roda assim que possível caso ele esteja desligado às 08:00.
-
-## Estrutura
+## 2. Como rodar
 
 ```
-radar.py                  coleta + classificação + digest
-app.py                    dashboard Flask
-config.yaml               configuração (estados, termos, e-mail...)
-editais.db                banco SQLite
-busca_editais/
-  matcher.py              normalização e casamento de termos
-  db.py                   esquema e upsert
-  digest.py               e-mail/HTML do digest
-  fontes/pncp.py          coletor PNCP (API consulta)
-  fontes/pncp_busca.py    busca textual PNCP (API do portal)
-  fontes/tcepi.py         raspador do Mural TCE-PI
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+Abra **http://localhost:8000** no navegador. Na primeira vez o app baixa a
+lista de municípios do IBGE e cria um perfil de exemplo (ar-condicionado no
+Piauí). Clique em **"Coletar agora"** para a primeira carga.
+
+A coleta automática roda todo dia às **06:00** e o alerta às **07:00**
+(horário de Fortaleza; mude no `.env`). Basta o programa ficar aberto.
+
+## 3. Como criar o bot do Telegram (5 minutos)
+
+1. No Telegram, procure **@BotFather** e envie `/newbot`. Dê um nome
+   (ex.: "Meu Radar de Licitações") e um usuário (ex.: `meu_radar_lic_bot`).
+2. O BotFather responde com o **token** (algo como
+   `7123456789:AAH...xyz`). Copie para `TELEGRAM_BOT_TOKEN=` no `.env`.
+3. Envie qualquer mensagem ("oi") para o SEU bot recém-criado.
+4. Abra no navegador:
+   `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates`
+   e procure `"chat":{"id":123456789...` — esse número é o seu
+   **chat_id**. Copie para `TELEGRAM_CHAT_ID=` no `.env`.
+5. Reinicie o app. Pronto: o alerta diário chega no seu Telegram.
+
+## 4. O arquivo .env (configurações)
+
+| Chave | Para quê |
+|---|---|
+| `APP_SENHA` | Senha do painel. Vazia = sem login (só use em casa). |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alerta diário no Telegram. |
+| `EMAIL_ATIVO` + `SMTP_*` | Alerta também por e-mail (opcional, Fase 2). |
+| `HORA_COLETA` / `HORA_ALERTA` | Horários dos jobs (HH:MM). |
+| `DIAS_JANELA_FUTURA` | Busca propostas que encerram em até N dias (padrão 90). |
+
+**Nunca envie o `.env` para ninguém nem para o GitHub** (o `.gitignore` já
+o protege).
+
+## 5. Perfis de busca
+
+Em **Perfis → Novo perfil** você define: estados (nenhum = Brasil inteiro),
+municípios (busca por digitação), modalidades, palavras-chave de inclusão e
+exclusão (aspas = expressão exata; `pavimenta*` = curinga), faixa de valor,
+só-SRP e ordenação. O botão **Pré-visualizar** mostra quantas licitações já
+gravadas casariam, sem salvar.
+
+## 6. Publicar na nuvem (Railway)
+
+1. Crie conta em https://railway.app (login com GitHub).
+2. "New Project" → "Deploy from GitHub repo" → escolha este repositório
+   (o `Dockerfile` é detectado sozinho).
+3. Em **Variables**, cadastre as mesmas chaves do seu `.env`.
+4. Em **Settings → Volumes**, monte um volume em `/radar/data`
+   (é onde vive o banco — sem isso os dados somem a cada deploy).
+5. Gere o domínio público em Settings → Networking. Defina `APP_SENHA`!
+
+Render e VPS funcionam igual: é um contêiner Docker comum na porta 8000.
+
+## 7. Backup
+
+Todo o seu histórico está num único arquivo: **`data/radar.db`**.
+Copie-o de vez em quando para um pendrive ou para o Google Drive.
+Para restaurar, basta colocar o arquivo de volta em `data/`.
+
+## 8. Testes
+
+```
+python -m pytest tests -q
+```
+
+## 9. Estrutura
+
+```
+app/main.py       servidor web + agendador          app/matcher.py  regras de busca
+app/pncp.py       cliente da API do PNCP            app/coleta.py   motor de coleta
+app/alerta.py     alerta Telegram                   app/seed.py     cargas iniciais
+app/db.py         tabelas (SQLAlchemy)              app/templates/  telas (Jinja2+HTMX)
+data/radar.db     SEU BANCO (faça backup!)          tests/          testes automáticos
+SPEC.md           especificação completa            Dockerfile      deploy na nuvem
+```
+
+### Legado (versão anterior)
+
+`radar.py`, `app.py` (Flask), `busca_editais/` e `docs/` são a primeira versão
+(site estático em https://facilitiair.github.io/radar-editais/ + coleta via
+GitHub Actions). Continuam funcionando de forma independente até você decidir
+desativá-los.

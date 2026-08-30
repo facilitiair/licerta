@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Editar' if perfil else 'Novo' }} perfil — Radar{% endblock %}
+{% block conteudo %}
+<h2 class="font-bold text-lg mb-4">{{ 'Editar perfil' if perfil else 'Novo perfil' }}</h2>
+
+<form id="formPerfil" method="post" action="/perfis/salvar" class="space-y-5">
+  {% if perfil %}<input type="hidden" name="perfil_id" value="{{ perfil.id }}">{% endif %}
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <label class="block">
+      <span class="text-sm font-semibold">Nome do perfil</span>
+      <input name="nome" value="{{ perfil.nome if perfil else '' }}" required
+             placeholder="ex.: Ar-condicionado — PI"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+    </label>
+    <div class="flex gap-6 text-sm">
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="ativo"
+               {{ 'checked' if not perfil or perfil.ativo else '' }}> Ativo
+      </label>
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="notificar"
+               {{ 'checked' if not perfil or perfil.notificar else '' }}>
+        Entra no alerta diário
+      </label>
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="somente_srp"
+               {{ 'checked' if perfil and perfil.somente_srp else '' }}>
+        Só registro de preços (SRP)
+      </label>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <span class="text-sm font-semibold">Estados
+      <span class="font-normal text-slate-500">(nenhum marcado = Brasil inteiro)</span></span>
+    <div class="grid grid-cols-5 sm:grid-cols-9 gap-1 mt-2 text-sm">
+      {% for uf in ufs_todas %}
+      <label class="flex items-center gap-1">
+        <input type="checkbox" name="ufs" value="{{ uf }}"
+               onchange="atualizarUfBusca()"
+               {{ 'checked' if perfil and uf in (perfil.ufs or []) else '' }}> {{ uf }}
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="mt-4">
+      <span class="text-sm font-semibold">Municípios
+        <span class="font-normal text-slate-500">(nenhum = todos das UFs acima)</span></span>
+      <div id="chipsMunicipios" class="flex gap-2 flex-wrap my-2">
+        {% for m in municipios_sel %}
+        <span class="chip bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full
+                     flex items-center gap-1" data-codigo="{{ m.codigo_ibge }}">
+          {{ m.nome }}/{{ m.uf }}
+          <input type="hidden" name="municipios_ibge" value="{{ m.codigo_ibge }}">
+          <button type="button" onclick="this.closest('.chip').remove()">✕</button>
+        </span>
+        {% endfor %}
+      </div>
+      <input type="search" id="buscaMunicipio" placeholder="Digite para buscar município..."
+             name="q" autocomplete="off"
+             hx-get="/api/municipios" hx-trigger="input changed delay:400ms"
+             hx-target="#resultadosMunicipios" hx-include="#ufBuscaOculta"
+             class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <input type="hidden" id="ufBuscaOculta" name="uf" value="">
+      <div id="resultadosMunicipios"
+           class="border border-slate-200 rounded-lg mt-1 bg-white divide-y
+                  divide-slate-100 max-h-52 overflow-auto"></div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <span class="text-sm font-semibold">Modalidades
+      <span class="font-normal text-slate-500">(nenhuma marcada = todas)</span></span>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-1 mt-2 text-sm">
+      {% for m in modalidades %}
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="modalidades" value="{{ m.codigo }}"
+               {{ 'checked' if perfil and m.codigo in (perfil.modalidades or []) else '' }}>
+        {{ m.nome }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 grid sm:grid-cols-2 gap-4">
+    <label class="block">
+      <span class="text-sm font-semibold">Palavras a incluir</span>
+      <p class="text-xs text-slate-500">Uma por linha. Casa se <b>qualquer uma</b>
+        aparecer. Aspas = expressão exata; * = curinga (pavimenta*).</p>
+      <textarea name="palavras_incluir" rows="6"
+        class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+        >{{ perfil.palavras_incluir|join('\n') if perfil else '' }}</textarea>
+    </label>
+    <label class="block">
+      <span class="text-sm font-semibold">Palavras a excluir</span>
+      <p class="text-xs text-slate-500">Descarta a licitação se qualquer uma aparecer.</p>
+      <textarea name="palavras_excluir" rows="6"
+        class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+        >{{ perfil.palavras_excluir|join('\n') if perfil else '' }}</textarea>
+    </label>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 grid sm:grid-cols-3 gap-4">
+    <label class="block">
+      <span class="text-sm font-semibold">Valor mínimo (R$)</span>
+      <input name="valor_min" inputmode="decimal"
+             value="{{ perfil.valor_min if perfil and perfil.valor_min is not none else '' }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+    </label>
+    <label class="block">
+      <span class="text-sm font-semibold">Valor máximo (R$)</span>
+      <input name="valor_max" inputmode="decimal"
+             value="{{ perfil.valor_max if perfil and perfil.valor_max is not none else '' }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+    </label>
+    <label class="block">
+      <span class="text-sm font-semibold">Ordenação</span>
+      <select name="ordenacao"
+              class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+        {% set ord = perfil.ordenacao if perfil else 'encerramento_asc' %}
+        <option value="encerramento_asc" {{ 'selected' if ord=='encerramento_asc' }}>Encerramento mais próximo</option>
+        <option value="abertura_asc" {{ 'selected' if ord=='abertura_asc' }}>Abertura mais próxima</option>
+        <option value="publicacao_desc" {{ 'selected' if ord=='publicacao_desc' }}>Publicação mais recente</option>
+        <option value="valor_desc" {{ 'selected' if ord=='valor_desc' }}>Maior valor</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="flex items-center gap-4 flex-wrap">
+    <button class="bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold
+                   hover:bg-blue-800">💾 Salvar perfil</button>
+    <button type="button"
+            hx-post="/perfis/preview" hx-include="#formPerfil"
+            hx-target="#resultadoPreview"
+            class="border border-blue-700 text-blue-700 px-5 py-2.5 rounded-lg
+                   font-semibold hover:bg-blue-50">👁 Pré-visualizar</button>
+    <span id="resultadoPreview" class="text-sm"></span>
+    <a href="/perfis" class="ml-auto text-slate-500 text-sm underline">cancelar</a>
+  </div>
+</form>
+
+<script>
+  // Chips de municípios: adiciona um hidden input por município escolhido
+  function adicionarMunicipio(codigo, rotulo){
+    if (document.querySelector(`.chip[data-codigo="${codigo}"]`)) return;
+    const chip = document.createElement('span');
+    chip.className = 'chip bg-blue-100 text-blue-800 text-xs px-2 py-1 ' +
+                     'rounded-full flex items-center gap-1';
+    chip.dataset.codigo = codigo;
+    chip.innerHTML = `${rotulo}
+      <input type="hidden" name="municipios_ibge" value="${codigo}">
+      <button type="button" onclick="this.closest('.chip').remove()">✕</button>`;
+    document.getElementById('chipsMunicipios').appendChild(chip);
+    document.getElementById('resultadosMunicipios').innerHTML = '';
+    document.getElementById('buscaMunicipio').value = '';
+  }
+  // A busca de municípios respeita as UFs marcadas
+  function atualizarUfBusca(){
+    const marcadas = [...document.querySelectorAll('input[name=ufs]:checked')]
+                     .map(i => i.value);
+    document.getElementById('ufBuscaOculta').value = marcadas.join(',');
+  }
+  atualizarUfBusca();
+</script>
+{% endblock %}
