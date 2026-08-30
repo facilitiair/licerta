@@ -4,10 +4,15 @@ Uso: python -m app.rotina
 As credenciais (Telegram/SMTP) vêm de variáveis de ambiente — nos Actions,
 dos Secrets do repositório.
 """
+import logging
+
 from .alerta import enviar_alerta_diario
 from .coleta import coletar
 from .db import criar_tabelas
 from .seed import semear
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 SITE = "https://facilitiair.github.io/radar-editais/"
 
