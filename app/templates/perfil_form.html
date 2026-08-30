@@ -84,10 +84,18 @@
   </div>
 
   <div class="bg-white rounded-xl border border-slate-200 p-4 grid sm:grid-cols-2 gap-4">
+    <div class="sm:col-span-2 text-sm">
+      <span class="font-semibold">Como casar as palavras?</span>
+      {% set modo = perfil.modo_busca if perfil else 'ou' %}
+      <label class="ml-3"><input type="radio" name="modo_busca" value="ou"
+        {{ 'checked' if modo != 'e' }}> Qualquer uma basta (OU — mais resultados)</label>
+      <label class="ml-3"><input type="radio" name="modo_busca" value="e"
+        {{ 'checked' if modo == 'e' }}> Todas precisam aparecer (E — específico)</label>
+    </div>
     <label class="block">
       <span class="text-sm font-semibold">Palavras a incluir</span>
-      <p class="text-xs text-slate-500">Uma por linha. Casa se <b>qualquer uma</b>
-        aparecer. Aspas = expressão exata; * = curinga (pavimenta*).</p>
+      <p class="text-xs text-slate-500">Uma por linha.
+        Aspas = expressão exata; * = curinga (pavimenta*).</p>
       <textarea name="palavras_incluir" rows="6"
         class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
         >{{ perfil.palavras_incluir|join('\n') if perfil else '' }}</textarea>

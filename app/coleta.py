@@ -74,7 +74,8 @@ def _rodar_matcher(sessao_db, perfis):
                 # registra POR QUAIS palavras casou, para exibir na interface
                 _, termos = texto_casa(lic.objeto or "",
                                        perfil.palavras_incluir,
-                                       perfil.palavras_excluir)
+                                       perfil.palavras_excluir,
+                                       getattr(perfil, "modo_busca", "ou"))
                 sessao_db.add(PerfilMatch(perfil_id=perfil.id,
                                           licitacao_id=lic.id,
                                           termos=", ".join(termos)))
@@ -163,7 +164,8 @@ def _coletar_atas(sessao_db, perfis, erros):
                 continue
             casados = [p.nome for p in perfis_com_palavras
                        if texto_casa(ata["objeto"] or "", p.palavras_incluir,
-                                     p.palavras_excluir)[0]]
+                                     p.palavras_excluir,
+                                     getattr(p, "modo_busca", "ou"))[0]]
             if not casados:
                 continue
             existente = sessao_db.query(Ata).filter_by(

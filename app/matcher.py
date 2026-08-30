@@ -27,16 +27,22 @@ def _termo_para_regex(termo):
     return re.compile(r"\w*".join(partes)) if len(partes) > 1 else re.compile(partes[0])
 
 
-def texto_casa(objeto, incluir, excluir):
-    """Aplica as listas de palavras ao objeto. Retorna (casou, termos_que_casaram)."""
+def texto_casa(objeto, incluir, excluir, modo="ou"):
+    """Aplica as listas de palavras ao objeto. Retorna (casou, termos_que_casaram).
+
+    modo='ou': casa se QUALQUER termo aparecer (padrão).
+    modo='e' : casa só se TODOS os termos aparecerem — busca específica.
+    """
     texto = normalizar(objeto)
     for termo in excluir or []:
         if termo.strip() and _termo_para_regex(termo).search(texto):
             return False, []
-    if not incluir:
+    validos = [t for t in (incluir or []) if t.strip()]
+    if not validos:
         return True, []          # lista vazia = qualquer objeto interessa
-    casados = [t for t in incluir
-               if t.strip() and _termo_para_regex(t).search(texto)]
+    casados = [t for t in validos if _termo_para_regex(t).search(texto)]
+    if modo == "e":
+        return len(casados) == len(validos), casados
     return bool(casados), casados
 
 
@@ -57,7 +63,8 @@ def licitacao_casa_perfil(lic, perfil):
     if perfil.valor_max is not None and valor is not None and valor > perfil.valor_max:
         return False
     casou, _ = texto_casa(lic.objeto or "", perfil.palavras_incluir,
-                          perfil.palavras_excluir)
+                          perfil.palavras_excluir,
+                          getattr(perfil, "modo_busca", None) or "ou")
     return casou
 
 

@@ -26,6 +26,7 @@ class PerfilBusca(Base):
     valor_min = Column(Float, nullable=True)
     valor_max = Column(Float, nullable=True)
     somente_srp = Column(Boolean, default=False, nullable=False)
+    modo_busca = Column(String, default="ou", nullable=False)  # 'ou' | 'e'
     ordenacao = Column(String, default="encerramento_asc", nullable=False)
     notificar = Column(Boolean, default=True, nullable=False)
     criado_em = Column(DateTime, default=datetime.now, nullable=False)
@@ -155,6 +156,7 @@ def _migrar():
         "licitacoes": [("fonte", "TEXT DEFAULT 'pncp'"), ("situacao", "TEXT"),
                        ("objeto_norm", "TEXT")],
         "perfil_matches": [("termos", "TEXT DEFAULT ''")],
+        "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'")],
     }
     with engine.connect() as con:
         for tabela, novas in pendencias.items():

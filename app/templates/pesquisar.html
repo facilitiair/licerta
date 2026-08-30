@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titulo %}Pesquisar PNCP — Radar{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">🌐 Pesquisar no PNCP</h1>
+<p class="text-xs text-slate-500 mb-4">Busca <b>ao vivo</b> em todo o Brasil,
+  qualquer objeto — independente do que os seus perfis coletam. O que
+  interessar, salve no radar para entrar no funil e na agenda.</p>
+
+<form method="get" action="/pesquisar" class="bg-white rounded-xl border
+      border-slate-200 p-3 mb-4 flex gap-2 flex-wrap items-center text-sm">
+  <input type="search" name="q" value="{{ q }}" autofocus
+         placeholder="ex.: poço artesiano, merenda, ambulância, software..."
+         class="flex-1 min-w-52 border border-slate-300 rounded-lg px-3 py-2">
+  <select name="uf" class="border border-slate-300 rounded-lg px-2 py-2">
+    <option value="">Brasil inteiro</option>
+    {% for u in ufs %}<option {{ 'selected' if uf == u }}>{{ u }}</option>{% endfor %}
+  </select>
+  <select name="status" class="border border-slate-300 rounded-lg px-2 py-2">
+    <option value="abertas" {{ 'selected' if status == 'abertas' }}>Recebendo propostas</option>
+    <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
+    <option value="encerradas" {{ 'selected' if status == 'encerradas' }}>Encerradas</option>
+  </select>
+  <button class="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold
+                 hover:bg-blue-700">🔍 Pesquisar</button>
+</form>
+
+{% if erro %}
+<p class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg
+          px-4 py-2 text-sm mb-4">{{ erro }}</p>
+{% elif q or uf %}
+<p class="text-xs text-slate-500 mb-3">{{ '{:,}'.format(total).replace(',', '.') }}
+  edital(is) encontrado(s) — página {{ pagina }} de {{ paginas }}</p>
+{% endif %}
+
+<div class="space-y-2">
+  {% for it in itens %}
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <p class="text-xs text-slate-500">
+      {{ it.modalidade_nome }} · {{ it.municipio_nome }}/{{ it.uf }} ·
+      {{ it.orgao_nome }} · {{ it.situacao }}</p>
+    <p class="text-sm my-1">{{ it.objeto }}</p>
+    <div class="flex gap-4 items-center flex-wrap text-xs">
+      <span>💰 {{ 'R$ {:,.2f}'.format(it.valor_total_estimado)
+                  .replace(',', 'X').replace('.', ',').replace('X', '.')
+                  if it.valor_total_estimado else 'valor não informado' }}</span>
+      <span>⏱️ propostas até {{ (it.data_encerramento_proposta or 'ver edital')[:16].replace('T',' ') }}</span>
+      {% if it.link_pncp %}
+      <a href="{{ it.link_pncp }}" target="_blank"
+         class="text-blue-700 underline">🔗 abrir edital</a>{% endif %}
+      {% if it.ja_salvo %}
+        <span class="text-green-700 font-semibold">✔ no radar</span>
+      {% else %}
+      <form hx-post="/pesquisar/salvar" hx-swap="outerHTML" class="inline">
+        {% for campo in ['numero_controle_pncp','objeto','modalidade_nome',
+                         'modalidade_codigo','orgao_nome','orgao_cnpj',
+                         'municipio_nome','uf','data_abertura_proposta',
+                         'data_encerramento_proposta','data_publicacao_pncp',
+                         'link_pncp','situacao','valor_total_estimado'] %}
+        <input type="hidden" name="{{ campo }}" value="{{ it[campo] or '' }}">
+        {% endfor %}
+        <button class="border border-green-700 text-green-700 px-3 py-1
+                       rounded-lg hover:bg-green-50">⭐ Salvar no radar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+    {% if q or uf %}{% if not erro %}
+    <p class="text-slate-500 text-sm">Nada encontrado com esses critérios.</p>
+    {% endif %}{% else %}
+    <p class="text-slate-500 text-sm">Digite o que procura e pesquise —
+      a busca é feita na hora no portal nacional.</p>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if paginas > 1 %}
+<div class="flex justify-center gap-3 mt-4 text-sm">
+  {% if pagina > 1 %}
+  <a href="?q={{ q }}&uf={{ uf }}&status={{ status }}&pagina={{ pagina - 1 }}"
+     class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">← Anterior</a>
+  {% endif %}
+  <span class="py-1.5 text-slate-500">página {{ pagina }} de {{ paginas }}</span>
+  {% if pagina < paginas %}
+  <a href="?q={{ q }}&uf={{ uf }}&status={{ status }}&pagina={{ pagina + 1 }}"
+     class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">Próxima →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -62,6 +62,14 @@ def test_inclusao_vazia_casa_qualquer_objeto():
     assert texto_casa("qualquer coisa", [], [])[0]
 
 
+def test_modo_e_exige_todas_as_palavras():
+    objeto = "manutenção de ar condicionado tipo split"
+    assert texto_casa(objeto, ["manutenção", "split"], [], modo="e")[0]
+    assert not texto_casa(objeto, ["manutenção", "chiller"], [], modo="e")[0]
+    # no modo OU (padrão), uma basta
+    assert texto_casa(objeto, ["manutenção", "chiller"], [], modo="ou")[0]
+
+
 def test_faixa_de_valor():
     p = perfil(valor_min=50000, valor_max=200000)
     assert licitacao_casa_perfil(LicFake(valor_total_estimado=100000), p)

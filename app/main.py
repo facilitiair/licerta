@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import alerta as alerta_mod
 from . import envcfg
+from . import pncp_busca
 from .coleta import coleta_em_andamento, coletar_em_background
 from .config import PASTA_DADOS, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
@@ -277,6 +278,7 @@ def _form_para_perfil(form):
         "valor_min": numero("valor_min"),
         "valor_max": numero("valor_max"),
         "somente_srp": form.get("somente_srp") == "on",
+        "modo_busca": form.get("modo_busca", "ou"),
         "ordenacao": form.get("ordenacao", "encerramento_asc"),
         "notificar": form.get("notificar") == "on",
     }
@@ -637,6 +639,89 @@ async def licitacoes_exportar(request: Request, formato: str = "csv"):
         return Response(gerar_csv(linhas), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition":
                                  'attachment; filename="licitacoes.csv"'})
+    finally:
+        s.close()
+
+
+# ------------------------------------------------- pesquisa ao vivo no PNCP
+UFS_TODAS = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG",
+             "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR",
+             "RS", "SC", "SE", "SP", "TO"]
+
+
+def _perfil_pesquisa_manual(s):
+    """Perfil-sistema que abriga o que você salva da pesquisa ao vivo."""
+    p = s.query(PerfilBusca).filter_by(nome="⭐ Salvos da pesquisa").first()
+    if not p:
+        p = PerfilBusca(nome="⭐ Salvos da pesquisa", ativo=False,
+                        notificar=False, ufs=[], modalidades=[],
+                        palavras_incluir=["__nunca_casa_automaticamente__"])
+        s.add(p)
+        s.commit()
+    return p
+
+
+@app.get("/pesquisar", response_class=HTMLResponse)
+async def pesquisar_pncp(request: Request, q: str = "", uf: str = "",
+                         status: str = "abertas", pagina: int = 1):
+    resultado, erro = {"total": 0, "itens": []}, None
+    if q or uf:
+        try:
+            resultado = pncp_busca.pesquisar(q=q, uf=uf, status=status,
+                                             pagina=pagina)
+        except Exception as e:  # noqa: BLE001
+            erro = f"PNCP indisponível no momento: {e}"
+    s = Sessao()
+    try:
+        salvos = {l[0] for l in s.query(Licitacao.numero_controle_pncp)}
+    finally:
+        s.close()
+    for item in resultado["itens"]:
+        item["ja_salvo"] = item["numero_controle_pncp"] in salvos
+    return templates.TemplateResponse(request, "pesquisar.html", {
+        "q": q, "uf": uf, "status": status, "pagina": pagina,
+        "total": resultado["total"], "itens": resultado["itens"],
+        "paginas": max(1, -(-resultado["total"] // 20)),
+        "erro": erro, "ufs": UFS_TODAS,
+    })
+
+
+@app.post("/pesquisar/salvar", response_class=HTMLResponse)
+async def pesquisar_salvar(request: Request):
+    """Salva um resultado da pesquisa ao vivo no radar (entra no funil)."""
+    form = await request.form()
+    numero = form.get("numero_controle_pncp", "")
+    if not numero:
+        return HTMLResponse("item inválido", status_code=400)
+    item = {c: (form.get(c) or None) for c in
+            ("numero_controle_pncp", "objeto", "modalidade_nome", "orgao_nome",
+             "orgao_cnpj", "municipio_nome", "uf", "data_abertura_proposta",
+             "data_encerramento_proposta", "data_publicacao_pncp",
+             "link_pncp", "situacao")}
+    item["fonte"] = "pncp"
+    item["objeto_norm"] = normalizar(item.get("objeto") or "")
+    try:
+        item["valor_total_estimado"] = float(form.get("valor_total_estimado"))
+    except (TypeError, ValueError):
+        item["valor_total_estimado"] = None
+    m_cod = form.get("modalidade_codigo")
+    item["modalidade_codigo"] = int(m_cod) if m_cod and m_cod.isdigit() else None
+    ano = numero.split("/")[-1]
+    item["ano_compra"] = int(ano) if ano.isdigit() else None
+    s = Sessao()
+    try:
+        from .coleta import _upsert
+        lic = _upsert(s, item)
+        s.commit()
+        perfil = _perfil_pesquisa_manual(s)
+        existe = s.query(PerfilMatch).filter_by(
+            perfil_id=perfil.id, licitacao_id=lic.id).first()
+        if not existe:
+            s.add(PerfilMatch(perfil_id=perfil.id, licitacao_id=lic.id,
+                              termos="salvo manualmente"))
+            s.commit()
+        return HTMLResponse('<span class="text-green-700 text-xs '
+                            'font-semibold">✔ no radar</span>')
     finally:
         s.close()
 

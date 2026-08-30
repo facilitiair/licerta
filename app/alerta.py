@@ -35,7 +35,35 @@ def _fmt_data(d):
         return d
 
 
-def _bloco_licitacao(n, lic):
+def _link_download_edital(sessao_db, lic):
+    """Melhor link direto para baixar o edital: primeiro o que já baixamos,
+    senão consulta a API de documentos na hora (melhor esforço)."""
+    import re
+
+    from .db import ArquivoEdital
+    from .pncp import listar_arquivos_compra
+
+    arq = (sessao_db.query(ArquivoEdital)
+           .filter_by(licitacao_id=lic.id, tipo="Edital").first())
+    if arq and arq.url_origem:
+        return re.sub(r"^(https://pncp\.gov\.br):\d+", r"\1", arq.url_origem)
+    if lic.fonte != "pncp" or not (lic.orgao_cnpj and lic.ano_compra):
+        return None
+    try:
+        seq = int(lic.numero_controle_pncp.split("-")[2].split("/")[0])
+        docs = listar_arquivos_compra(lic.orgao_cnpj, lic.ano_compra, seq)
+        edital = next((d for d in docs
+                       if (d.get("tipoDocumentoNome") or "") == "Edital"),
+                      docs[0] if docs else None)
+        if edital and (edital.get("url") or edital.get("uri")):
+            return re.sub(r"^(https://pncp\.gov\.br):\d+", r"\1",
+                          edital.get("url") or edital.get("uri"))
+    except Exception:  # noqa: BLE001 — link é cortesia, nunca trava o alerta
+        pass
+    return None
+
+
+def _bloco_licitacao(n, lic, termos="", link_download=None):
     objeto = (lic.objeto or "").strip()   # objeto completo, sem truncar
     linhas = [
         f"{n}. {lic.modalidade_nome or ''} {lic.numero_compra or ''}/"
@@ -47,8 +75,14 @@ def _bloco_licitacao(n, lic):
         f"   Abertura: {_fmt_data(lic.data_abertura_proposta)} · "
         f"Encerra: {_fmt_data(lic.data_encerramento_proposta)}",
     ]
+    if termos:
+        linhas.append(f"   🎯 Casou por: {termos}")
+    if link_download:
+        linhas.append(f"   ⬇️ Baixar edital: {link_download}")
     if lic.link_pncp:
-        linhas.append(f"   🔗 {lic.link_pncp}")
+        linhas.append(f"   🔗 Página no PNCP: {lic.link_pncp}")
+    elif lic.link_sistema_origem:
+        linhas.append(f"   🔗 {lic.link_sistema_origem}")
     return "\n".join(linhas)
 
 
@@ -64,12 +98,17 @@ def montar_mensagem(sessao_db, host="http://localhost:8000"):
                      .filter_by(perfil_id=perfil.id, notificado=False).all())
         if not pendentes:
             continue
+        por_lic = {m.licitacao_id: m for m in pendentes}
         lics = ordenar_licitacoes([m.licitacao for m in pendentes],
                                   perfil.ordenacao)
         partes.append(f"🔹 PERFIL: {perfil.nome} ({len(pendentes)} nova"
                       f"{'s' if len(pendentes) != 1 else ''})\n")
         for i, lic in enumerate(lics[:LIMITE_POR_PERFIL], 1):
-            partes.append(_bloco_licitacao(i, lic) + "\n")
+            m = por_lic.get(lic.id)
+            partes.append(_bloco_licitacao(
+                i, lic,
+                termos=m.termos if m else "",
+                link_download=_link_download_edital(sessao_db, lic)) + "\n")
         if len(lics) > LIMITE_POR_PERFIL:
             partes.append(f"   ... e mais {len(lics) - LIMITE_POR_PERFIL} — "
                           "veja no painel.\n")
