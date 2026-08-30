@@ -21,9 +21,53 @@ HEADERS = {
 STATUS = {"abertas": "recebendo_proposta", "encerradas": "encerradas", "todas": ""}
 ORDENACOES = {"recentes": "-data", "antigas": "data", "relevancia": "relevancia"}
 
+# Cache das opções de filtro do portal (municípios e órgãos com seus IDs)
+_opcoes_cache = {"quando": 0.0, "municipios": [], "orgaos": []}
+_OPCOES_TTL = 6 * 3600
+
+
+def _carregar_opcoes():
+    import time
+    if time.time() - _opcoes_cache["quando"] < _OPCOES_TTL and \
+            _opcoes_cache["municipios"]:
+        return _opcoes_cache
+    r = requests.get("https://pncp.gov.br/api/search/filters", headers=HEADERS,
+                     params={"tipos_documento": "edital",
+                             "status": "recebendo_proposta"}, timeout=40)
+    r.raise_for_status()
+    filtros = r.json().get("filters") or {}
+    _opcoes_cache["municipios"] = [
+        {"id": str(m["id"]), "nome": m["nome"],
+         "nome_norm": normalizar(m["nome"])}
+        for m in filtros.get("municipios") or [] if m.get("id")]
+    _opcoes_cache["orgaos"] = [
+        {"id": str(o["id"]), "nome": o["nome"], "cnpj": o.get("cnpj", ""),
+         "nome_norm": normalizar(o["nome"])}
+        for o in filtros.get("orgaos") or [] if o.get("id")]
+    _opcoes_cache["quando"] = time.time()
+    return _opcoes_cache
+
+
+def buscar_opcoes(tipo, q, limite=12):
+    """Busca por digitação nas opções do portal (municipios | orgaos)."""
+    try:
+        opcoes = _carregar_opcoes().get(tipo) or []
+    except Exception:  # noqa: BLE001 — sem opções, o filtro só fica indisponível
+        return []
+    alvo = normalizar(q)
+    return [o for o in opcoes if alvo in o["nome_norm"]][:limite]
+
+
+def nome_opcao(tipo, id_):
+    for o in _opcoes_cache.get(tipo) or []:
+        if o["id"] == str(id_):
+            return o["nome"]
+    return str(id_)
+
 
 def pesquisar(q="", uf="", status="abertas", pagina=1, tam_pagina=20,
-              ufs=None, modalidades=None, esferas=None, ordenacao="recentes"):
+              ufs=None, modalidades=None, esferas=None, ordenacao="recentes",
+              municipios=None, orgaos=None):
     """Busca avançada. Listas (ufs/modalidades/esferas) usam o separador '|',
     formato aceito pela API do portal (validado ao vivo: os totais somam)."""
     params = {"tipos_documento": "edital",
@@ -38,6 +82,10 @@ def pesquisar(q="", uf="", status="abertas", pagina=1, tam_pagina=20,
         params["modalidades"] = "|".join(str(m) for m in modalidades)
     if esferas:
         params["esferas"] = "|".join(esferas)
+    if municipios:
+        params["municipios"] = "|".join(str(m) for m in municipios)
+    if orgaos:
+        params["orgaos"] = "|".join(str(o) for o in orgaos)
     st = STATUS.get(status, "recebendo_proposta")
     if st:
         params["status"] = st

@@ -683,13 +683,16 @@ async def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
     f_ufs = qp.getlist("ufs")
     f_mods = [m for m in qp.getlist("modalidades") if m.isdigit()]
     f_esferas = [e for e in qp.getlist("esferas") if e in ("M", "E", "F", "D")]
-    consultou = bool(q or f_ufs or f_mods or f_esferas)
+    f_muns = [m for m in qp.getlist("municipios") if m.isdigit()]
+    f_orgs = [o for o in qp.getlist("orgaos") if o.isdigit()]
+    consultou = bool(q or f_ufs or f_mods or f_esferas or f_muns or f_orgs)
     resultado, erro, filtrados_pagina = {"total": 0, "itens": []}, None, 0
     if consultou:
         termo = f'"{q}"' if (q and frase_exata and '"' not in q) else q
         try:
             resultado = pncp_busca.pesquisar(
                 q=termo, ufs=f_ufs, modalidades=f_mods, esferas=f_esferas,
+                municipios=f_muns, orgaos=f_orgs,
                 status=status, ordenacao=ordenacao, pagina=pagina)
         except Exception as e:  # noqa: BLE001
             erro = f"PNCP indisponível no momento: {e}"
@@ -724,6 +727,8 @@ async def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
         "frase_exata": frase_exata, "cidade": cidade,
         "valor_min": valor_min, "valor_max": valor_max,
         "f_ufs": f_ufs, "f_mods": f_mods, "f_esferas": f_esferas,
+        "f_muns": [(m, pncp_busca.nome_opcao("municipios", m)) for m in f_muns],
+        "f_orgs": [(o, pncp_busca.nome_opcao("orgaos", o)) for o in f_orgs],
         "total": resultado["total"], "itens": resultado["itens"],
         "paginas": max(1, -(-resultado["total"] // 20)),
         "erro": erro, "ufs": UFS_TODAS, "modalidades": modalidades,
@@ -734,8 +739,29 @@ async def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
              f"valor_min={valor_min}", f"valor_max={valor_max}"] +
             [f"ufs={u}" for u in f_ufs] +
             [f"modalidades={m}" for m in f_mods] +
-            [f"esferas={e}" for e in f_esferas]),
+            [f"esferas={e}" for e in f_esferas] +
+            [f"municipios={m}" for m in f_muns] +
+            [f"orgaos={o}" for o in f_orgs]),
     })
+
+
+@app.get("/api/pncp/opcoes", response_class=HTMLResponse)
+async def pncp_opcoes(tipo: str = "municipios", q: str = ""):
+    """Autocomplete de municípios e órgãos com os IDs do próprio portal."""
+    if tipo not in ("municipios", "orgaos") or len(q) < 2:
+        return HTMLResponse("")
+    opcoes = pncp_busca.buscar_opcoes(tipo, q)
+    if not opcoes:
+        return HTMLResponse('<p class="px-3 py-1.5 text-xs text-slate-400">'
+                            "Nada encontrado.</p>")
+    linhas = []
+    for o in opcoes:
+        rotulo = o["nome"] + (f" ({o['cnpj']})" if o.get("cnpj") else "")
+        linhas.append(
+            f'<button type="button" class="block w-full text-left px-3 py-1.5 '
+            f'text-xs hover:bg-blue-50" onclick="addFiltro(\'{tipo}\', '
+            f'\'{o["id"]}\', this.textContent.trim())">{rotulo}</button>')
+    return HTMLResponse("".join(linhas))
 
 
 @app.post("/pesquisar/salvar", response_class=HTMLResponse)

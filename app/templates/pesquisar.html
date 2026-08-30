@@ -73,25 +73,88 @@
     </div>
   </details>
 
-  <!-- Refinamentos locais -->
-  <details {{ 'open' if cidade or valor_min or valor_max }}
+  <!-- Municípios e órgãos (IDs oficiais do portal, com autocomplete) -->
+  <details {{ 'open' if f_muns or f_orgs }} class="border-t border-slate-100 pt-3">
+    <summary class="cursor-pointer font-semibold text-xs text-slate-600">
+      🏛 Municípios e órgãos
+      {{ '(' ~ (f_muns|length + f_orgs|length) ~ ' selecionado(s))'
+         if f_muns or f_orgs else '(todos)' }}</summary>
+    <div class="grid sm:grid-cols-2 gap-4 mt-2 text-xs">
+      <div>
+        <span class="font-semibold">Municípios</span>
+        <div id="chips_municipios" class="flex gap-1.5 flex-wrap my-1.5">
+          {% for id, nome in f_muns %}
+          <span class="chip bg-blue-100 text-blue-800 px-2 py-1 rounded-full
+                       flex items-center gap-1">{{ nome }}
+            <input type="hidden" name="municipios" value="{{ id }}">
+            <button type="button" onclick="this.closest('.chip').remove()">✕</button></span>
+          {% endfor %}
+        </div>
+        <input type="search" placeholder="digite o município..." autocomplete="off"
+               hx-get="/api/pncp/opcoes" hx-trigger="input changed delay:400ms"
+               hx-target="#lista_municipios" hx-vals='{"tipo": "municipios"}'
+               name="q_mun" hx-include="this"
+               oninput="this.setAttribute('hx-vals', JSON.stringify({tipo:'municipios', q:this.value}))"
+               class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
+        <div id="lista_municipios" class="border border-slate-200 rounded-lg
+             bg-white divide-y divide-slate-100 max-h-44 overflow-auto"></div>
+      </div>
+      <div>
+        <span class="font-semibold">Órgãos (prefeituras, secretarias, ministérios...)</span>
+        <div id="chips_orgaos" class="flex gap-1.5 flex-wrap my-1.5">
+          {% for id, nome in f_orgs %}
+          <span class="chip bg-purple-100 text-purple-800 px-2 py-1 rounded-full
+                       flex items-center gap-1">{{ nome }}
+            <input type="hidden" name="orgaos" value="{{ id }}">
+            <button type="button" onclick="this.closest('.chip').remove()">✕</button></span>
+          {% endfor %}
+        </div>
+        <input type="search" autocomplete="off" name="q_org"
+               placeholder="ex.: municipio de teresina, dnit, comando do exercito..."
+               hx-get="/api/pncp/opcoes" hx-trigger="input changed delay:400ms"
+               hx-target="#lista_orgaos"
+               oninput="this.setAttribute('hx-vals', JSON.stringify({tipo:'orgaos', q:this.value}))"
+               class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
+        <div id="lista_orgaos" class="border border-slate-200 rounded-lg
+             bg-white divide-y divide-slate-100 max-h-44 overflow-auto"></div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Refinamentos de valor -->
+  <details {{ 'open' if valor_min or valor_max }}
            class="border-t border-slate-100 pt-3">
     <summary class="cursor-pointer font-semibold text-xs text-slate-600">
-      🔬 Refinar: cidade e valor</summary>
+      💰 Faixa de valor</summary>
     <div class="flex gap-3 flex-wrap mt-2 text-xs items-end">
-      <label>Cidade contém<br>
-        <input type="text" name="cidade" value="{{ cidade }}" placeholder="ex.: Teresina"
-               class="border border-slate-300 rounded-lg px-2 py-1.5"></label>
+      <input type="hidden" name="cidade" value="">
       <label>Valor mínimo (R$)<br>
         <input type="text" name="valor_min" value="{{ valor_min }}" inputmode="numeric"
                class="border border-slate-300 rounded-lg px-2 py-1.5 w-32"></label>
       <label>Valor máximo (R$)<br>
         <input type="text" name="valor_max" value="{{ valor_max }}" inputmode="numeric"
                class="border border-slate-300 rounded-lg px-2 py-1.5 w-32"></label>
-      <span class="text-slate-400 pb-1.5">— aplicados sobre cada página de resultados</span>
+      <span class="text-slate-400 pb-1.5">— aplicados sobre cada página
+        (muitos editais não informam valor)</span>
     </div>
   </details>
 </form>
+
+<script>
+  function addFiltro(tipo, id, rotulo){
+    const alvo = document.getElementById('chips_' + tipo);
+    if (alvo.querySelector(`input[value="${id}"]`)) return;
+    const cor = tipo === 'municipios' ? 'blue' : 'purple';
+    const chip = document.createElement('span');
+    chip.className = `chip bg-${cor}-100 text-${cor}-800 px-2 py-1 ` +
+                     'rounded-full flex items-center gap-1';
+    chip.innerHTML = `${rotulo}
+      <input type="hidden" name="${tipo}" value="${id}">
+      <button type="button" onclick="this.closest('.chip').remove()">✕</button>`;
+    alvo.appendChild(chip);
+    document.getElementById('lista_' + tipo).innerHTML = '';
+  }
+</script>
 
 {% if erro %}
 <p class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg
