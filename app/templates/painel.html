@@ -55,7 +55,7 @@
                 'vou_participar':'bg-green-100 text-green-800'}
                .get(m.status, 'bg-slate-100') }}">{{ m.status.replace('_',' ') }}</span>
         </p>
-        <p class="text-sm mt-0.5">{{ (m.lic.objeto or '')[:110] }}</p>
+        <p class="text-sm mt-0.5">{{ m.lic.objeto or '' }}</p>
       </div>
       {% else %}
       <p class="px-4 py-6 text-sm text-slate-500">Nenhum prazo próximo.</p>
@@ -78,7 +78,7 @@
              if l.valor_total_estimado else 'valor n/i' }}
           {% if l.fonte == 'tcepi' %}<span class="text-purple-700">· TCE-PI</span>{% endif %}
         </p>
-        <p class="text-sm mt-0.5">{{ (l.objeto or '')[:110] }}</p>
+        <p class="text-sm mt-0.5">{{ l.objeto or '' }}</p>
       </div>
       {% else %}
       <p class="px-4 py-6 text-sm text-slate-500">Banco vazio — colete agora.</p>

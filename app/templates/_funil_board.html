@@ -14,7 +14,7 @@
           casou por: {{ m.termos }}</p>{% endif %}
         {% if lic.situacao and lic.situacao != 'Divulgada no PNCP' %}
         <p class="text-[10px] text-red-700 font-semibold">{{ lic.situacao }}</p>{% endif %}
-        <p class="my-1 leading-snug">{{ (lic.objeto or '')[:110] }}</p>
+        <p class="my-1 leading-snug">{{ lic.objeto or '' }}</p>
         <p class="text-[11px]">
           💰 {{ 'R$ {:,.0f}'.format(lic.valor_total_estimado).replace(',', '.')
                 if lic.valor_total_estimado else 'n/i' }}

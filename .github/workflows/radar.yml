@@ -2,7 +2,7 @@ name: Radar diário
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # 08:00 no horário de Brasília
+    - cron: "0 9 * * *"    # 06:00 em America/Fortaleza
   workflow_dispatch: {}     # botão "Run workflow" para rodar na hora
 
 permissions:
@@ -15,9 +15,9 @@ concurrency:
 jobs:
   radar:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
-      TZ: America/Sao_Paulo
+      TZ: America/Fortaleza
     steps:
       - uses: actions/checkout@v4
 
@@ -29,20 +29,25 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Rodar o radar (coleta + digest)
+      - name: Coleta + alerta diário (Telegram e e-mail)
         env:
-          GMAIL_USUARIO: ${{ secrets.GMAIL_USUARIO }}
-          GMAIL_SENHA_APP: ${{ secrets.GMAIL_SENHA_APP }}
-          EMAIL_DESTINATARIOS: ${{ secrets.EMAIL_DESTINATARIOS }}
-        run: python radar.py
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_ATIVO: ${{ secrets.SMTP_PASSWORD != '' && 'true' || 'false' }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_DESTINO: ${{ secrets.EMAIL_DESTINO }}
+        run: python -m app.rotina
 
-      - name: Gerar site
+      - name: Atualizar site do celular
         run: python gerar_site.py
 
-      - name: Publicar banco e site atualizados
+      - name: Publicar banco e site
         run: |
           git config user.name "radar-bot"
           git config user.email "actions@github.com"
-          git add editais.db docs/dados.json
+          git add data/radar.db docs/dados.json
           git diff --cached --quiet || git commit -m "Radar $(date +'%d/%m/%Y %H:%M')"
           git push

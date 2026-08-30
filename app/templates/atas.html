@@ -28,7 +28,7 @@
                      font-semibold">permite adesão</span>{% endif %}
       · perfis: {{ a.perfis_casados|join(', ') }}
     </p>
-    <p class="text-sm my-1">{{ (a.objeto or '')[:350] }}</p>
+    <p class="text-sm my-1">{{ a.objeto or '' }}</p>
     <p class="text-xs">
       Vigência: {{ a.vigencia_inicio }} até
       <b>{{ a.vigencia_fim }}</b>

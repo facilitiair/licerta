@@ -36,9 +36,7 @@ def _fmt_data(d):
 
 
 def _bloco_licitacao(n, lic):
-    objeto = (lic.objeto or "").strip()
-    if len(objeto) > LIMITE_OBJETO:
-        objeto = objeto[:LIMITE_OBJETO].rstrip() + "..."
+    objeto = (lic.objeto or "").strip()   # objeto completo, sem truncar
     linhas = [
         f"{n}. {lic.modalidade_nome or ''} {lic.numero_compra or ''}/"
         f"{lic.ano_compra or ''} — {lic.orgao_nome or ''} "

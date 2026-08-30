@@ -114,7 +114,7 @@
              else 'bg-slate-100 text-slate-600' }}">{{ l.situacao }}</span>{% endif %}</td>
       <td class="px-3 py-2">{{ l.uf }}</td>
       <td class="px-3 py-2">{{ l.municipio_nome }}<br>
-        <span class="text-xs text-slate-500">{{ (l.orgao_nome or '')[:50] }}</span></td>
+        <span class="text-xs text-slate-500">{{ l.orgao_nome or '' }}</span></td>
       <td class="px-3 py-2">
         {% if m %}
           <span class="text-xs px-1.5 py-0.5 rounded-full mr-1
@@ -125,7 +125,7 @@
             {{ m.status.replace('_', ' ') }}</span>
           {% if m.favorito %}⭐{% endif %}
         {% endif %}
-        {{ (l.objeto or '')[:220] }}</td>
+        {{ l.objeto or '' }}</td>
       <td class="px-3 py-2 text-right whitespace-nowrap">
         {{ 'R$ {:,.0f}'.format(l.valor_total_estimado).replace(',', '.')
            if l.valor_total_estimado else '—' }}</td>

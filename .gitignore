@@ -3,5 +3,6 @@ __pycache__/
 digests/
 .venv/
 .env
-data/
 .pytest_cache/
+data/editais/
+*.db-journal
