@@ -526,11 +526,37 @@ async def licitacoes_lista(request: Request, pagina: int = 1):
         modalidades = s.query(Modalidade).order_by(Modalidade.codigo).all()
         situacoes = [x[0] for x in s.query(Licitacao.situacao).distinct()
                      .order_by(Licitacao.situacao) if x[0]]
+        # Radar vazio para esses filtros? Busca AO VIVO no PNCP com os mesmos
+        # critérios e entrega os resultados na própria tela.
+        vivo, vivo_total = [], 0
+        if total == 0 and any(filtros.get(c) for c in
+                              ("q", "uf", "municipio", "modalidade")):
+            try:
+                muns = []
+                if filtros.get("municipio"):
+                    achados = pncp_busca.buscar_opcoes(
+                        "municipios", filtros["municipio"], limite=1)
+                    muns = [a["id"] for a in achados]
+                resultado_vivo = pncp_busca.pesquisar(
+                    q=filtros.get("q", ""),
+                    ufs=[filtros["uf"]] if filtros.get("uf") else None,
+                    modalidades=[filtros["modalidade"]]
+                        if filtros.get("modalidade") else None,
+                    municipios=muns or None, status="abertas")
+                vivo_total = resultado_vivo["total"]
+                salvos = {l[0] for l in
+                          s.query(Licitacao.numero_controle_pncp)}
+                for item in resultado_vivo["itens"]:
+                    item["ja_salvo"] = item["numero_controle_pncp"] in salvos
+                vivo = resultado_vivo["itens"]
+            except Exception:  # noqa: BLE001 — sem PNCP, fica só o aviso
+                pass
         return templates.TemplateResponse(request, "licitacoes.html", {
             "linhas": linhas, "total": total, "pagina": pagina,
             "paginas": max(1, -(-total // POR_PAGINA)), "filtros": filtros,
             "perfis": perfis, "ufs": ufs, "matches": matches,
             "modalidades": modalidades, "situacoes": situacoes,
+            "vivo": vivo, "vivo_total": vivo_total,
             # querystring só com os filtros (sem 'pagina'), para paginação/export
             "query": urlencode({k: v for k, v in filtros.items() if v}),
         })

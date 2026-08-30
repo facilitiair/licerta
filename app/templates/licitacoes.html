@@ -141,17 +141,9 @@
     </tr>
     <tr><td colspan="7" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
     {% else %}
-    <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">
-      <p class="mb-3">Nada no seu radar com esses filtros
-        {% if filtros.uf %}— seus perfis não monitoram {{ filtros.uf }}{% endif %}.</p>
-      <a href="/pesquisar?{% if filtros.q %}q={{ filtros.q }}&{% endif %}{% if filtros.uf %}ufs={{ filtros.uf }}&{% endif %}status=abertas"
-         class="inline-block bg-blue-600 text-white px-5 py-2.5 rounded-lg
-                font-semibold hover:bg-blue-700">
-        🌐 Buscar {{ 'em ' ~ filtros.uf if filtros.uf else 'no Brasil inteiro' }}
-        ao vivo no PNCP →</a>
-      <p class="mt-3 text-xs">Dica: para o radar passar a vigiar
-        {{ filtros.uf or 'outro estado' }} todo dia, adicione-o num
-        <a href="/perfis" class="text-blue-700 underline">perfil</a>.</p>
+    <tr><td colspan="7" class="px-3 py-4 text-center text-sm text-slate-500">
+      Nada coletado no seu radar com esses filtros
+      {% if vivo %}— mas buscamos ao vivo no PNCP e encontramos ⤵{% endif %}
     </td></tr>
     {% endfor %}
   </tbody>
@@ -169,6 +161,52 @@
     <a href="?{{ query }}&pagina={{ pagina + 1 }}"
        class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">Próxima →</a>
   {% endif %}
+</div>
+{% endif %}
+
+{% if vivo %}
+<div class="mt-6">
+  <h3 class="font-bold mb-1">🌐 Encontrados ao vivo no PNCP
+    ({{ '{:,}'.format(vivo_total).replace(',', '.') }} no total — mostrando
+    os {{ vivo|length }} mais recentes)</h3>
+  <p class="text-xs text-slate-500 mb-3">Salve os que interessarem — entram no
+    seu radar, funil e agenda. Para ver os demais ou refinar mais, use a
+    <a href="/pesquisar?{% if filtros.q %}q={{ filtros.q }}&{% endif %}{% if filtros.uf %}ufs={{ filtros.uf }}&{% endif %}status=abertas"
+       class="text-blue-700 underline">pesquisa completa</a>.</p>
+  <div class="space-y-2">
+    {% for it in vivo %}
+    <div class="bg-white rounded-xl border border-blue-200 p-4">
+      <p class="text-xs text-slate-500">
+        {{ it.modalidade_nome }} · {{ it.municipio_nome }}/{{ it.uf }} ·
+        {{ it.orgao_nome }} · {{ it.situacao }}</p>
+      <p class="text-sm my-1">{{ it.objeto }}</p>
+      <div class="flex gap-4 items-center flex-wrap text-xs">
+        <span>💰 {{ 'R$ {:,.2f}'.format(it.valor_total_estimado)
+                    .replace(',', 'X').replace('.', ',').replace('X', '.')
+                    if it.valor_total_estimado else 'valor não informado' }}</span>
+        <span>⏱️ até {{ (it.data_encerramento_proposta or 'ver edital')[:16].replace('T',' ') }}</span>
+        {% if it.link_pncp %}
+        <a href="{{ it.link_pncp }}" target="_blank"
+           class="text-blue-700 underline">🔗 abrir edital</a>{% endif %}
+        {% if it.ja_salvo %}
+          <span class="text-green-700 font-semibold">✔ no radar</span>
+        {% else %}
+        <form hx-post="/pesquisar/salvar" hx-swap="outerHTML" class="inline">
+          {% for campo in ['numero_controle_pncp','objeto','modalidade_nome',
+                           'modalidade_codigo','orgao_nome','orgao_cnpj',
+                           'municipio_nome','uf','data_abertura_proposta',
+                           'data_encerramento_proposta','data_publicacao_pncp',
+                           'link_pncp','situacao','valor_total_estimado'] %}
+          <input type="hidden" name="{{ campo }}" value="{{ it[campo] or '' }}">
+          {% endfor %}
+          <button class="border border-green-700 text-green-700 px-3 py-1
+                         rounded-lg hover:bg-green-50">⭐ Salvar no radar</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 {% endif %}
 {% endblock %}
