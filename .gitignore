@@ -9,3 +9,4 @@ data/editais/
 *.db-shm
 *.db-wal
 data/.segredo_sessao
+data/vapid_privada.pem

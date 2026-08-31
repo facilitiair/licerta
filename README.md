@@ -5,6 +5,12 @@ oficial do **PNCP**, com perfis de busca configuráveis, coleta automática
 ao longo do dia e alertas no **Telegram** e por e-mail. Construído conforme
 o `SPEC.md`.
 
+> **Multiusuário.** Cada pessoa da empresa tem sua conta, seus perfis de
+> busca e seus canais de aviso: **notificação push no celular** (como as dos
+> apps do governo), **Telegram** e **e-mail** — cada canal se liga e desliga
+> em *Minha conta*, com botão de teste. O primeiro acesso de uma instalação
+> nova cria o administrador; ele cadastra a equipe na tela *Usuários*.
+
 > **Produto genérico, configuração por empresa.** Nada do ramo de ninguém
 > está gravado no código: o que se monitora — estados, municípios,
 > modalidades, palavras do objeto, faixa de valor, situação, frequência de
@@ -54,7 +60,17 @@ A coleta automática roda todo dia às **06:00** e o alerta às **07:00**
    `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates`
    e procure `"chat":{"id":123456789...` — esse número é o seu
    **chat_id**. Copie para `TELEGRAM_CHAT_ID=` no `.env`.
-5. Reinicie o app. Pronto: os alertas chegam no seu Telegram.
+5. Reinicie o app. Cada pessoa então abre **Minha conta → Conectar meu
+   Telegram**: o app abre o bot com um código de pareamento, a pessoa aperta
+   COMEÇAR e confirma — sem copiar chat_id na mão.
+
+### Avisos no celular (push)
+
+Em **Minha conta → Ativar neste aparelho**, o navegador pede permissão uma
+vez e pronto: os alertas aparecem na tela do celular como notificação, mesmo
+com o navegador fechado (Android; no iPhone antes use "Adicionar à Tela de
+Início"). O app também é instalável como aplicativo (PWA): Chrome → ⋮ →
+"Adicionar à tela inicial".
 
 ### Como configurar cada alerta
 

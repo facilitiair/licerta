@@ -4,37 +4,41 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#1d4ed8">
-  <link rel="manifest" href="/manifest.json">
-  <title>Entrar — Radar de Licitações</title>
+  <title>Primeiro acesso — Radar de Licitações</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gradient-to-b from-blue-700 to-blue-900 min-h-screen flex
              items-center justify-center p-4">
-  <form method="post" action="/login"
+  <form method="post" action="/registrar"
         class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm space-y-4">
     <div class="text-center space-y-1">
       <div class="text-4xl">📡</div>
-      <h1 class="text-xl font-bold">Radar de Licitações</h1>
-      <p class="text-xs text-slate-500">Oportunidades públicas, direto no seu
-        celular</p>
+      <h1 class="text-xl font-bold">Bem-vindo ao Radar</h1>
+      <p class="text-xs text-slate-500">Esta instalação é nova. Crie a conta
+        do <b>administrador</b> — depois você cadastra sua equipe na tela
+        Usuários.</p>
     </div>
     {% if erro %}<p class="text-red-600 text-sm text-center bg-red-50 border
         border-red-100 rounded-lg px-3 py-2">{{ erro }}</p>{% endif %}
     <label class="block text-sm">
-      <span class="font-semibold">E-mail</span>
-      <input type="email" name="email" autofocus autocomplete="username"
-             placeholder="voce@empresa.com.br"
+      <span class="font-semibold">Seu nome</span>
+      <input name="nome" autofocus required
              class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5">
     </label>
     <label class="block text-sm">
-      <span class="font-semibold">Senha</span>
-      <input type="password" name="senha" autocomplete="current-password"
+      <span class="font-semibold">E-mail</span>
+      <input type="email" name="email" required autocomplete="username"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5">
+    </label>
+    <label class="block text-sm">
+      <span class="font-semibold">Senha</span> <span class="text-slate-400">(6+
+        caracteres)</span>
+      <input type="password" name="senha" required minlength="6"
+             autocomplete="new-password"
              class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5">
     </label>
     <button class="w-full bg-blue-700 text-white rounded-lg py-2.5
-                   font-semibold hover:bg-blue-800">Entrar</button>
-    <p class="text-xs text-slate-400 text-center">Sem conta? Peça ao
-      administrador da sua empresa para criar a sua.</p>
+                   font-semibold hover:bg-blue-800">Criar conta e entrar</button>
   </form>
 </body>
 </html>

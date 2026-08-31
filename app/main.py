@@ -2,8 +2,6 @@
 
 Subir com:  uvicorn app.main:app  (ou  python -m app.main)
 """
-import hashlib
-import hmac
 import logging
 import os
 import re
@@ -22,13 +20,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import alerta as alerta_mod
+from . import push as push_mod
+from . import usuarios as usuarios_mod
 from . import envcfg
 from . import pncp_busca
 from . import sincronizar
 from .coleta import coleta_em_andamento, coletar_em_background
 from .config import PASTA_DADOS, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
-                 Municipio, PerfilBusca, PerfilMatch, Sessao, criar_tabelas)
+                 Municipio, PerfilBusca, PerfilMatch, PushAssinatura,
+                 Sessao, Usuario, criar_tabelas)
 from .documentos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
 from .matcher import (SITUACOES_CONHECIDAS, SITUACOES_DISPUTAVEIS,
@@ -148,64 +149,90 @@ def _segredo_sessao():
         return _SEGREDO_MEMORIA
 
 
-def _girar_segredo_sessao():
-    """Invalida TODOS os cookies emitidos — é o que faz 'Sair' sair de verdade."""
-    global _SEGREDO_MEMORIA
-    _SEGREDO_MEMORIA = secrets.token_bytes(32)
+def usuario_da_requisicao(request: Request):
+    """O usuário logado desta requisição (ou None)."""
+    return usuarios_mod.usuario_do_token(
+        request.cookies.get("sessao", ""), _segredo_sessao())
+
+
+def _sem_usuarios():
+    s = Sessao()
     try:
-        with open(CAMINHO_SEGREDO, "wb") as f:
-            f.write(_SEGREDO_MEMORIA)
-    except OSError:
-        pass          # sem arquivo, girar a chave de memória já invalidou
+        return s.query(Usuario).count() == 0
+    finally:
+        s.close()
 
 
-def _token_sessao():
-    return hmac.new(_segredo_sessao(), config.APP_SENHA.encode("utf-8"),
-                    hashlib.sha256).hexdigest()
-
-
-def _iguais(a, b):
-    """Comparação em tempo constante que aceita acentos.
-
-    `hmac.compare_digest` LEVANTA TypeError com str não-ASCII em vez de
-    devolver False. Consequências reais: uma senha como 'licitações2024'
-    trancava o dono para fora com erro 500 mesmo digitando a senha certa,
-    e um único byte acentuado no cookie derrubava todas as rotas — sem
-    precisar estar logado.
-    """
-    return hmac.compare_digest(a.encode("utf-8", "surrogatepass"),
-                               b.encode("utf-8", "surrogatepass"))
-
-
-def logado(request: Request):
-    """Sem APP_SENHA o painel fica aberto — mas SÓ em rede local.
-
-    Publicado, senha vazia é acidente, não escolha: no Railway o .env vivia
-    no disco efêmero do contêiner, então um redeploy zerava a APP_SENHA e o
-    painel inteiro — inclusive a tela que guarda o token do Telegram e a
-    senha do e-mail — ficava aberto na internet, sem nenhum aviso.
-    """
-    if not config.APP_SENHA:
-        return not config.COOKIE_SEGURO
-    return _iguais(request.cookies.get("sessao", ""), _token_sessao())
+ROTAS_LIVRES = ("/login", "/registrar", "/manifest.json", "/sw.js")
 
 
 @app.middleware("http")
 async def exigir_login(request: Request, call_next):
-    livre = request.url.path in ("/login",) or request.url.path.startswith("/static")
-    if not livre and not logado(request):
-        return RedirectResponse("/login", status_code=303)
+    caminho = request.url.path
+    livre = caminho in ROTAS_LIVRES or caminho.startswith("/static")
+    if not livre:
+        usuario = usuario_da_requisicao(request)
+        if not usuario:
+            return RedirectResponse("/login", status_code=303)
+        request.state.usuario = usuario
     return await call_next(request)
+
+
+def eu(request: Request):
+    """O usuário logado, já carregado pelo middleware."""
+    return request.state.usuario
 
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):
-    erro = None
-    if not config.APP_SENHA and config.COOKIE_SEGURO:
-        erro = ("Este app está publicado na internet e está SEM SENHA. "
-                "Defina APP_SENHA nas variáveis do Railway e reinicie — "
-                "sem isso ninguém entra, nem você.")
-    return templates.TemplateResponse(request, "login.html", {"erro": erro})
+    if _sem_usuarios():
+        return RedirectResponse("/registrar", status_code=303)
+    return templates.TemplateResponse(request, "login.html", {"erro": None})
+
+
+@app.get("/registrar", response_class=HTMLResponse)
+async def registrar_form(request: Request):
+    """Primeiro acesso de uma instalação nova: cria a conta do administrador.
+
+    Só existe enquanto não há nenhum usuário — depois disso, contas novas
+    são criadas pelo administrador na tela Usuários. Assim uma URL pública
+    não vira balcão de cadastro aberto.
+    """
+    if not _sem_usuarios():
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "registrar.html", {"erro": None})
+
+
+@app.post("/registrar")
+async def registrar(request: Request, nome: str = Form(""),
+                    email: str = Form(""), senha: str = Form("")):
+    if not _sem_usuarios():
+        return RedirectResponse("/login", status_code=303)
+    nome, email = nome.strip(), email.strip().lower()
+    if not (nome and "@" in email and len(senha) >= 6):
+        return templates.TemplateResponse(
+            request, "registrar.html",
+            {"erro": "Preencha nome, um e-mail válido e uma senha de pelo "
+                     "menos 6 caracteres."})
+    s = Sessao()
+    try:
+        admin = Usuario(nome=nome, email=email, papel="admin",
+                        senha_hash=usuarios_mod.gerar_hash(senha),
+                        email_alertas=email)
+        s.add(admin)
+        s.commit()
+        resposta = RedirectResponse("/conta?bemvindo=1", status_code=303)
+        _pendurar_sessao(resposta, admin)
+        return resposta
+    finally:
+        s.close()
+
+
+def _pendurar_sessao(resposta, usuario):
+    resposta.set_cookie(
+        "sessao", usuarios_mod.criar_token(usuario, _segredo_sessao()),
+        httponly=True, samesite="lax", secure=config.COOKIE_SEGURO,
+        max_age=usuarios_mod.VALIDADE_SESSAO)
 
 
 # Freio de força bruta. O app está numa URL pública e a senha é a defesa
@@ -225,7 +252,7 @@ def _tempo_de_castigo(ip):
 
 
 @app.post("/login")
-async def login(request: Request, senha: str = Form("")):
+def login(request: Request, email: str = Form(""), senha: str = Form("")):
     ip = request.client.host if request.client else "?"
     faltam = _tempo_de_castigo(ip)
     if faltam:
@@ -233,25 +260,24 @@ async def login(request: Request, senha: str = Form("")):
             request, "login.html",
             {"erro": f"Muitas tentativas. Tente de novo em {faltam}s."},
             status_code=429)
-    if config.APP_SENHA and _iguais(senha, config.APP_SENHA):
+    usuario = usuarios_mod.autenticar(email, senha)
+    if usuario:
         _falhas_login.pop(ip, None)
         resposta = RedirectResponse("/", status_code=303)
-        resposta.set_cookie("sessao", _token_sessao(), httponly=True,
-                            samesite="lax", secure=config.COOKIE_SEGURO,
-                            max_age=60 * 60 * 24 * 30)
+        _pendurar_sessao(resposta, usuario)
         return resposta
     falhas, _ = _falhas_login.get(ip, (0, 0))
     _falhas_login[ip] = (falhas + 1, time.monotonic())
-    log.warning("Senha incorreta em /login (origem %s, %sª falha)", ip, falhas + 1)
-    return templates.TemplateResponse(request, "login.html",
-                                      {"erro": "Senha incorreta."})
+    log.warning("Login recusado (origem %s, %sª falha)", ip, falhas + 1)
+    return templates.TemplateResponse(
+        request, "login.html", {"erro": "E-mail ou senha incorretos."})
 
 
 @app.get("/logout")
 async def logout():
-    # Gira o segredo: o cookie antigo deixa de valer no servidor, e não só
-    # no navegador de quem clicou. Antes, "Sair" era puramente cosmético.
-    _girar_segredo_sessao()
+    # Sai só DESTE aparelho. Para derrubar todas as sessões da conta —
+    # cookie roubado, por exemplo — troque a senha: o token assina a senha
+    # e morre junto com ela.
     resposta = RedirectResponse("/login", status_code=303)
     resposta.delete_cookie("sessao")
     return resposta
@@ -270,12 +296,15 @@ def _dias_ate(data_iso):
 async def painel(request: Request):
     s = Sessao()
     try:
+        meus = (PerfilBusca.usuario_id == eu(request).id)
+
         def conta(status):
-            return s.query(PerfilMatch).filter_by(status=status).count()
+            return (s.query(PerfilMatch).join(PerfilBusca)
+                    .filter(PerfilMatch.status == status, meus).count())
 
         hoje = agora().strftime("%Y-%m-%d")
-        ativos = (s.query(PerfilMatch).join(Licitacao)
-                  .filter(PerfilMatch.status != "descartado",
+        ativos = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
+                  .filter(meus, PerfilMatch.status != "descartado",
                           Licitacao.data_encerramento_proposta >= hoje)
                   .order_by(Licitacao.data_encerramento_proposta))
         urgentes = [m for m in ativos
@@ -304,12 +333,13 @@ COLUNAS_FUNIL = [("novo", "🟡 Novas"), ("analisando", "🔵 Em análise"),
                  ("descartado", "⚪ Descartadas")]
 
 
-def _contexto_funil(s):
+def _contexto_funil(s, usuario):
     hoje = agora().strftime("%Y-%m-%d")
     colunas = []
     for status, rotulo in COLUNAS_FUNIL:
-        consulta = (s.query(PerfilMatch).join(Licitacao)
-                    .filter(PerfilMatch.status == status)
+        consulta = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
+                    .filter(PerfilMatch.status == status,
+                            PerfilBusca.usuario_id == usuario.id)
                     .order_by(Licitacao.data_encerramento_proposta))
         if status != "descartado":     # descartadas antigas não interessam
             consulta = consulta.filter(
@@ -326,7 +356,7 @@ async def funil(request: Request):
     s = Sessao()
     try:
         return templates.TemplateResponse(request, "funil.html",
-                                          _contexto_funil(s))
+                                          _contexto_funil(s, eu(request)))
     finally:
         s.close()
 
@@ -336,12 +366,14 @@ async def funil_mover(request: Request, match_id: int, status: str):
     s = Sessao()
     try:
         m = s.get(PerfilMatch, match_id)
-        if m and status in ("novo", "analisando", "vou_participar", "descartado"):
+        meu = m and m.perfil and m.perfil.usuario_id == eu(request).id
+        if meu and status in ("novo", "analisando", "vou_participar",
+                              "descartado"):
             m.status = status
             m.lido = True
             s.commit()
         return templates.TemplateResponse(request, "_funil_board.html",
-                                          _contexto_funil(s))
+                                          _contexto_funil(s, eu(request)))
     finally:
         s.close()
 
@@ -352,8 +384,9 @@ async def agenda(request: Request):
     s = Sessao()
     try:
         hoje = agora().strftime("%Y-%m-%d")
-        matches = (s.query(PerfilMatch).join(Licitacao)
+        matches = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
                    .filter(PerfilMatch.status != "descartado",
+                           PerfilBusca.usuario_id == eu(request).id,
                            Licitacao.data_encerramento_proposta >= hoje)
                    .order_by(Licitacao.data_encerramento_proposta).all())
         dias = {}
@@ -479,7 +512,9 @@ def _contexto_form(request, s, perfil):
 async def perfis_lista(request: Request):
     s = Sessao()
     try:
-        perfis = s.query(PerfilBusca).order_by(PerfilBusca.nome).all()
+        perfis = (s.query(PerfilBusca)
+                  .filter_by(usuario_id=eu(request).id)
+                  .order_by(PerfilBusca.nome).all())
         return templates.TemplateResponse(request, "perfis.html", {
             "perfis": perfis, "resumo_frequencia": alerta_mod.resumo_frequencia,
             "enviado": request.query_params.get("enviado")})
@@ -518,7 +553,7 @@ async def perfil_editar(request: Request, perfil_id: int):
     s = Sessao()
     try:
         perfil = s.get(PerfilBusca, perfil_id)
-        if not perfil:
+        if not perfil or perfil.usuario_id != eu(request).id:
             return RedirectResponse("/perfis", status_code=303)
         return templates.TemplateResponse(request, "perfil_form.html",
                                           _contexto_form(request, s, perfil))
@@ -534,11 +569,13 @@ async def perfil_salvar(request: Request):
     try:
         perfil_id = form.get("perfil_id", "")
         perfil = s.get(PerfilBusca, int(perfil_id)) if perfil_id.isdigit() else None
+        if perfil and perfil.usuario_id != eu(request).id:
+            return RedirectResponse("/perfis", status_code=303)
         if perfil:
             for campo, valor in dados.items():
                 setattr(perfil, campo, valor)
         else:
-            s.add(PerfilBusca(**dados))
+            s.add(PerfilBusca(**dados, usuario_id=eu(request).id))
         s.commit()
         return RedirectResponse("/perfis", status_code=303)
     finally:
@@ -563,11 +600,11 @@ async def perfil_preview(request: Request):
 
 
 @app.post("/perfis/{perfil_id}/toggle")
-async def perfil_toggle(perfil_id: int):
+async def perfil_toggle(request: Request, perfil_id: int):
     s = Sessao()
     try:
         perfil = s.get(PerfilBusca, perfil_id)
-        if perfil:
+        if perfil and perfil.usuario_id == eu(request).id:
             perfil.ativo = not perfil.ativo
             s.commit()
         return RedirectResponse("/perfis", status_code=303)
@@ -576,13 +613,14 @@ async def perfil_toggle(perfil_id: int):
 
 
 @app.post("/perfis/{perfil_id}/duplicar")
-async def perfil_duplicar(perfil_id: int):
+async def perfil_duplicar(request: Request, perfil_id: int):
     s = Sessao()
     try:
         original = s.get(PerfilBusca, perfil_id)
-        if original:
+        if original and original.usuario_id == eu(request).id:
             s.add(PerfilBusca(
                 nome=f"{original.nome} (cópia)", ativo=False,
+                usuario_id=original.usuario_id,
                 ufs=list(original.ufs or []),
                 municipios_ibge=list(original.municipios_ibge or []),
                 modalidades=list(original.modalidades or []),
@@ -627,11 +665,11 @@ def perfil_enviar_agora(perfil_id: int):
 
 
 @app.post("/perfis/{perfil_id}/excluir")
-async def perfil_excluir(perfil_id: int):
+async def perfil_excluir(request: Request, perfil_id: int):
     s = Sessao()
     try:
         perfil = s.get(PerfilBusca, perfil_id)
-        if perfil:
+        if perfil and perfil.usuario_id == eu(request).id:
             s.delete(perfil)
             s.commit()
         return RedirectResponse("/perfis", status_code=303)
@@ -753,7 +791,9 @@ def licitacoes_lista(request: Request, pagina: int = 1):
             for m in s.query(PerfilMatch).filter_by(
                     perfil_id=int(filtros["perfil_id"])):
                 matches[m.licitacao_id] = m
-        perfis = s.query(PerfilBusca).order_by(PerfilBusca.nome).all()
+        perfis = (s.query(PerfilBusca)
+                  .filter_by(usuario_id=eu(request).id)
+                  .order_by(PerfilBusca.nome).all())
         ufs = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA",
                "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN",
                "RO", "RR", "RS", "SC", "SE", "SP", "TO"]
@@ -816,7 +856,9 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
         lic = s.get(Licitacao, lic_id)
         if not lic:
             return HTMLResponse("Licitação não encontrada.", status_code=404)
-        consulta = s.query(PerfilMatch).filter_by(licitacao_id=lic_id)
+        consulta = (s.query(PerfilMatch).join(PerfilBusca)
+                    .filter(PerfilMatch.licitacao_id == lic_id,
+                            PerfilBusca.usuario_id == eu(request).id))
         if perfil_id:
             consulta = consulta.filter_by(perfil_id=perfil_id)
         matches = consulta.all()
@@ -893,11 +935,14 @@ async def atas_lista(request: Request, q: str = "", adesao: str = "",
 
 
 @app.post("/matches/{match_id}", response_class=HTMLResponse)
-async def match_atualizar(match_id: int, status: str = Form(None),
-                          favorito: str = Form(None), anotacao: str = Form(None)):
+async def match_atualizar(request: Request, match_id: int,
+                          status: str = Form(None), favorito: str = Form(None),
+                          anotacao: str = Form(None)):
     s = Sessao()
     try:
         m = s.get(PerfilMatch, match_id)
+        if m and (not m.perfil or m.perfil.usuario_id != eu(request).id):
+            m = None
         if not m:
             return HTMLResponse("Match não encontrado.", status_code=404)
         if status in ("novo", "analisando", "vou_participar", "descartado"):
@@ -937,11 +982,13 @@ UFS_TODAS = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG",
              "RS", "SC", "SE", "SP", "TO"]
 
 
-def _perfil_pesquisa_manual(s):
+def _perfil_pesquisa_manual(s, usuario):
     """Perfil-sistema que abriga o que você salva da pesquisa ao vivo."""
-    p = s.query(PerfilBusca).filter_by(nome="⭐ Salvos da pesquisa").first()
+    p = (s.query(PerfilBusca)
+         .filter_by(nome="⭐ Salvos da pesquisa", usuario_id=usuario.id).first())
     if not p:
         p = PerfilBusca(nome="⭐ Salvos da pesquisa", ativo=False,
+                        usuario_id=usuario.id,
                         notificar=False, ufs=[], modalidades=[],
                         palavras_incluir=["__nunca_casa_automaticamente__"])
         s.add(p)
@@ -1078,7 +1125,7 @@ async def pesquisar_salvar(request: Request):
         from .coleta import _upsert
         lic = _upsert(s, item)
         s.commit()
-        perfil = _perfil_pesquisa_manual(s)
+        perfil = _perfil_pesquisa_manual(s, eu(request))
         existe = s.query(PerfilMatch).filter_by(
             perfil_id=perfil.id, licitacao_id=lic.id).first()
         if not existe:
@@ -1107,6 +1154,8 @@ async def logs_coletas(request: Request):
 # --------------------------------------------------------------------- config
 @app.get("/config", response_class=HTMLResponse)
 async def config_form(request: Request, salvo: int = 0):
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(request, "config.html", {
         "valores": envcfg.valores_para_tela(), "salvo": salvo,
         "resultado_teste": None,
@@ -1115,6 +1164,8 @@ async def config_form(request: Request, salvo: int = 0):
 
 @app.post("/config")
 async def config_salvar(request: Request):
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
     form = await request.form()
     envcfg.salvar(dict(form))
     # Reagenda a coleta com o novo horário, sem reiniciar. O job de alertas
@@ -1136,6 +1187,350 @@ def config_testar(request: Request, canal: str = Form("telegram")):
     msg = ("✔ Teste enviado — confira se chegou." if ok else
            "✖ Falhou. Confira os dados e veja o terminal para detalhes.")
     return HTMLResponse(f'<span class="{cor} text-sm font-semibold">{msg}</span>')
+
+
+# --------------------------------------------------- minha conta e notificações
+def _resposta_html(ok, msg_ok, msg_erro):
+    cor = "text-green-700" if ok else "text-red-700"
+    return HTMLResponse(f'<span class="{cor} text-sm font-semibold">'
+                        f'{escape(msg_ok if ok else msg_erro)}</span>')
+
+
+@app.get("/conta", response_class=HTMLResponse)
+def conta(request: Request, bemvindo: int = 0, salvo: int = 0):
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        aparelhos = len(usuario.assinaturas_push)
+        return templates.TemplateResponse(request, "conta.html", {
+            "usuario": usuario, "aparelhos_push": aparelhos,
+            "bemvindo": bemvindo, "salvo": salvo,
+            "bot": _nome_do_bot(),
+            "tem_bot": bool(config.TELEGRAM_BOT_TOKEN),
+        })
+    finally:
+        s.close()
+
+
+@app.post("/conta")
+async def conta_salvar(request: Request):
+    form = await request.form()
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        usuario.nome = form.get("nome", usuario.nome).strip() or usuario.nome
+        email_alertas = form.get("email_alertas", "").strip()
+        usuario.email_alertas = email_alertas if "@" in email_alertas else ""
+        usuario.receber_telegram = form.get("receber_telegram") == "on"
+        usuario.receber_email = form.get("receber_email") == "on"
+        usuario.receber_push = form.get("receber_push") == "on"
+        s.commit()
+        return RedirectResponse("/conta?salvo=1", status_code=303)
+    finally:
+        s.close()
+
+
+@app.post("/conta/senha", response_class=HTMLResponse)
+def conta_trocar_senha(request: Request, atual: str = Form(""),
+                       nova: str = Form("")):
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        if not usuarios_mod.conferir_senha(atual, usuario.senha_hash):
+            return _resposta_html(False, "", "A senha atual não confere.")
+        if len(nova) < 6:
+            return _resposta_html(False, "",
+                                  "A nova senha precisa de 6+ caracteres.")
+        usuario.senha_hash = usuarios_mod.gerar_hash(nova)
+        s.commit()
+        # trocar a senha derruba as sessões antigas; renova a deste aparelho
+        resposta = _resposta_html(True, "Senha trocada. As sessões antigas "
+                                        "foram encerradas.", "")
+        resposta.set_cookie(
+            "sessao", usuarios_mod.criar_token(usuario, _segredo_sessao()),
+            httponly=True, samesite="lax", secure=config.COOKIE_SEGURO,
+            max_age=usuarios_mod.VALIDADE_SESSAO)
+        return resposta
+    finally:
+        s.close()
+
+
+_nome_bot_cache = {"nome": "", "quando": 0.0}
+
+
+def _nome_do_bot():
+    """@usuario do bot do Telegram desta instalação (para o link Conectar)."""
+    if not config.TELEGRAM_BOT_TOKEN:
+        return ""
+    if _nome_bot_cache["nome"] and \
+            time.monotonic() - _nome_bot_cache["quando"] < 3600:
+        return _nome_bot_cache["nome"]
+    try:
+        import requests as req
+        r = req.get("https://api.telegram.org/bot"
+                    f"{config.TELEGRAM_BOT_TOKEN}/getMe", timeout=15)
+        nome = (r.json().get("result") or {}).get("username", "")
+        if nome:
+            _nome_bot_cache.update(nome=nome, quando=time.monotonic())
+        return nome
+    except Exception:  # noqa: BLE001
+        return _nome_bot_cache["nome"]
+
+
+@app.post("/conta/telegram/conectar", response_class=HTMLResponse)
+def telegram_conectar(request: Request):
+    """Gera o código de pareamento e mostra o link do bot.
+
+    Fluxo de dois toques, como nos apps grandes: o usuário abre o link, o
+    Telegram já leva o código junto, ele aperta COMEÇAR e volta para
+    confirmar. Ninguém precisa descobrir chat_id na mão.
+    """
+    bot = _nome_do_bot()
+    if not bot:
+        return _resposta_html(False, "", "O administrador ainda não "
+                              "configurou o bot do Telegram desta instalação.")
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        usuario.telegram_codigo = secrets.token_hex(8)
+        s.commit()
+        link = f"https://t.me/{bot}?start={usuario.telegram_codigo}"
+        return HTMLResponse(
+            f'<div class="text-sm space-y-2">'
+            f'<p>1. <a href="{escape(link)}" target="_blank" '
+            f'class="text-blue-700 underline font-semibold">Toque aqui para '
+            f'abrir o bot @{escape(bot)}</a> e aperte <b>COMEÇAR</b> '
+            f'(ou INICIAR).</p>'
+            f'<p>2. Depois volte e '
+            f'<button hx-post="/conta/telegram/confirmar" '
+            f'hx-target="#resTelegram" '
+            f'class="border border-blue-700 text-blue-700 px-3 py-1 rounded-lg '
+            f'font-semibold hover:bg-blue-50">confirme a conexão</button></p>'
+            f"</div>")
+    finally:
+        s.close()
+
+
+@app.post("/conta/telegram/confirmar", response_class=HTMLResponse)
+def telegram_confirmar(request: Request):
+    """Procura nas mensagens recentes do bot o /start com o código gerado."""
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        if not usuario.telegram_codigo:
+            return _resposta_html(False, "", "Toque antes em Conectar.")
+        try:
+            import requests as req
+            r = req.get("https://api.telegram.org/bot"
+                        f"{config.TELEGRAM_BOT_TOKEN}/getUpdates",
+                        params={"limit": 100}, timeout=20)
+            atualizacoes = r.json().get("result") or []
+        except Exception:  # noqa: BLE001
+            return _resposta_html(False, "", "Não consegui falar com o "
+                                             "Telegram. Tente de novo.")
+        for a in reversed(atualizacoes):
+            msg = a.get("message") or {}
+            if (msg.get("text") or "").strip() == \
+                    f"/start {usuario.telegram_codigo}":
+                usuario.telegram_chat_id = str(msg["chat"]["id"])
+                usuario.telegram_codigo = ""
+                s.commit()
+                alerta_mod.enviar_telegram(
+                    "✅ Pronto! Seus alertas do Radar de Licitações vão "
+                    "chegar aqui.", chat_id=usuario.telegram_chat_id)
+                return _resposta_html(True, "Conectado! Mandei uma mensagem "
+                                            "de boas-vindas no seu Telegram.",
+                                      "")
+        return _resposta_html(False, "", 'Ainda não vi o seu COMEÇAR. Abra o '
+                                         'link do passo 1, aperte o botão e '
+                                         'tente confirmar de novo.')
+    finally:
+        s.close()
+
+
+@app.post("/conta/telegram/desconectar", response_class=HTMLResponse)
+def telegram_desconectar(request: Request):
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        usuario.telegram_chat_id = ""
+        s.commit()
+        return _resposta_html(True, "Telegram desconectado desta conta.", "")
+    finally:
+        s.close()
+
+
+@app.post("/conta/testar/{canal}", response_class=HTMLResponse)
+def conta_testar(request: Request, canal: str):
+    """Teste dos MEUS canais — cada usuário confere os seus."""
+    s = Sessao()
+    try:
+        usuario = s.get(Usuario, eu(request).id)
+        texto = ("📡 Radar de Licitações — teste dos seus alertas.\n"
+                 "Se chegou, este canal está pronto. ✅")
+        if canal == "telegram":
+            if not usuario.telegram_chat_id:
+                return _resposta_html(False, "", "Conecte o Telegram antes.")
+            ok = alerta_mod.enviar_telegram(texto,
+                                            chat_id=usuario.telegram_chat_id)
+            return _resposta_html(ok, "Teste enviado no seu Telegram.",
+                                  "Falhou — tente reconectar.")
+        if canal == "email":
+            if not usuario.email_alertas:
+                return _resposta_html(False, "", "Preencha o e-mail e salve.")
+            ok = alerta_mod.enviar_email(texto, destino=usuario.email_alertas)
+            return _resposta_html(ok, "Teste enviado no seu e-mail.",
+                                  "Falhou — nesta hospedagem o e-mail pode "
+                                  "sair só pela rotina diária.")
+        if canal == "push":
+            entregues = push_mod.enviar_push(
+                s, usuario, "📡 Radar de Licitações",
+                "Teste: os avisos no aparelho estão funcionando ✅", url="/")
+            return _resposta_html(entregues > 0,
+                                  f"Enviado para {entregues} aparelho(s).",
+                                  "Nenhum aparelho ativado ainda — toque em "
+                                  "Ativar neste aparelho.")
+        return _resposta_html(False, "", "Canal desconhecido.")
+    finally:
+        s.close()
+
+
+# --------------------------------------------------------- push (Web Push/PWA)
+@app.get("/api/push/chave")
+async def push_chave():
+    return {"chave": push_mod.chave_publica()}
+
+
+@app.post("/api/push/assinar")
+async def push_assinar(request: Request):
+    dados = await request.json()
+    endpoint = (dados.get("endpoint") or "")[:2000]
+    chaves = dados.get("keys") or {}
+    if not (endpoint.startswith("https://") and chaves.get("p256dh")
+            and chaves.get("auth")):
+        return Response(status_code=400)
+    s = Sessao()
+    try:
+        existente = (s.query(PushAssinatura)
+                     .filter_by(endpoint=endpoint).first())
+        if existente:
+            existente.usuario_id = eu(request).id
+            existente.p256dh = chaves["p256dh"]
+            existente.auth = chaves["auth"]
+        else:
+            s.add(PushAssinatura(
+                usuario_id=eu(request).id, endpoint=endpoint,
+                p256dh=chaves["p256dh"], auth=chaves["auth"],
+                rotulo=(request.headers.get("user-agent") or "")[:120]))
+        s.commit()
+        return {"ok": True}
+    finally:
+        s.close()
+
+
+@app.post("/api/push/remover")
+async def push_remover(request: Request):
+    dados = await request.json()
+    s = Sessao()
+    try:
+        (s.query(PushAssinatura)
+         .filter_by(endpoint=dados.get("endpoint", ""),
+                    usuario_id=eu(request).id).delete())
+        s.commit()
+        return {"ok": True}
+    finally:
+        s.close()
+
+
+@app.get("/sw.js")
+async def service_worker():
+    """O service worker precisa ser servido da raiz para valer no site todo."""
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static",
+                                     "sw.js"), media_type="text/javascript")
+
+
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static",
+                                     "manifest.json"),
+                        media_type="application/manifest+json")
+
+
+# ------------------------------------------------------------ usuários (admin)
+def _sou_admin(request):
+    return eu(request).papel == "admin"
+
+
+@app.get("/usuarios", response_class=HTMLResponse)
+async def usuarios_lista(request: Request, erro: str = ""):
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
+    s = Sessao()
+    try:
+        lista = s.query(Usuario).order_by(Usuario.nome).all()
+        return templates.TemplateResponse(request, "usuarios.html", {
+            "lista": lista, "erro": erro, "meu_id": eu(request).id})
+    finally:
+        s.close()
+
+
+@app.post("/usuarios/criar")
+async def usuarios_criar(request: Request, nome: str = Form(""),
+                         email: str = Form(""), senha: str = Form(""),
+                         papel: str = Form("usuario")):
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
+    nome, email = nome.strip(), email.strip().lower()
+    if not (nome and "@" in email and len(senha) >= 6):
+        return RedirectResponse(
+            "/usuarios?erro=Preencha nome, e-mail e senha (6+).",
+            status_code=303)
+    s = Sessao()
+    try:
+        if s.query(Usuario).filter_by(email=email).first():
+            return RedirectResponse("/usuarios?erro=Este e-mail já tem conta.",
+                                    status_code=303)
+        s.add(Usuario(nome=nome, email=email, email_alertas=email,
+                      papel="admin" if papel == "admin" else "usuario",
+                      senha_hash=usuarios_mod.gerar_hash(senha)))
+        s.commit()
+        return RedirectResponse("/usuarios", status_code=303)
+    finally:
+        s.close()
+
+
+@app.post("/usuarios/{usuario_id}/toggle")
+async def usuarios_toggle(request: Request, usuario_id: int):
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
+    s = Sessao()
+    try:
+        alvo = s.get(Usuario, usuario_id)
+        if alvo and alvo.id != eu(request).id:   # ninguém se desativa sozinho
+            alvo.ativo = not alvo.ativo
+            s.commit()
+        return RedirectResponse("/usuarios", status_code=303)
+    finally:
+        s.close()
+
+
+@app.post("/usuarios/{usuario_id}/senha")
+async def usuarios_resetar_senha(request: Request, usuario_id: int,
+                                 nova: str = Form("")):
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
+    if len(nova) < 6:
+        return RedirectResponse("/usuarios?erro=Senha nova precisa de 6+.",
+                                status_code=303)
+    s = Sessao()
+    try:
+        alvo = s.get(Usuario, usuario_id)
+        if alvo:
+            alvo.senha_hash = usuarios_mod.gerar_hash(nova)
+            s.commit()
+        return RedirectResponse("/usuarios", status_code=303)
+    finally:
+        s.close()
 
 
 # ------------------------------------------------------------------- execução

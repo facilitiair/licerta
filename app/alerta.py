@@ -269,15 +269,20 @@ def montar_mensagem_perfil(sessao_db, perfil, matches, host=None, urgente=False)
     return "\n".join(partes), enviados
 
 
-def enviar_telegram(texto):
-    """Envia pelo Bot API; mensagens longas são divididas em blocos de 4096."""
-    if not (config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID):
-        log.warning("Telegram não configurado (.env) — alerta não enviado")
+def enviar_telegram(texto, chat_id=None):
+    """Envia pelo Bot API; mensagens longas são divididas em blocos de 4096.
+
+    O bot é um só (da instalação); o `chat_id` é de cada usuário. Sem um
+    explícito, usa o do .env — o modo antigo de instalação de uma pessoa.
+    """
+    chat = chat_id or config.TELEGRAM_CHAT_ID
+    if not (config.TELEGRAM_BOT_TOKEN and chat):
+        log.warning("Telegram não configurado — alerta não enviado")
         return False
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
     for pedaco in dividir_mensagem(texto):
         r = requests.post(url, json={
-            "chat_id": config.TELEGRAM_CHAT_ID,
+            "chat_id": chat,
             "text": pedaco,
             "disable_web_page_preview": True,
         }, timeout=30)
@@ -334,18 +339,19 @@ def _texto_para_html(texto):
             f"</body></html>")
 
 
-def enviar_email(texto):
+def enviar_email(texto, destino=None):
     """Envia o alerta por SMTP. Só age se EMAIL_ATIVO=true (SPEC §6)."""
     if not config.EMAIL_ATIVO:
         return False
-    if not (config.SMTP_HOST and config.SMTP_USER and config.EMAIL_DESTINO):
+    para = destino or config.EMAIL_DESTINO
+    if not (config.SMTP_HOST and config.SMTP_USER and para):
         log.warning("EMAIL_ATIVO=true mas SMTP incompleto no .env")
         return False
     try:
         msg = MIMEText(_texto_para_html(texto), "html", "utf-8")
         msg["Subject"] = f"Radar de Licitações — {agora_local().strftime('%d/%m/%Y')}"
         msg["From"] = config.SMTP_USER
-        msg["To"] = config.EMAIL_DESTINO
+        msg["To"] = para
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
             smtp.starttls()
             smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -389,6 +395,35 @@ def tem_urgencia(perfil, enviaveis, agora):
     return False
 
 
+def despachar_canais(sessao_db, perfil, texto, quantidade, urgente, host=None):
+    """Entrega pelos canais do DONO do perfil: Telegram, e-mail e push.
+
+    Multiusuário: cada pessoa recebe pelos canais que configurou na tela
+    Minha conta. Perfil sem dono (instalação antiga, antes da migração) cai
+    nos canais globais do .env, como sempre foi.
+    """
+    dono = getattr(perfil, "usuario", None)
+    if dono is None:
+        return enviar_telegram(texto), enviar_email(texto), False
+    ok_tg = ok_email = ok_push = False
+    if dono.receber_telegram and dono.telegram_chat_id:
+        ok_tg = enviar_telegram(texto, chat_id=dono.telegram_chat_id)
+    if dono.receber_email and dono.email_alertas:
+        ok_email = enviar_email(texto, destino=dono.email_alertas)
+    if dono.receber_push:
+        from .push import enviar_push
+        titulo = ("⏰ Fecha hoje: " if urgente else "📡 ") + perfil.nome
+        corpo = (f"{quantidade} oportunidade"
+                 f"{'s' if quantidade != 1 else ''} nova"
+                 f"{'s' if quantidade != 1 else ''} — toque para abrir")
+        try:
+            ok_push = enviar_push(sessao_db, dono, titulo, corpo,
+                                  url=(host or config.APP_URL) + "/") > 0
+        except Exception:  # noqa: BLE001 — push nunca derruba o alerta
+            log.exception("Falha no push do alerta '%s'", perfil.nome)
+    return ok_tg, ok_email, ok_push
+
+
 def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None,
                          urgente=False):
     """Envia o alerta de um perfil. Devolve (enviou?, quantidade enviada).
@@ -411,9 +446,9 @@ def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None,
         return False, 0
     texto, incluidos = montar_mensagem_perfil(sessao_db, perfil, enviaveis,
                                               host, urgente=urgente)
-    ok_telegram = enviar_telegram(texto)
-    ok_email = enviar_email(texto)
-    if not (ok_telegram or ok_email):
+    ok_telegram, ok_email, ok_push = despachar_canais(
+        sessao_db, perfil, texto, len(incluidos), urgente, host)
+    if not (ok_telegram or ok_email or ok_push):
         sessao_db.commit()                 # ao menos grava os vencidos
         return False, 0
     # Só quem entrou na mensagem é marcado. O excedente continua pendente e
@@ -423,9 +458,10 @@ def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None,
     if not urgente:
         perfil.ultimo_envio = agora
     sessao_db.commit()
-    log.info("Alerta '%s'%s enviado (telegram=%s, email=%s): %s de %s novas, "
-             "%s vencidas descartadas", perfil.nome, " URGENTE" if urgente else "",
-             ok_telegram, ok_email, len(incluidos), len(enviaveis), len(vencidos))
+    log.info("Alerta '%s'%s enviado (telegram=%s, email=%s, push=%s): %s de %s "
+             "novas, %s vencidas descartadas", perfil.nome,
+             " URGENTE" if urgente else "", ok_telegram, ok_email, ok_push,
+             len(incluidos), len(enviaveis), len(vencidos))
     return True, len(incluidos)
 
 

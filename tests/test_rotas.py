@@ -15,9 +15,11 @@ from app.main import app
 @pytest.fixture(scope="module")
 def cliente():
     with TestClient(app) as c:
-        token = hmac.new(b"radar-licitacoes", config.APP_SENHA.encode(),
-                         hashlib.sha256).hexdigest()
-        c.cookies.set("sessao", token)
+        # multiusuário: entra de verdade pela rota de login (e-mail em branco
+        # funciona quando a senha bate com uma conta só)
+        r = c.post("/login", data={"email": "", "senha": config.APP_SENHA},
+                   follow_redirects=False)
+        assert r.status_code == 303 and "sessao" in c.cookies,             "fixture não conseguiu logar — confira APP_SENHA/migração"
         yield c
 
 
@@ -114,21 +116,24 @@ def test_gatilho_da_coleta_respeita_o_intervalo():
 
 
 # --------------------------------------- regressões apontadas pela auditoria
-def test_senha_com_acento_nao_derruba_o_login():
-    """hmac.compare_digest LEVANTA com str não-ASCII. Uma senha como
-    'licitações2024' trancava o dono para fora com erro 500, mesmo digitando
-    a senha certa, e sem caminho de recuperação pela interface."""
-    from app.main import _iguais
-    assert _iguais("licitações2024", "licitações2024")
-    assert not _iguais("licitações2024", "outra")
-    assert not _iguais("café", "cafe")
+def test_senha_com_acento_funciona_no_hash():
+    """Senha brasileira tem acento; o hash trabalha em bytes UTF-8."""
+    from app.usuarios import conferir_senha, gerar_hash
+    h = gerar_hash("licitações2024")
+    assert conferir_senha("licitações2024", h)
+    assert not conferir_senha("licitacoes2024", h)
 
 
-def test_cookie_com_byte_acentuado_nao_derruba_as_rotas():
-    """Sem login nenhum, um byte acentuado no cookie fazia TODAS as rotas
-    protegidas responderem 500."""
-    from app.main import _iguais, _token_sessao
-    assert not _iguais("caf\xe9", _token_sessao())
+def test_cookie_esquisito_nao_derruba_as_rotas():
+    """Cookie corrompido tem de virar redirect para /login, nunca 500."""
+    with TestClient(app) as anonimo:
+        for lixo in ("1:2", "a:b:c", ":::", "1:99999999999999:x", "9" * 500):
+            anonimo.cookies.set("sessao", lixo)
+            r = anonimo.get("/", follow_redirects=False)
+            assert r.status_code == 303, repr(lixo)
+    # byte acentuado não passa pelo cliente de teste; confere na função
+    from app.usuarios import usuario_do_token
+    assert usuario_do_token("caf\xe9", b"s" * 32) is None
 
 
 def test_segredos_nao_aparecem_no_html_da_tela_de_configuracoes(cliente):
@@ -151,9 +156,9 @@ def test_autocomplete_do_pncp_escapa_html(monkeypatch, cliente):
         lambda tipo, q: [{"id": "1", "nome": "<img src=x onerror=alert(1)>",
                           "cnpj": "d'Água"}])
     html = cliente.get("/api/pncp/opcoes?tipo=orgaos&q=teste").text
-    assert "<img" not in html
-    assert "onerror" not in html.replace("&#", "")
-    assert "onclick" not in html
+    assert "<img" not in html                # o markup não vira elemento
+    assert "&lt;img" in html                 # vira texto escapado, visível
+    assert "onclick" not in html             # dados em data-*, não em handler
 
 
 def test_pagina_gigante_nao_estoura_o_sqlite(cliente):
@@ -246,22 +251,34 @@ def test_login_funciona_mesmo_sem_poder_gravar_o_segredo(monkeypatch):
     from app.config import config
     monkeypatch.setattr(m, "CAMINHO_SEGREDO", "Z:/nao/existe/.segredo")
     with TestClient(m.app) as anonimo:
-        r = anonimo.post("/login", data={"senha": config.APP_SENHA},
+        r = anonimo.post("/login", data={"email": "",
+                                         "senha": config.APP_SENHA},
                          follow_redirects=False)
-        assert r.status_code < 500
-        if config.APP_SENHA:
-            assert r.status_code == 303          # entrou mesmo assim
-            assert "sessao" in r.cookies
-        # e o token continua estável dentro do processo
-        assert m._token_sessao() == m._token_sessao()
+        assert r.status_code == 303          # entrou mesmo assim
+        assert "sessao" in r.cookies
 
 
-def test_logout_invalida_o_cookie_mesmo_sem_arquivo(monkeypatch):
-    import app.main as m
-    monkeypatch.setattr(m, "CAMINHO_SEGREDO", "Z:/nao/existe/.segredo")
-    antes = m._token_sessao()
-    m._girar_segredo_sessao()
-    assert m._token_sessao() != antes
+def test_trocar_a_senha_derruba_as_sessoes_antigas():
+    """O token assina a senha: cookie roubado morre quando a senha muda."""
+    from app.usuarios import criar_token, gerar_hash, usuario_do_token
+
+    class U:
+        id = 999
+        ativo = True
+        senha_hash = gerar_hash("antiga")
+
+    segredo = b"s" * 32
+    token = criar_token(U(), segredo)
+    import app.usuarios as mod
+    original = mod.carregar_usuario
+    u = U()
+    mod.carregar_usuario = lambda uid: u if uid == 999 else original(uid)
+    try:
+        assert usuario_do_token(token, segredo) is u
+        u.senha_hash = gerar_hash("nova")
+        assert usuario_do_token(token, segredo) is None
+    finally:
+        mod.carregar_usuario = original
 
 
 def test_instalacao_nova_nasce_sem_perfil_de_exemplo(monkeypatch, tmp_path):

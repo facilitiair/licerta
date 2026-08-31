@@ -14,10 +14,9 @@ from app.sincronizar import CAMPOS, PERFIL_SISTEMA, aplicar_perfis
 @pytest.fixture(scope="module")
 def cliente():
     with TestClient(app) as c:
-        token = hmac.new(b"radar-licitacoes", config.APP_SENHA.encode(),
-                         hashlib.sha256).hexdigest()
-        from app.main import _token_sessao
-        c.cookies.set("sessao", _token_sessao())
+        r = c.post("/login", data={"email": "", "senha": config.APP_SENHA},
+                   follow_redirects=False)
+        assert r.status_code == 303
         yield c
 
 

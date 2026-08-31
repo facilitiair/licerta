@@ -20,9 +20,11 @@
   </div>
 
   <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-    <h3 class="font-semibold">Telegram (alerta principal)</h3>
-    <p class="text-xs text-slate-500">Como criar o bot e achar o chat_id:
-      veja a seção 3 do README.</p>
+    <h3 class="font-semibold">Telegram (bot da instalação)</h3>
+    <p class="text-xs text-slate-500">Crie o bot uma vez (seção 3 do README) e
+      cole o token. Cada pessoa conecta o PRÓPRIO Telegram depois, em
+      <a href="/conta" class="underline">Minha conta</a> — o Chat ID abaixo é
+      só reserva de instalação antiga.</p>
     <div class="grid sm:grid-cols-2 gap-3 text-sm">
       <label>Token do bot
         <input type="password" name="TELEGRAM_BOT_TOKEN" value="" autocomplete="off"
@@ -65,8 +67,9 @@
         <input type="password" name="SMTP_PASSWORD" value="" autocomplete="new-password"
                placeholder="{{ '•••••• (guardada) — em branco mantém' if valores.SMTP_PASSWORD_DEFINIDO else 'senha de app do Gmail' }}"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
-      <label>Destinatário
+      <label>Destinatário reserva
         <input name="EMAIL_DESTINO" value="{{ valores.EMAIL_DESTINO }}"
+               placeholder="cada pessoa define o seu em Minha conta"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
     </div>
     <span hx-post="/config/testar" hx-vals='{"canal": "email"}'

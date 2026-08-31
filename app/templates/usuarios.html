@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}Usuários — Radar{% endblock %}
+{% block conteudo %}
+<h2 class="font-bold text-lg mb-1">Usuários</h2>
+<p class="text-sm text-slate-500 mb-4">Cada pessoa tem seus perfis de busca e
+  seus canais de aviso. Só administradores veem esta tela.</p>
+{% if erro %}<p class="bg-red-50 border border-red-200 text-red-700 rounded-lg
+  px-4 py-2 text-sm mb-4">{{ erro }}</p>{% endif %}
+
+<div class="space-y-3 mb-6">
+  {% for u in lista %}
+  <div class="bg-white rounded-xl border border-slate-200 p-4
+              {{ '' if u.ativo else 'opacity-60' }}">
+    <div class="flex items-center gap-3 flex-wrap">
+      <span class="font-semibold">{{ u.nome }}</span>
+      <span class="text-xs text-slate-500">{{ u.email }}</span>
+      {% if u.papel == 'admin' %}<span class="text-xs px-2 py-0.5 rounded-full
+        bg-purple-100 text-purple-800">admin</span>{% endif %}
+      <span class="text-xs px-2 py-0.5 rounded-full
+        {{ 'bg-green-100 text-green-800' if u.ativo else 'bg-slate-200 text-slate-600' }}">
+        {{ 'ativo' if u.ativo else 'desativado' }}</span>
+      <span class="text-xs text-slate-400">
+        {{ u.perfis|length }} perfil(is)
+        · canais: {{ '✈️' if u.telegram_chat_id }}
+        {{ '✉️' if u.email_alertas }}
+        {{ '📱' if u.assinaturas_push }}</span>
+    </div>
+    <div class="flex gap-2 mt-3 text-sm flex-wrap">
+      {% if u.id != meu_id %}
+      <form method="post" action="/usuarios/{{ u.id }}/toggle">
+        <button class="px-3 py-1 border border-slate-300 rounded-lg
+              hover:bg-slate-50">{{ '⏸ Desativar' if u.ativo else '▶ Reativar' }}</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/usuarios/{{ u.id }}/senha" class="flex gap-2">
+        <input type="password" name="nova" placeholder="senha nova (6+)"
+               minlength="6" required
+               class="border border-slate-300 rounded-lg px-2 py-1 w-40">
+        <button class="px-3 py-1 border border-slate-300 rounded-lg
+              hover:bg-slate-50">🔑 Redefinir senha</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 p-4 max-w-lg">
+  <h3 class="font-semibold text-sm mb-3">+ Nova conta</h3>
+  <form method="post" action="/usuarios/criar"
+        class="grid sm:grid-cols-2 gap-3 text-sm">
+    <input name="nome" placeholder="Nome" required
+           class="border border-slate-300 rounded-lg px-3 py-2">
+    <input type="email" name="email" placeholder="e-mail" required
+           class="border border-slate-300 rounded-lg px-3 py-2">
+    <input type="password" name="senha" placeholder="senha inicial (6+)"
+           minlength="6" required
+           class="border border-slate-300 rounded-lg px-3 py-2">
+    <select name="papel" class="border border-slate-300 rounded-lg px-3 py-2">
+      <option value="usuario">usuário</option>
+      <option value="admin">administrador</option>
+    </select>
+    <button class="sm:col-span-2 bg-blue-700 text-white rounded-lg py-2
+                   font-semibold hover:bg-blue-800">Criar conta</button>
+  </form>
+  <p class="text-xs text-slate-400 mt-2">Avise a pessoa para trocar a senha
+    no primeiro acesso, em Minha conta.</p>
+</div>
+{% endblock %}

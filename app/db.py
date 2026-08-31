@@ -25,9 +25,48 @@ Sessao = sessionmaker(bind=engine, expire_on_commit=False)
 Base = declarative_base()
 
 
+class Usuario(Base):
+    """Cada pessoa da empresa tem sua conta, seus perfis e seus canais de
+    aviso (Telegram, e-mail, push no celular) — o app é multiusuário."""
+    __tablename__ = "usuarios"
+    id = Column(Integer, primary_key=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    senha_hash = Column(String, nullable=False)     # scrypt salgado
+    papel = Column(String, default="usuario", nullable=False)  # admin|usuario
+    ativo = Column(Boolean, default=True, nullable=False)
+    # Canais de aviso — cada um liga e desliga o seu
+    telegram_chat_id = Column(String, default="", nullable=False)
+    telegram_codigo = Column(String, default="", nullable=False)  # p/ conectar
+    receber_telegram = Column(Boolean, default=True, nullable=False)
+    email_alertas = Column(String, default="", nullable=False)
+    receber_email = Column(Boolean, default=True, nullable=False)
+    receber_push = Column(Boolean, default=True, nullable=False)
+    criado_em = Column(DateTime, default=agora, nullable=False)
+    perfis = relationship("PerfilBusca", back_populates="usuario")
+    assinaturas_push = relationship("PushAssinatura", back_populates="usuario",
+                                    cascade="all, delete-orphan")
+
+
+class PushAssinatura(Base):
+    """Um aparelho que aceitou receber notificações push (celular, PC)."""
+    __tablename__ = "push_assinaturas"
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False,
+                        index=True)
+    endpoint = Column(Text, unique=True, nullable=False)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+    rotulo = Column(String, default="")             # ex.: "Chrome no Android"
+    criado_em = Column(DateTime, default=agora, nullable=False)
+    usuario = relationship("Usuario", back_populates="assinaturas_push")
+
+
 class PerfilBusca(Base):
     __tablename__ = "perfis_busca"
     id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True,
+                        index=True)
     nome = Column(Text, nullable=False)
     ativo = Column(Boolean, default=True, nullable=False)
     ufs = Column(JSON, default=list)               # vazio = Brasil inteiro
@@ -53,6 +92,7 @@ class PerfilBusca(Base):
     hora_envio = Column(String, default="", nullable=False)   # "" = HORA_ALERTA
     ultimo_envio = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=agora, nullable=False)
+    usuario = relationship("Usuario", back_populates="perfis")
     matches = relationship("PerfilMatch", back_populates="perfil",
                            cascade="all, delete-orphan")
 
@@ -188,8 +228,17 @@ def _migrar():
                          ("dia_mes", "INTEGER DEFAULT 1"),
                          ("mes_ano", "INTEGER DEFAULT 1"),
                          ("hora_envio", "TEXT DEFAULT ''"),
-                         ("ultimo_envio", "DATETIME")],
+                         ("ultimo_envio", "DATETIME"),
+                         ("usuario_id", "INTEGER")],
     }
+    indices = [
+        # Consultas mais quentes do despacho de alertas e do funil
+        "CREATE INDEX IF NOT EXISTS ix_matches_perfil_notificado "
+        "ON perfil_matches (perfil_id, notificado)",
+        "CREATE INDEX IF NOT EXISTS ix_matches_status "
+        "ON perfil_matches (status)",
+        "CREATE INDEX IF NOT EXISTS ix_licitacoes_fonte ON licitacoes (fonte)",
+    ]
     with engine.connect() as con:
         criadas = set()
         for tabela, novas in pendencias.items():
@@ -212,4 +261,46 @@ def _migrar():
         con.exec_driver_sql(
             "UPDATE licitacoes SET situacao = REPLACE(situacao, ' no PNCP', '') "
             "WHERE situacao LIKE '% no PNCP'")
+        for indice in indices:
+            con.exec_driver_sql(indice)
         con.commit()
+    _migrar_para_multiusuario()
+
+
+def _migrar_para_multiusuario():
+    """Instalação antiga (senha única no .env) vira multiusuário sem perder
+    nada: o dono atual vira o primeiro administrador, herda todos os perfis
+    e os canais de aviso que estavam no .env (chat do Telegram, e-mail).
+
+    Idempotente: só age quando não existe nenhum usuário ainda.
+    """
+    from .config import config
+    from .usuarios import gerar_hash
+    sessao = Sessao()
+    try:
+        if sessao.query(Usuario).count():
+            # Já é multiusuário; só garante que nenhum perfil ficou órfão
+            # (ex.: criado por versão antiga entre migrações).
+            admin = (sessao.query(Usuario).filter_by(papel="admin")
+                     .order_by(Usuario.id).first())
+            if admin:
+                sessao.query(PerfilBusca).filter(
+                    PerfilBusca.usuario_id.is_(None)).update(
+                    {"usuario_id": admin.id})
+                sessao.commit()
+            return
+        if not config.APP_SENHA:
+            return          # instalação nova: a tela /registrar cria o admin
+        email = (config.EMAIL_DESTINO or "").strip() or "admin@radar.local"
+        admin = Usuario(
+            nome="Administrador", email=email,
+            senha_hash=gerar_hash(config.APP_SENHA), papel="admin",
+            telegram_chat_id=config.TELEGRAM_CHAT_ID or "",
+            email_alertas=config.EMAIL_DESTINO or "")
+        sessao.add(admin)
+        sessao.flush()
+        sessao.query(PerfilBusca).filter(
+            PerfilBusca.usuario_id.is_(None)).update({"usuario_id": admin.id})
+        sessao.commit()
+    finally:
+        sessao.close()

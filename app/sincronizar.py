@@ -33,22 +33,51 @@ PERFIL_SISTEMA = "⭐ Salvos da pesquisa"
 
 
 def exportar_perfis(sessao_db):
-    """Os perfis como dicionários de configuração (para /api/perfis/exportar)."""
+    """Os perfis como dicionários de configuração (para /api/perfis/exportar).
+
+    Vai junto o e-mail do dono: no multiusuário, o robô do e-mail precisa
+    saber de quem é cada perfil para avisar a pessoa certa.
+    """
     perfis = (sessao_db.query(PerfilBusca)
               .filter(PerfilBusca.nome != PERFIL_SISTEMA)
               .order_by(PerfilBusca.nome).all())
-    return [{c: getattr(p, c) for c in CAMPOS} for p in perfis]
+    resultado = []
+    for p in perfis:
+        d = {c: getattr(p, c) for c in CAMPOS}
+        d["dono_email"] = p.usuario.email if p.usuario else ""
+        resultado.append(d)
+    return resultado
+
+
+def _dono_local(sessao_db, dono_email):
+    """O usuário local para pendurar o perfil sincronizado.
+
+    Procura pelo e-mail; sem correspondência, cai no primeiro administrador —
+    melhor um dono aproximado do que um perfil órfão que não alerta ninguém.
+    """
+    from .db import Usuario
+    email = (dono_email or "").strip().lower()
+    if email:
+        u = sessao_db.query(Usuario).filter_by(email=email).first()
+        if u:
+            return u
+    return (sessao_db.query(Usuario).filter_by(papel="admin")
+            .order_by(Usuario.id).first())
 
 
 def aplicar_perfis(sessao_db, recebidos):
-    """Upsert por nome. Devolve (atualizados, criados). Não faz commit."""
+    """Upsert por (dono, nome). Devolve (atualizados, criados). Sem commit."""
     atualizados, criados = [], []
     for dados in recebidos:
         nome = (dados.get("nome") or "").strip()
         if not nome or nome == PERFIL_SISTEMA:
             continue
         limpo = {c: dados[c] for c in CAMPOS if c in dados}
-        existente = sessao_db.query(PerfilBusca).filter_by(nome=nome).first()
+        dono = _dono_local(sessao_db, dados.get("dono_email"))
+        consulta = sessao_db.query(PerfilBusca).filter_by(nome=nome)
+        if dono:
+            consulta = consulta.filter_by(usuario_id=dono.id)
+        existente = consulta.first()
         if existente:
             mudou = False
             for campo, valor in limpo.items():
@@ -58,7 +87,8 @@ def aplicar_perfis(sessao_db, recebidos):
             if mudou:
                 atualizados.append(nome)
         else:
-            sessao_db.add(PerfilBusca(**limpo))
+            sessao_db.add(PerfilBusca(
+                **limpo, usuario_id=dono.id if dono else None))
             criados.append(nome)
     return atualizados, criados
 
