@@ -352,7 +352,9 @@ async def painel(request: Request):
         fecham_hoje = sum(1 for m in urgentes
                           if (m.licitacao.data_encerramento_proposta
                               or "")[:10] == hoje)
-        ultima = (s.query(ColetaLog).filter_by(sucesso=True)
+        # A última coleta CONCLUÍDA, com ou sem tropeços: uma varredura que
+        # trouxe 900 editais e falhou numa combinação continua sendo coleta.
+        ultima = (s.query(ColetaLog).filter(ColetaLog.fim.isnot(None))
                   .order_by(ColetaLog.fim.desc()).first())
         ultimas = (s.query(Licitacao)
                    .order_by(Licitacao.coletado_em.desc()).limit(8).all())
@@ -368,7 +370,7 @@ async def painel(request: Request):
                 (usuario.receber_telegram and usuario.telegram_chat_id)
                 or (usuario.receber_email and usuario.email_alertas)
                 or (usuario.receber_push and usuario.assinaturas_push)),
-            "coleta": ultima is not None,
+            "coleta": bool(ultimas),       # o radar já tem dados?
         }
         return templates.TemplateResponse(request, "painel.html", {
             "kpis": kpis, "proximos": proximos, "ultima_coleta": ultima,

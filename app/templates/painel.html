@@ -5,6 +5,10 @@
     <h1 class="text-xl font-bold">Painel</h1>
     <p class="text-xs text-slate-500">Última coleta:
       {{ ultima_coleta.fim.strftime('%d/%m/%Y %H:%M') if ultima_coleta else 'nunca' }}
+      {% if ultima_coleta and not ultima_coleta.sucesso %}
+      <a href="/logs" class="text-amber-600" title="a última coleta teve
+         erros — veja os registros">⚠</a>
+      {% endif %}
       · próxima automática às {{ '%02d:%02d' % hora_coleta }}</p>
   </div>
   <div class="ml-auto flex items-center gap-3">
