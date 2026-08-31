@@ -5,6 +5,23 @@ expressão exata ("ar condicionado"); asterisco é curinga (pavimenta*).
 """
 import re
 import unicodedata
+from datetime import datetime
+
+# Situações que o PNCP e o Mural do TCE-PI usam. As duas primeiras são as
+# disputáveis — é o que um alerta novo já vem marcando por padrão.
+SITUACOES_DISPUTAVEIS = ["Divulgada", "Aberta"]
+SITUACOES_CONHECIDAS = SITUACOES_DISPUTAVEIS + [
+    "Retificada", "Não finalizada", "Suspensa", "Finalizada",
+    "Cancelada", "Anulada", "Revogada"]
+
+
+def esta_vigente(lic, agora=None):
+    """A disputa ainda está de pé? Compara o encerramento das propostas com
+    o instante atual. Sem data informada não dá para descartar: passa."""
+    fim = (lic.data_encerramento_proposta or "").strip().replace(" ", "T")
+    if not fim:
+        return True
+    return fim[:16] >= (agora or datetime.now()).strftime("%Y-%m-%dT%H:%M")
 
 
 def normalizar(texto):
@@ -59,9 +76,15 @@ def texto_casa(objeto, incluir, excluir, modo="ou"):
     return bool(casados), casados
 
 
-def licitacao_casa_perfil(lic, perfil):
-    """Filtro completo: geografia E modalidade E valor E texto (SPEC §5)."""
+def licitacao_casa_perfil(lic, perfil, agora=None):
+    """Filtro completo: geografia E modalidade E valor E situação E prazo
+    E texto (SPEC §5)."""
     if perfil.ufs and lic.uf not in perfil.ufs:
+        return False
+    situacoes = getattr(perfil, "situacoes", None) or []
+    if situacoes and (lic.situacao or "") not in situacoes:
+        return False
+    if getattr(perfil, "somente_vigentes", True) and not esta_vigente(lic, agora):
         return False
     if perfil.municipios_ibge and str(lic.municipio_ibge) not in \
             [str(m) for m in perfil.municipios_ibge]:

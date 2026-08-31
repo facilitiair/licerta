@@ -41,7 +41,17 @@ class PerfilBusca(Base):
     somente_srp = Column(Boolean, default=False, nullable=False)
     modo_busca = Column(String, default="ou", nullable=False)  # 'ou' | 'e'
     ordenacao = Column(String, default="encerramento_asc", nullable=False)
+    situacoes = Column(JSON, default=list)         # vazio = qualquer situação
+    # Nunca alertar sobre disputa cujo prazo de proposta já passou
+    somente_vigentes = Column(Boolean, default=True, nullable=False)
+    # --- agendamento do alerta deste perfil ---
     notificar = Column(Boolean, default=True, nullable=False)
+    frequencia = Column(String, default="diario", nullable=False)
+    dia_semana = Column(Integer, default=0, nullable=False)   # 0=segunda
+    dia_mes = Column(Integer, default=1, nullable=False)      # 1..28
+    mes_ano = Column(Integer, default=1, nullable=False)      # 1..12 (anual)
+    hora_envio = Column(String, default="", nullable=False)   # "" = HORA_ALERTA
+    ultimo_envio = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.now, nullable=False)
     matches = relationship("PerfilMatch", back_populates="perfil",
                            cascade="all, delete-orphan")
@@ -169,9 +179,18 @@ def _migrar():
         "licitacoes": [("fonte", "TEXT DEFAULT 'pncp'"), ("situacao", "TEXT"),
                        ("objeto_norm", "TEXT")],
         "perfil_matches": [("termos", "TEXT DEFAULT ''")],
-        "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'")],
+        "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'"),
+                         ("situacoes", "TEXT DEFAULT '[]'"),
+                         ("somente_vigentes", "BOOLEAN DEFAULT 1"),
+                         ("frequencia", "TEXT DEFAULT 'diario'"),
+                         ("dia_semana", "INTEGER DEFAULT 0"),
+                         ("dia_mes", "INTEGER DEFAULT 1"),
+                         ("mes_ano", "INTEGER DEFAULT 1"),
+                         ("hora_envio", "TEXT DEFAULT ''"),
+                         ("ultimo_envio", "DATETIME")],
     }
     with engine.connect() as con:
+        criadas = set()
         for tabela, novas in pendencias.items():
             colunas = [linha[1] for linha in
                        con.exec_driver_sql(f"PRAGMA table_info({tabela})")]
@@ -179,6 +198,14 @@ def _migrar():
                 if nome not in colunas:
                     con.exec_driver_sql(
                         f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+                    criadas.add(f"{tabela}.{nome}")
+        # Perfis anteriores ao filtro de situação nasceriam aceitando tudo,
+        # inclusive cancelada e revogada. Só na criação da coluna: se depois
+        # o usuário desmarcar todas de propósito, a escolha dele permanece.
+        if "perfis_busca.situacoes" in criadas:
+            con.exec_driver_sql(
+                """UPDATE perfis_busca SET situacoes = '["Divulgada", "Aberta"]'
+                   WHERE situacoes IS NULL OR situacoes = '[]'""")
         # Unifica a situação entre as fontes (PNCP dizia "Divulgada no PNCP",
         # o Mural TCE-PI diz "Divulgada") — idempotente, roda a cada partida
         con.exec_driver_sql(

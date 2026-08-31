@@ -13,15 +13,10 @@
              placeholder="ex.: Ar-condicionado — PI"
              class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
     </label>
-    <div class="flex gap-6 text-sm">
+    <div class="flex gap-6 text-sm flex-wrap">
       <label class="flex items-center gap-2">
         <input type="checkbox" name="ativo"
                {{ 'checked' if not perfil or perfil.ativo else '' }}> Ativo
-      </label>
-      <label class="flex items-center gap-2">
-        <input type="checkbox" name="notificar"
-               {{ 'checked' if not perfil or perfil.notificar else '' }}>
-        Entra no alerta diário
       </label>
       <label class="flex items-center gap-2">
         <input type="checkbox" name="somente_srp"
@@ -29,6 +24,84 @@
         Só registro de preços (SRP)
       </label>
     </div>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <span class="text-sm font-semibold">Situação da licitação</span>
+    <p class="text-xs text-slate-500 -mt-1">
+      Nenhuma marcada = qualquer situação. O padrão é receber só as que ainda
+      dá para disputar.</p>
+    {% set sits = (perfil.situacoes if perfil else situacoes_padrao) or [] %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-1 text-sm">
+      {% for sit in situacoes_todas %}
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="situacoes" value="{{ sit }}"
+               {{ 'checked' if sit in sits else '' }}> {{ sit }}
+      </label>
+      {% endfor %}
+    </div>
+    <label class="flex items-center gap-2 text-sm border-t border-slate-100 pt-3">
+      <input type="checkbox" name="somente_vigentes"
+             {{ 'checked' if not perfil or perfil.somente_vigentes else '' }}>
+      <span><b>Só o que ainda está em aberto</b>
+        <span class="text-slate-500">— descarta o que já passou do prazo de
+          proposta (recomendado)</span></span>
+    </label>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="notificar" id="notificar"
+             {{ 'checked' if not perfil or perfil.notificar else '' }}>
+      <b>Receber alerta deste perfil</b>
+      <span class="text-slate-500">(Telegram / e-mail)</span>
+    </label>
+    {% set freq = perfil.frequencia if perfil else 'diario' %}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <label class="block">
+        <span class="text-sm font-semibold">Com que frequência?</span>
+        <select name="frequencia" id="frequencia" onchange="mostrarCamposFreq()"
+                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+          {% for chave, rotulo in frequencias.items() %}
+          <option value="{{ chave }}" {{ 'selected' if freq == chave }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold">Hora do envio</span>
+        <input type="time" name="hora_envio"
+               value="{{ perfil.hora_envio if perfil and perfil.hora_envio else hora_padrao }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+      </label>
+      <label class="block" id="campoDiaSemana">
+        <span class="text-sm font-semibold">Dia da semana</span>
+        <select name="dia_semana"
+                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+          {% for dia in dias_semana %}
+          <option value="{{ loop.index0 }}"
+            {{ 'selected' if perfil and perfil.dia_semana == loop.index0 }}>{{ dia }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block" id="campoDiaMes">
+        <span class="text-sm font-semibold">Dia do mês</span>
+        <input type="number" name="dia_mes" min="1" max="28"
+               value="{{ perfil.dia_mes if perfil else 1 }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+      </label>
+      <label class="block" id="campoMes">
+        <span class="text-sm font-semibold">Mês</span>
+        <select name="mes_ano"
+                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+          {% for mes in meses %}
+          <option value="{{ loop.index }}"
+            {{ 'selected' if perfil and perfil.mes_ano == loop.index }}>{{ mes }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="text-xs text-slate-500">Um ciclo sem nada novo não gera mensagem —
+      o alerta só chega quando há oportunidade de verdade.</p>
   </div>
 
   <div class="bg-white rounded-xl border border-slate-200 p-4">
@@ -164,6 +237,18 @@
     document.getElementById('resultadosMunicipios').innerHTML = '';
     document.getElementById('buscaMunicipio').value = '';
   }
+  // Só mostra os campos que a frequência escolhida realmente usa
+  function mostrarCamposFreq(){
+    const freq = document.getElementById('frequencia').value;
+    document.getElementById('campoDiaSemana').style.display =
+      freq === 'semanal' ? '' : 'none';
+    document.getElementById('campoDiaMes').style.display =
+      (freq === 'mensal' || freq === 'anual') ? '' : 'none';
+    document.getElementById('campoMes').style.display =
+      freq === 'anual' ? '' : 'none';
+  }
+  mostrarCamposFreq();
+
   // A busca de municípios respeita as UFs marcadas
   function atualizarUfBusca(){
     const marcadas = [...document.querySelectorAll('input[name=ufs]:checked')]

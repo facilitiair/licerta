@@ -70,8 +70,12 @@ ROTAS_POST = [
     ("/pesquisar/salvar", {}),                        # sem identificador -> 400
     ("/perfis/999999/toggle", {}),
     ("/perfis/999999/excluir", {}),
+    ("/perfis/999999/enviar", {}),                    # id inexistente: não envia
     ("/perfis/preview", {"nome": "x", "valor_min": "abc",  # texto no número
                          "palavras_incluir": "teste"}),
+    ("/perfis/preview", {"nome": "x", "frequencia": "quinzenal",  # inexistente
+                         "dia_semana": "99", "dia_mes": "0",
+                         "mes_ano": "abc", "hora_envio": "25:99"}),
 ]
 
 

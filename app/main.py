@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -26,7 +27,8 @@ from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
                  Municipio, PerfilBusca, PerfilMatch, Sessao, criar_tabelas)
 from .documentos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
-from .matcher import licitacao_casa_perfil, normalizar
+from .matcher import (SITUACOES_CONHECIDAS, SITUACOES_DISPUTAVEIS,
+                      licitacao_casa_perfil, normalizar)
 from .seed import semear
 
 logging.basicConfig(level=logging.INFO,
@@ -49,8 +51,12 @@ def _job_coleta():
 
 
 def _job_alerta():
+    """Roda de 10 em 10 minutos e envia os alertas cuja hora chegou.
+
+    Varrer com frequência (em vez de um job por perfil) mantém um caminho só:
+    mudar a frequência de um alerta na tela não exige reagendar nada."""
     try:
-        alerta_mod.enviar_alerta_diario()
+        alerta_mod.enviar_alertas_devidos()
     except Exception:  # noqa: BLE001
         log.exception("Erro no job de alerta")
 
@@ -71,13 +77,13 @@ async def vida(app_):
     h, m = config.HORA_COLETA
     agendador.add_job(_job_coleta, "cron", hour=h, minute=m, id="coleta",
                       replace_existing=True)
-    h, m = config.HORA_ALERTA
-    agendador.add_job(_job_alerta, "cron", hour=h, minute=m, id="alerta",
+    agendador.add_job(_job_alerta, "interval", minutes=10, id="alerta",
                       replace_existing=True)
     if not agendador.running:
         agendador.start()
-    log.info("Agendador ativo: coleta %02d:%02d, alerta %02d:%02d (%s)",
-             *config.HORA_COLETA, *config.HORA_ALERTA, config.TZ)
+    log.info("Agendador ativo: coleta %02d:%02d; alertas conferidos a cada "
+             "10 min, cada um na sua frequência (%s)",
+             *config.HORA_COLETA, config.TZ)
     yield
     if agendador.running:
         agendador.shutdown(wait=False)
@@ -265,6 +271,9 @@ async def coleta_status(request: Request):
 
 
 # --------------------------------------------------------------------- perfis
+_HORA_VALIDA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 def _form_para_perfil(form):
     """Converte o formulário HTML nos campos JSON da tabela perfis_busca."""
     def linhas(nome):
@@ -277,6 +286,13 @@ def _form_para_perfil(form):
         except ValueError:
             return None            # texto inválido no campo de valor: ignora
 
+    def inteiro(nome, padrao, minimo, maximo):
+        try:
+            return max(minimo, min(maximo, int(form.get(nome) or padrao)))
+        except (TypeError, ValueError):
+            return padrao
+
+    hora = (form.get("hora_envio") or "").strip()
     return {
         "nome": form.get("nome", "").strip() or "Sem nome",
         "ativo": form.get("ativo") == "on",
@@ -290,8 +306,25 @@ def _form_para_perfil(form):
         "somente_srp": form.get("somente_srp") == "on",
         "modo_busca": form.get("modo_busca", "ou"),
         "ordenacao": form.get("ordenacao", "encerramento_asc"),
+        "situacoes": form.getlist("situacoes"),
+        "somente_vigentes": form.get("somente_vigentes") == "on",
         "notificar": form.get("notificar") == "on",
+        "frequencia": (form.get("frequencia") if form.get("frequencia")
+                       in alerta_mod.FREQUENCIAS else "diario"),
+        "dia_semana": inteiro("dia_semana", 0, 0, 6),
+        "dia_mes": inteiro("dia_mes", 1, 1, 28),
+        "mes_ano": inteiro("mes_ano", 1, 1, 12),
+        "hora_envio": hora if _HORA_VALIDA.match(hora) else "",
     }
+
+
+def _situacoes_disponiveis(s):
+    """As situações conhecidas mais as que realmente apareceram na coleta —
+    assim a tela nunca fica sem uma opção que existe no banco."""
+    vistas = [linha[0] for linha in
+              s.query(Licitacao.situacao).distinct() if linha[0]]
+    return SITUACOES_CONHECIDAS + sorted(
+        v for v in set(vistas) if v not in SITUACOES_CONHECIDAS)
 
 
 def _contexto_form(request, s, perfil):
@@ -303,6 +336,12 @@ def _contexto_form(request, s, perfil):
     return {"perfil": perfil,
             "modalidades": s.query(Modalidade).order_by(Modalidade.codigo).all(),
             "municipios_sel": municipios_sel,
+            "situacoes_todas": _situacoes_disponiveis(s),
+            "situacoes_padrao": SITUACOES_DISPUTAVEIS,
+            "frequencias": alerta_mod.FREQUENCIAS,
+            "dias_semana": alerta_mod.DIAS_SEMANA,
+            "meses": alerta_mod.MESES,
+            "hora_padrao": "%02d:%02d" % config.HORA_ALERTA,
             "ufs_todas": ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO",
                           "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR",
                           "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"]}
@@ -313,8 +352,9 @@ async def perfis_lista(request: Request):
     s = Sessao()
     try:
         perfis = s.query(PerfilBusca).order_by(PerfilBusca.nome).all()
-        return templates.TemplateResponse(request, "perfis.html",
-                                          {"perfis": perfis})
+        return templates.TemplateResponse(request, "perfis.html", {
+            "perfis": perfis, "resumo_frequencia": alerta_mod.resumo_frequencia,
+            "enviado": request.query_params.get("enviado")})
     finally:
         s.close()
 
@@ -336,7 +376,10 @@ async def perfil_novo(request: Request):
                              if m.isdigit()],
                 municipios_ibge=[], palavras_incluir=palavras,
                 palavras_excluir=[], somente_srp=False, modo_busca="e",
-                ordenacao="encerramento_asc", ativo=True, notificar=True)
+                ordenacao="encerramento_asc", ativo=True, notificar=True,
+                situacoes=list(SITUACOES_DISPUTAVEIS), somente_vigentes=True,
+                frequencia="diario", dia_semana=0, dia_mes=1, mes_ano=1,
+                hora_envio="")
         return templates.TemplateResponse(request, "perfil_form.html", contexto)
     finally:
         s.close()
@@ -419,11 +462,24 @@ async def perfil_duplicar(perfil_id: int):
                 palavras_excluir=list(original.palavras_excluir or []),
                 valor_min=original.valor_min, valor_max=original.valor_max,
                 somente_srp=original.somente_srp, ordenacao=original.ordenacao,
-                notificar=original.notificar))
+                modo_busca=original.modo_busca,
+                situacoes=list(original.situacoes or []),
+                somente_vigentes=original.somente_vigentes,
+                notificar=original.notificar, frequencia=original.frequencia,
+                dia_semana=original.dia_semana, dia_mes=original.dia_mes,
+                mes_ano=original.mes_ano, hora_envio=original.hora_envio))
             s.commit()
         return RedirectResponse("/perfis", status_code=303)
     finally:
         s.close()
+
+
+@app.post("/perfis/{perfil_id}/enviar")
+async def perfil_enviar_agora(perfil_id: int):
+    """Botão 'Enviar agora': dispara este alerta fora da agenda."""
+    enviados = alerta_mod.enviar_alertas_devidos(perfil_id=perfil_id)
+    return RedirectResponse(f"/perfis?enviado={'sim' if enviados else 'vazio'}",
+                            status_code=303)
 
 
 @app.post("/perfis/{perfil_id}/excluir")
@@ -899,11 +955,10 @@ async def config_form(request: Request, salvo: int = 0):
 async def config_salvar(request: Request):
     form = await request.form()
     envcfg.salvar(dict(form))
-    # Reagenda os jobs com os novos horários, sem reiniciar
+    # Reagenda a coleta com o novo horário, sem reiniciar. O job de alertas
+    # é de intervalo fixo: quem manda na hora é cada perfil.
     h, m = config.HORA_COLETA
     agendador.reschedule_job("coleta", trigger="cron", hour=h, minute=m)
-    h, m = config.HORA_ALERTA
-    agendador.reschedule_job("alerta", trigger="cron", hour=h, minute=m)
     return RedirectResponse("/config?salvo=1", status_code=303)
 
 

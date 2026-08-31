@@ -6,3 +6,5 @@ digests/
 .pytest_cache/
 data/editais/
 *.db-journal
+*.db-shm
+*.db-wal

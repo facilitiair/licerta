@@ -81,7 +81,7 @@
         <input name="HORA_COLETA" value="{{ valores.HORA_COLETA }}"
                placeholder="06:00"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
-      <label>Hora do alerta
+      <label>Hora padrão dos alertas
         <input name="HORA_ALERTA" value="{{ valores.HORA_ALERTA }}"
                placeholder="07:00"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
@@ -90,7 +90,10 @@
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
     </div>
     <p class="text-xs text-slate-500 mt-2">Fuso: {{ valores.TZ }}
-      (mude a chave TZ no arquivo .env se precisar).</p>
+      (mude a chave TZ no arquivo .env se precisar).
+      A hora acima só vale para os alertas que não escolheram uma própria —
+      cada perfil tem a sua frequência e o seu horário em
+      <a href="/perfis" class="underline">Perfis e alertas</a>.</p>
   </div>
 
   <button class="bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold

@@ -45,16 +45,38 @@ A coleta automática roda todo dia às **06:00** e o alerta às **07:00**
    `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates`
    e procure `"chat":{"id":123456789...` — esse número é o seu
    **chat_id**. Copie para `TELEGRAM_CHAT_ID=` no `.env`.
-5. Reinicie o app. Pronto: o alerta diário chega no seu Telegram.
+5. Reinicie o app. Pronto: os alertas chegam no seu Telegram.
+
+### Como configurar cada alerta
+
+Em **Perfis e alertas** cada perfil é também um alerta independente, com:
+
+- **Estados, municípios, modalidades e palavras** — o recorte do que interessa.
+- **Situação** — por padrão só *Divulgada* e *Aberta*, as que dá para disputar.
+  Cancelada, anulada e revogada ficam de fora.
+- **Só o que ainda está em aberto** — descarta o que já passou do prazo de
+  proposta. Deixe ligado: é o que impede edital vencido de virar mensagem.
+- **Frequência e hora** — todo dia, uma vez por semana (escolhendo o dia),
+  uma vez por mês (escolhendo o dia) ou uma vez por ano (dia e mês).
+- **Receber alerta deste perfil** — desmarque para o perfil continuar
+  garimpando para o painel sem mandar nada no Telegram.
+
+Um ciclo sem nada novo não gera mensagem. O botão **Enviar agora** dispara o
+alerta fora da agenda, útil para conferir se está tudo certo.
+
+> **Dica de recorte:** uma palavra genérica sozinha (ex.: `manutenção`) no modo
+> "qualquer uma basta" casa manutenção de elevador, de frota, de prédio.
+> Prefira `manutenção + ar condicionado`, que exige as duas no mesmo objeto.
 
 ## 4. O arquivo .env (configurações)
 
 | Chave | Para quê |
 |---|---|
 | `APP_SENHA` | Senha do painel. Vazia = sem login (só use em casa). |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alerta diário no Telegram. |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alertas no Telegram. |
 | `EMAIL_ATIVO` + `SMTP_*` | Alerta também por e-mail (opcional, Fase 2). |
-| `HORA_COLETA` / `HORA_ALERTA` | Horários dos jobs (HH:MM). |
+| `HORA_COLETA` | Hora da coleta diária (HH:MM). |
+| `HORA_ALERTA` | Hora padrão dos alertas que não escolheram uma própria. |
 | `DIAS_JANELA_FUTURA` | Busca propostas que encerram em até N dias (padrão 90). |
 
 **Nunca envie o `.env` para ninguém nem para o GitHub** (o `.gitignore` já
@@ -122,7 +144,10 @@ SPEC.md           especificação completa            Dockerfile      deploy na 
 ### Produção
 
 - **App completo 24h**: https://radar-editais-production-67c1.up.railway.app
-  (Railway; envia o alerta diário no **Telegram** ~07:00).
-- **Robô do GitHub** (`.github/workflows/radar.yml`): roda às 06:00 só para o
-  alerta diário por **e-mail** (o Railway bloqueia SMTP na plataforma).
+  (Railway; confere os alertas a cada 10 min e manda cada um na hora marcada
+  no **Telegram**).
+- **Robô do GitHub** (`.github/workflows/radar.yml`): roda às 06:00 e manda por
+  **e-mail** os alertas cuja frequência venceu — a hora escolhida no perfil não
+  vale aqui, porque o robô só acorda uma vez por dia (o Railway bloqueia SMTP
+  na plataforma).
 - No celular: abra o endereço do app no Chrome → ⋮ → "Adicionar à tela inicial".

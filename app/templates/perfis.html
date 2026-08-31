@@ -2,10 +2,16 @@
 {% block titulo %}Perfis — Radar de Licitações{% endblock %}
 {% block conteudo %}
 <div class="flex items-center mb-4">
-  <h2 class="font-bold text-lg">Perfis de busca</h2>
+  <h2 class="font-bold text-lg">Perfis de busca e alertas</h2>
   <a href="/perfis/novo" class="ml-auto bg-blue-700 text-white px-4 py-2
         rounded-lg text-sm font-semibold hover:bg-blue-800">+ Novo perfil</a>
 </div>
+{% if enviado %}
+<p class="mb-4 text-sm rounded-lg px-3 py-2
+   {{ 'bg-green-100 text-green-800' if enviado == 'sim' else 'bg-slate-100 text-slate-700' }}">
+  {{ '✔ Alerta enviado — confira o Telegram.' if enviado == 'sim'
+     else 'Nada novo para enviar neste alerta agora.' }}</p>
+{% endif %}
 <div class="space-y-3">
   {% for p in perfis %}
   <div class="bg-white rounded-xl border border-slate-200 p-4
@@ -16,13 +22,18 @@
             {{ 'bg-green-100 text-green-800' if p.ativo else 'bg-slate-200 text-slate-600' }}">
         {{ 'ativo' if p.ativo else 'inativo' }}</span>
       {% if p.notificar %}<span class="text-xs px-2 py-0.5 rounded-full
-            bg-blue-100 text-blue-800">alerta diário</span>{% endif %}
+            bg-blue-100 text-blue-800">🔔 {{ resumo_frequencia(p) }}</span>
+      {% else %}<span class="text-xs px-2 py-0.5 rounded-full
+            bg-slate-100 text-slate-500">🔕 sem alerta</span>{% endif %}
     </div>
     <p class="text-xs text-slate-500 mt-1">
       {{ p.ufs|join(', ') if p.ufs else 'Brasil inteiro' }}
       · {{ p.modalidades|length or 'todas as' }} modalidade(s)
+      · situação: {{ p.situacoes|join(', ') if p.situacoes else 'qualquer' }}
+      {% if p.somente_vigentes %} · só prazo em aberto{% endif %}
       · incluir: {{ p.palavras_incluir|join(', ') or '(qualquer objeto)' }}
       {% if p.palavras_excluir %} · excluir: {{ p.palavras_excluir|join(', ') }}{% endif %}
+      {% if p.ultimo_envio %} · último alerta: {{ p.ultimo_envio.strftime('%d/%m/%Y %H:%M') }}{% endif %}
     </p>
     <div class="flex gap-2 mt-3 text-sm">
       <a href="/perfis/{{ p.id }}" class="px-3 py-1 border border-slate-300
@@ -31,6 +42,12 @@
         <button class="px-3 py-1 border border-slate-300 rounded-lg
               hover:bg-slate-50">{{ '⏸ Desativar' if p.ativo else '▶ Ativar' }}</button>
       </form>
+      {% if p.notificar %}
+      <form method="post" action="/perfis/{{ p.id }}/enviar">
+        <button class="px-3 py-1 border border-blue-300 text-blue-700
+              rounded-lg hover:bg-blue-50">📤 Enviar agora</button>
+      </form>
+      {% endif %}
       <form method="post" action="/perfis/{{ p.id }}/duplicar">
         <button class="px-3 py-1 border border-slate-300 rounded-lg
               hover:bg-slate-50">📋 Duplicar</button>

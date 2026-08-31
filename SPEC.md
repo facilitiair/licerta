@@ -11,7 +11,7 @@ Aplicativo web pessoal para monitorar licitações públicas em todo o Brasil, a
 
 - **Perfis de busca configuráveis pelo usuário** (estado, município, modalidade, objeto/palavras-chave, faixa de valor, ordenação).
 - **Coleta automática diária**.
-- **Alerta diário** com as licitações novas que casaram com cada perfil.
+- **Alertas configuráveis**, um por perfil, cada um com sua frequência (diária, semanal, mensal ou anual), sua hora e seu recorte de situação e prazo.
 - **Painel web** para criar/editar perfis e navegar nos resultados.
 
 Usuário único (não há cadastro público). Login simples por senha.
@@ -99,7 +99,13 @@ Baixe a lista oficial de municípios do IBGE (`https://servicodados.ibge.gov.br/
 | valor_min / valor_max | decimal | nulo = sem limite |
 | somente_srp | bool | só registro de preços |
 | ordenacao | text | `abertura_asc`, `encerramento_asc`, `publicacao_desc`, `valor_desc` |
-| notificar | bool | entra ou não no alerta diário |
+| situacoes | json | lista de situações aceitas; vazio = qualquer uma |
+| somente_vigentes | bool | descarta o que já passou do prazo de proposta |
+| notificar | bool | manda alerta deste perfil |
+| frequencia | text | `diario`, `semanal`, `mensal`, `anual` |
+| dia_semana / dia_mes / mes_ano | int | quando a frequência exige (0=segunda; dia 1–28) |
+| hora_envio | text | `HH:MM`; vazio = usa `HORA_ALERTA` do `.env` |
+| ultimo_envio | datetime | evita repetir o alerta no mesmo ciclo |
 | criado_em | datetime | |
 
 ### `licitacoes`
@@ -137,32 +143,37 @@ Ambos os horários configuráveis no `.env`. Botão "Coletar agora" no painel di
 
 ---
 
-## 6. Alerta diário
+## 6. Alertas (um por perfil)
 
-Envia **um resumo por dia**, agrupado por perfil, contendo apenas matches com `notificado = false`. Após o envio, marca como notificados. Se não houver nada novo, envia uma linha curta informando isso (para você saber que o sistema está vivo).
+Cada perfil é também um alerta independente: tem sua frequência (diária, semanal, mensal ou anual), sua hora e seu recorte. O agendador confere a cada 10 minutos quem está na vez (`alerta_devido`) e envia só esses.
+
+Regras que valem em todo envio:
+
+- **Nunca alerta sobre o que já venceu.** Com `somente_vigentes`, matches cuja `data_encerramento_proposta` já passou são descartados e marcados como avisados — o prazo não volta atrás.
+- **Respeita a situação escolhida.** Com `situacoes` preenchida, cancelada/anulada/revogada não viram mensagem. Diferente do prazo vencido, esses ficam pendentes: a situação pode mudar.
+- **Ciclo sem novidade não vira mensagem.** Silêncio em vez de ruído; o painel mostra se a coleta rodou.
+- **Falha no canal não consome o match.** Só marca `notificado` se Telegram ou e-mail aceitaram.
 
 Formato da mensagem (Telegram, Markdown):
 
 ```
-📡 Radar de Licitações — 30/08/2026
-
-🔹 PERFIL: AC — Piauí (4 novas)
+📡 AC — Piauí — 30/08/2026
+4 oportunidades com proposta em aberto
 
 1. Pregão Eletrônico 023/2026 — Prefeitura de Altos/PI
    Objeto: manutenção preventiva e corretiva de ar-condicionado...
    Valor estimado: R$ 850.233,30 · SRP: sim
    Abertura: 08/09/2026 09:00 · Encerra: 08/09/2026 08:59
-   🔗 <link do PNCP>
+   🎯 Casou por: ar condicionado
+   ⬇️ Baixar edital: <link direto>
+   🔗 Página no PNCP: <link do PNCP>
 
 2. ...
-
-🔹 PERFIL: Pavimentação — MA/PI (1 nova)
-...
 
 Ver todas: http://<seu-host>/
 ```
 
-Trunque o objeto em 180 caracteres. Se um perfil tiver mais de 10 novidades, mostre as 10 primeiras conforme a ordenação do perfil e informe o total restante.
+Uma mensagem por alerta (não um resumo de todos). Se um perfil tiver mais de 10 novidades, mostre as 10 primeiras conforme a ordenação do perfil e informe o total restante.
 
 **E-mail:** mesma estrutura em HTML, via SMTP configurado no `.env`. Enviar só se `EMAIL_ATIVO=true`.
 

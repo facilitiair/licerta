@@ -7,7 +7,7 @@ dos Secrets do repositório.
 import logging
 import os
 
-from .alerta import enviar_alerta_diario
+from .alerta import enviar_alertas_devidos
 from .coleta import coletar
 from .db import criar_tabelas
 from .seed import semear
@@ -25,4 +25,7 @@ if __name__ == "__main__":
     if registro:
         print(f"Coleta: sucesso={registro.sucesso} novas={registro.qtd_novas} "
               f"erros={registro.qtd_erros}")
-    enviar_alerta_diario(host=SITE)
+    # Aqui a hora do perfil não vale: este job roda uma vez por dia, no
+    # horário do GitHub Actions. O que continua valendo é a frequência.
+    enviados = enviar_alertas_devidos(host=SITE, respeitar_hora=False)
+    print(f"Alertas enviados: {enviados}")
