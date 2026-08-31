@@ -26,7 +26,7 @@ from . import envcfg
 from .ingestao import pncp_busca
 from . import sincronizar
 from .radar.coleta import coleta_em_andamento, coletar_em_background
-from .config import PASTA_DADOS, agora, config
+from .config import PASTA_DADOS, VERSAO, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
                  Municipio, PerfilBusca, PerfilMatch, PushAssinatura,
                  Sessao, Usuario, criar_tabelas)
@@ -198,7 +198,19 @@ def _sem_usuarios():
         s.close()
 
 
-ROTAS_LIVRES = ("/login", "/registrar", "/manifest.json", "/sw.js")
+ROTAS_LIVRES = ("/login", "/registrar", "/manifest.json", "/sw.js",
+                "/api/saude")
+
+
+@app.get("/api/saude")
+async def saude():
+    """Sinal de vida público e sem dado sensível: versão e hora do processo.
+
+    Serve ao healthcheck da hospedagem e ao watchdog — e a nós, para saber
+    qual versão está de pé depois de um deploy.
+    """
+    return {"app": "licerta", "versao": VERSAO,
+            "hora": agora().isoformat(timespec="seconds")}
 
 
 @app.middleware("http")

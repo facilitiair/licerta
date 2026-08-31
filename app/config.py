@@ -46,6 +46,10 @@ def _hora(valor, padrao):
     return h, m
 
 
+# Versão do produto — bump manual a cada leva de mudanças relevante.
+VERSAO = "0.9.0"
+
+
 class Config:
     APP_SENHA = os.environ.get("APP_SENHA", "")
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
