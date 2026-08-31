@@ -230,6 +230,28 @@ class ArquivoEdital(Base):
     licitacao = relationship("Licitacao")
 
 
+class DocumentoEmpresa(Base):
+    """Documento do dossiê da EMPRESA (certidão, atestado, balanço...).
+
+    O documento é da empresa — a instalação inteira —, não de um usuário;
+    quem subiu fica registrado só para auditoria. A validade é vigiada por
+    CÓDIGO (arquitetura: 'IA lê, código calcula' — alerta de prazo errado
+    encerra a confiança). `ultimo_aviso_dias` guarda o último marco avisado
+    (30/15/7/3/1/0/-1=vencido) para não repetir aviso todo dia.
+    """
+    __tablename__ = "documentos_empresa"
+    id = Column(Integer, primary_key=True)
+    nome = Column(String, nullable=False)
+    tipo = Column(String, default="Outro", nullable=False)
+    caminho_local = Column(String, default="")      # relativo a data/
+    validade = Column(String, nullable=True)        # ISO AAAA-MM-DD
+    observacao = Column(Text, default="")
+    enviado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    arquivado = Column(Boolean, default=False, nullable=False)
+    ultimo_aviso_dias = Column(Integer, nullable=True)
+    criado_em = Column(DateTime, default=agora, nullable=False)
+
+
 class EditalFicha(Base):
     """Ficha estruturada do edital, extraída por IA — ativo GLOBAL.
 

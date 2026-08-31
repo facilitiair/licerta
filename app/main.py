@@ -11,10 +11,10 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from html import escape
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
                                Response)
 from fastapi.staticfiles import StaticFiles
@@ -29,11 +29,12 @@ from .ingestao import pncp_busca
 from . import sincronizar
 from .radar.coleta import (MSG_INTERROMPIDA, coleta_em_andamento,
                            coletar_em_background)
-from .config import PASTA_DADOS, VERSAO, agora, config
-from .db import (ArquivoEdital, Ata, ColetaLog, EditalFicha, Licitacao,
-                 LicitacaoAlteracao, Modalidade, Municipio, PerfilBusca,
-                 PerfilMatch, PushAssinatura, Sessao, Usuario, VigiaProblema,
-                 criar_tabelas)
+from .config import PASTA_DADOS, VERSAO, agora, config, hoje
+from .db import (ArquivoEdital, Ata, ColetaLog, DocumentoEmpresa, EditalFicha,
+                 Licitacao, LicitacaoAlteracao, Modalidade, Municipio,
+                 PerfilBusca, PerfilMatch, PushAssinatura, Sessao, Usuario,
+                 VigiaProblema, criar_tabelas)
+from .documentos import validades as validades_mod
 from .editais.analise import SemChaveIA, analisar_edital
 from .editais.arquivos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
@@ -118,6 +119,14 @@ def _job_alerta():
         log.exception("Erro no job de alerta")
 
 
+def _job_validades():
+    """Vigia diário do dossiê: certidão vencendo vira aviso aos admins."""
+    try:
+        validades_mod.avisar_vencimentos()
+    except Exception:  # noqa: BLE001
+        log.exception("Erro no job de validades")
+
+
 def _job_vigia():
     """O radar vigia a si mesmo: detecta falha silenciosa e avisa os admins."""
     try:
@@ -148,6 +157,9 @@ async def vida(app_):
     # da janela de carência do boot.
     agendador.add_job(_job_vigia, "interval", minutes=30, id="vigia",
                       replace_existing=True)
+    h_alerta, m_alerta = config.HORA_ALERTA
+    agendador.add_job(_job_validades, "cron", hour=h_alerta, minute=m_alerta,
+                      id="validades", replace_existing=True)
     if not agendador.running:
         agendador.start()
     log.info("Agendador ativo: coleta às %sh; alertas conferidos a cada "
@@ -410,6 +422,15 @@ async def painel(request: Request):
                 or (usuario.receber_push and usuario.assinaturas_push)),
             "coleta": bool(ultimas),       # o radar já tem dados?
         }
+        # Certidão vencendo interessa a TODOS (o dossiê é da empresa).
+        docs_alerta = []
+        consulta_docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False)
+                         .filter(DocumentoEmpresa.validade.isnot(None)))
+        for d in consulta_docs:
+            situ, dias = validades_mod.situacao_documento(d)
+            if situ in ("vencido", "vencendo"):
+                docs_alerta.append({"doc": d, "situacao": situ, "dias": dias})
+        docs_alerta.sort(key=lambda x: x["dias"])
         # Problemas do vigia: assunto de quem opera a instalação. Para os
         # demais usuários o painel segue limpo — eles não têm o que fazer.
         problemas = (s.query(VigiaProblema).order_by(VigiaProblema.desde).all()
@@ -419,6 +440,7 @@ async def painel(request: Request):
             "ultimas": ultimas, "coletando": coleta_em_andamento(),
             "hora_coleta": config.HORA_COLETA,
             "fecham_hoje": fecham_hoje, "problemas": problemas,
+            "docs_alerta": docs_alerta,
             "passos": passos, "tudo_pronto": all(passos.values()),
         })
     finally:
@@ -1288,6 +1310,133 @@ async def pesquisar_salvar(request: Request):
 
 
 # ----------------------------------------------------------------------- logs
+# ------------------------------------------------------ documentos da empresa
+PASTA_DOCUMENTOS = os.path.join(PASTA_DADOS, "documentos")
+
+
+def _contexto_documentos(s, aviso=None):
+    docs = (s.query(DocumentoEmpresa)
+            .order_by(DocumentoEmpresa.arquivado,
+                      DocumentoEmpresa.validade.is_(None),
+                      DocumentoEmpresa.validade).all())
+    hoje_ = hoje()
+    itens = []
+    for d in docs:
+        situacao, dias = validades_mod.situacao_documento(d, hoje_)
+        itens.append({"doc": d, "situacao": situacao, "dias": dias})
+    return {"itens": itens, "tipos": validades_mod.TIPOS, "aviso": aviso}
+
+
+@app.get("/documentos", response_class=HTMLResponse)
+async def documentos(request: Request, aviso: str = ""):
+    s = Sessao()
+    try:
+        return templates.TemplateResponse(request, "documentos.html",
+                                          _contexto_documentos(s, aviso))
+    finally:
+        s.close()
+
+
+@app.post("/documentos")
+async def documentos_upload(request: Request,
+                            arquivo: UploadFile = File(None),
+                            nome: str = Form(""), tipo: str = Form("Outro"),
+                            validade: str = Form("")):
+    """Sobe um documento do dossiê. Validade em branco + PDF legível =
+    o app sugere a data lida do próprio arquivo (regex, nunca IA) — e diz
+    que foi sugestão, para o usuário conferir."""
+    s = Sessao()
+    aviso = ""
+    try:
+        doc = DocumentoEmpresa(
+            nome=(nome or "").strip()
+                 or os.path.splitext(arquivo.filename or "Documento")[0][:80],
+            tipo=(tipo or "Outro").strip()[:60],
+            validade=_data_ou_nada(validade),
+            enviado_por=eu(request).id)
+        s.add(doc)
+        s.flush()
+        if arquivo and arquivo.filename:
+            os.makedirs(PASTA_DOCUMENTOS, exist_ok=True)
+            seguro = re.sub(r"[^\w.\-]+", "_", arquivo.filename).strip("_")[:80]
+            caminho = os.path.join(PASTA_DOCUMENTOS, f"{doc.id}-{seguro}")
+            with open(caminho, "wb") as f:
+                f.write(await arquivo.read())
+            doc.caminho_local = os.path.relpath(caminho, PASTA_DADOS)
+        if not doc.validade and doc.caminho_local:
+            sugerida = validades_mod.sugerir_validade(doc.caminho_local)
+            if sugerida:
+                doc.validade = sugerida
+                d, m, a = sugerida.split("-")[::-1]
+                aviso = (f"Validade {d}/{m}/{a} lida do PDF — confira no "
+                         "documento antes de confiar.")
+        s.commit()
+        destino = "/documentos" + (f"?aviso={quote(aviso)}" if aviso else "")
+        return RedirectResponse(destino, status_code=303)
+    finally:
+        s.close()
+
+
+def _data_ou_nada(texto):
+    """Aceita só AAAA-MM-DD real (o campo é <input type=date>, mas quem
+    digita à mão merece a mesma proteção do resto do app)."""
+    texto = (texto or "").strip()
+    try:
+        datetime.strptime(texto, "%Y-%m-%d")
+        return texto
+    except ValueError:
+        return None
+
+
+@app.post("/documentos/{doc_id}/salvar")
+async def documento_salvar(request: Request, doc_id: int,
+                           nome: str = Form(""), tipo: str = Form(""),
+                           validade: str = Form(""),
+                           observacao: str = Form("")):
+    s = Sessao()
+    try:
+        doc = s.get(DocumentoEmpresa, doc_id)
+        if doc:
+            doc.nome = (nome or doc.nome).strip()[:120]
+            doc.tipo = (tipo or doc.tipo).strip()[:60]
+            nova = _data_ou_nada(validade)
+            if nova != doc.validade:
+                doc.validade = nova
+                doc.ultimo_aviso_dias = None   # validade nova recomeça os avisos
+            doc.observacao = (observacao or "").strip()[:2000]
+            s.commit()
+        return RedirectResponse("/documentos", status_code=303)
+    finally:
+        s.close()
+
+
+@app.post("/documentos/{doc_id}/arquivar")
+async def documento_arquivar(request: Request, doc_id: int):
+    s = Sessao()
+    try:
+        doc = s.get(DocumentoEmpresa, doc_id)
+        if doc:
+            doc.arquivado = not doc.arquivado
+            s.commit()
+        return RedirectResponse("/documentos", status_code=303)
+    finally:
+        s.close()
+
+
+@app.get("/documentos/{doc_id}/arquivo")
+async def documento_arquivo(request: Request, doc_id: int):
+    s = Sessao()
+    try:
+        doc = s.get(DocumentoEmpresa, doc_id)
+        caminho = (os.path.join(PASTA_DADOS, doc.caminho_local)
+                   if doc and doc.caminho_local else "")
+        if not (caminho and os.path.exists(caminho)):
+            return HTMLResponse("Arquivo não encontrado.", status_code=404)
+        return FileResponse(caminho, filename=os.path.basename(caminho))
+    finally:
+        s.close()
+
+
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_coletas(request: Request):
     s = Sessao()

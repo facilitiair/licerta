@@ -49,6 +49,8 @@ ROTAS_GET = [
     "/licitacoes/999999/detalhe",           # 404 sem 500
     "/licitacoes/exportar?formato=csv&modalidade=abc",
     "/licitacoes/exportar?formato=xlsx",
+    "/documentos",
+    "/documentos/999999/arquivo",           # 404 sem 500
     "/atas",
     "/atas?q=ar condicionado&adesao=1&pagina=999",
     "/atas?pagina=0",
@@ -69,6 +71,8 @@ def test_rota_nao_da_erro_500(cliente, rota):
 ROTAS_POST = [
     ("/matches/999999", {"status": "novo"}),          # 404 sem 500
     ("/licitacoes/999999/analisar", {"forcar": 0}),   # id inexistente -> 404
+    ("/documentos/999999/salvar", {"nome": "x", "validade": "lixo"}),
+    ("/documentos/999999/arquivar", {}),
     ("/funil/mover/999999/novo", {}),                 # id inexistente
     ("/funil/mover/1/status_invalido", {}),           # status inválido
     ("/pesquisar/salvar", {}),                        # sem identificador -> 400

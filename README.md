@@ -184,6 +184,19 @@ pelos seus canais, e o histórico da mudança aparece no detalhe da
 licitação. Edital ainda não triado não gera aviso — mudança de algo que
 você nem olhou seria só ruído.
 
+## 5.4 Dossiê da empresa — validades vigiadas
+
+Em **Documentos** (menu lateral) você sobe as certidões e documentos da
+empresa (CND, FGTS, CNDT, balanço, atestados...) com a data de validade.
+O app vigia por código — nunca por IA — e avisa os administradores aos
+**30, 15, 7, 3 e 1 dia** do vencimento, no dia, e uma vez após vencer.
+Documento vencendo também aparece em destaque no painel, para todos.
+
+Num PDF de certidão, deixe a validade em branco: o app tenta ler a data
+do próprio documento ("válida até ...") e mostra que foi sugestão, para
+você conferir. Documento que não precisa mais de vigília (versão antiga,
+contrato encerrado) se arquiva sem apagar.
+
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).

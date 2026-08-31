@@ -6,6 +6,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+# A camada de IA é pacote irmão de app/ (main.py importa `ia.cliente`).
+# Esquecê-la aqui derrubou o site: ModuleNotFoundError no boot = 502 até
+# alguém notar. Se nascer outro pacote de topo, ele entra NESTA lista.
+COPY ia ./ia
 COPY .env.example .
 
 # O banco fica em /radar/data — no Railway, monte um Volume nesse caminho
