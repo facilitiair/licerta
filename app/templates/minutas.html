@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Minutas — Licerta{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">Minutas jurídicas</h1>
+<p class="text-xs text-slate-500 mb-4">Peças geradas a partir dos riscos das
+  fichas — <b>sempre rascunho</b>, com revisão obrigatória por pessoa
+  habilitada antes de qualquer protocolo.</p>
+
+{% if minutas %}
+<div class="card divide-y divide-slate-100">
+  {% for m in minutas %}
+  <a href="/minutas/{{ m.id }}"
+     class="flex items-center gap-3 px-4 py-3 text-sm
+            hover:bg-slate-50/70 transition-colors">
+    <i data-lucide="file-pen" class="lucide text-amber-700"></i>
+    <span class="min-w-0">
+      <span class="block font-semibold">Impugnação —
+        {{ m.licitacao.modalidade_nome or 'Licitação' }}
+        {{ m.licitacao.numero_compra }}/{{ m.licitacao.ano_compra }}</span>
+      <span class="block text-xs text-slate-500 truncar"
+            title="{{ m.licitacao.objeto or '' }}">
+        {{ m.licitacao.municipio_nome or '' }}{{ '/' + m.licitacao.uf
+        if m.licitacao.uf }} · {{ (m.licitacao.objeto|sentenca)[:80] }}</span>
+    </span>
+    <span class="ml-auto flex items-center gap-2 shrink-0">
+      {{ c.badge('rascunho', 'atencao') }}
+      <span class="text-[11px] text-slate-400">
+        {{ m.criada_em.strftime('%d/%m %H:%M') }}</span>
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  {{ c.estado_vazio('Nenhuma minuta ainda. Quando a ficha de um edital
+                     apontar riscos, o botão "Gerar minuta de impugnação"
+                     aparece lá — e o resultado fica guardado aqui.',
+                    'file-pen', '/fichas', 'Ver fichas de edital') }}
+</div>
+{% endif %}
+{% endblock %}

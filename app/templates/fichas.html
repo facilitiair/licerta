@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Fichas de edital — Licerta{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">Fichas de edital</h1>
+<p class="text-xs text-slate-500 mb-4">Cada edital analisado vira uma ficha
+  — exigências, garantias, riscos e prazos — que fica salva para toda a
+  equipe. Para analisar um edital novo, abra-o em
+  <a href="/licitacoes" class="text-blue-700 underline">Oportunidades</a>
+  e clique em <b>Analisar edital</b>.</p>
+
+{% if itens %}
+<div class="space-y-2">
+  {% for item in itens %}
+  <details class="card">
+    <summary class="cursor-pointer px-4 py-3 text-sm">
+      <div class="flex items-center gap-2 flex-wrap">
+        <i data-lucide="file-search" class="lucide text-blue-700"></i>
+        <span class="font-semibold truncar" style="max-width: 60%"
+              title="{{ item.lic.objeto or '' }}">
+          {{ (item.lic.objeto|sentenca)[:90] }}</span>
+        <span class="text-xs text-slate-500">
+          {{ item.lic.municipio_nome or '' }}{{ '/' + item.lic.uf if item.lic.uf }}
+          · {{ item.lic.data_encerramento_proposta|quando }}</span>
+        {% if item.riscos %}
+          {{ c.badge(item.riscos|string + ' risco' + ('s' if item.riscos != 1),
+                     'atencao', 'triangle-alert') }}
+        {% endif %}
+        <span class="ml-auto text-[11px] text-slate-400">
+          {{ item.ficha.gerada_em.strftime('%d/%m %H:%M') }}
+          {% if sou_admin %} · US$ {{ '%.2f' % (item.ficha.custo_usd or 0) }}
+          {% endif %}</span>
+      </div>
+      <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ item.resumo }}</p>
+    </summary>
+    <div class="px-2 pb-2"
+         hx-get="/licitacoes/{{ item.lic.id }}/detalhe"
+         hx-trigger="toggle once from:closest details"
+         hx-swap="innerHTML">
+      {{ c.skeleton(4) }}
+    </div>
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  {{ c.estado_vazio('Nenhum edital analisado ainda. Abra uma oportunidade e
+                     clique em "Analisar edital" — a ficha aparece aqui para
+                     toda a equipe.',
+                    'file-search', '/licitacoes', 'Ver oportunidades') }}
+</div>
+{% endif %}
+{% endblock %}

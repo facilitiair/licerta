@@ -51,6 +51,8 @@ ROTAS_GET = [
     "/licitacoes/exportar?formato=xlsx",
     "/documentos",
     "/documentos/999999/arquivo",           # 404 sem 500
+    "/fichas",
+    "/minutas",
     "/minutas/999999",                      # 404 sem 500
     "/minutas/999999/baixar",
     "/atas",

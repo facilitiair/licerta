@@ -1475,6 +1475,40 @@ async def pesquisar_salvar(request: Request):
 
 
 # ----------------------------------------------------------------------- logs
+# ------------------------------------------------------- analista (listagens)
+@app.get("/fichas", response_class=HTMLResponse)
+def fichas_lista(request: Request):
+    """Todas as fichas de edital já geradas — a memória do analista."""
+    s = Sessao()
+    try:
+        fichas = (s.query(EditalFicha)
+                  .filter(EditalFicha.ficha_json != "")
+                  .order_by(EditalFicha.gerada_em.desc()).limit(60).all())
+        itens = []
+        for f in fichas:
+            dados = _dados_ficha(f)
+            itens.append({"ficha": f, "lic": f.licitacao,
+                          "resumo": (dados or {}).get("resumo", ""),
+                          "riscos": len((dados or {}).get("riscos", []))})
+        return templates.TemplateResponse(request, "fichas.html", {
+            "itens": itens, "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
+@app.get("/minutas", response_class=HTMLResponse)
+def minutas_lista(request: Request):
+    """Todas as minutas jurídicas geradas — sempre rascunho."""
+    s = Sessao()
+    try:
+        minutas = (s.query(Minuta)
+                   .order_by(Minuta.criada_em.desc()).limit(60).all())
+        return templates.TemplateResponse(request, "minutas.html", {
+            "minutas": minutas, "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
 # ------------------------------------------------------------ peças (minutas)
 @app.post("/licitacoes/{lic_id}/minuta", response_class=HTMLResponse)
 def licitacao_minuta(request: Request, lic_id: int):
