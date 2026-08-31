@@ -158,6 +158,20 @@ data/radar.db     SEU BANCO (faça backup!)          tests/          testes auto
 SPEC.md           especificação completa            Dockerfile      deploy na nuvem
 ```
 
+### Onde editar os perfis (importante)
+
+O sistema roda em três lugares com três bancos: o site no Railway (manda o
+Telegram), o robô do GitHub Actions (manda o e-mail) e o seu PC. **Edite os
+perfis no site** — ele é a fonte da verdade. Os outros dois puxam de lá:
+
+- O robô do e-mail sincroniza sozinho antes de cada rodada, desde que o
+  secret `APP_SENHA` exista no GitHub (Settings → Secrets → Actions).
+- No PC, o `enviar_para_nuvem.bat` sincroniza antes de enviar, e você também
+  pode rodar `python -m app.sincronizar` a qualquer momento.
+
+A sincronização atualiza perfis de mesmo nome e cria os que faltam; um
+perfil que só existe localmente **nunca** é apagado nem desativado por ela.
+
 ### Produção
 
 - **App completo 24h**: https://radar-editais-production-67c1.up.railway.app

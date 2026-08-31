@@ -9,6 +9,10 @@ REM Agora o HEAD e reposicionado sobre o remoto mantendo o SEU banco, e o
 REM push vira um avanco normal: nada some do historico.
 cd /d C:\busca_editais
 
+REM Primeiro puxa do site os perfis mais novos (o site e o lugar de editar).
+REM Se o site estiver fora do ar, segue com o que tem — so avisa.
+python -m app.sincronizar
+
 git fetch origin main
 if errorlevel 1 goto falhou
 

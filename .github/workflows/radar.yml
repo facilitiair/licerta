@@ -35,6 +35,9 @@ jobs:
       - name: Coleta + alerta por e-mail + site do celular
         env:
           EMAIL_ATIVO: "true"
+          # Com este secret, o robô puxa os perfis do site antes de coletar
+          # (o site é onde o Paulo edita). Sem ele, usa os do repositório.
+          APP_SENHA: ${{ secrets.APP_SENHA }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}

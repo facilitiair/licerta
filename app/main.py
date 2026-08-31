@@ -24,6 +24,7 @@ from fastapi.templating import Jinja2Templates
 from . import alerta as alerta_mod
 from . import envcfg
 from . import pncp_busca
+from . import sincronizar
 from .coleta import coleta_em_andamento, coletar_em_background
 from .config import PASTA_DADOS, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
@@ -598,6 +599,21 @@ async def perfil_duplicar(perfil_id: int):
                 mes_ano=original.mes_ano, hora_envio=original.hora_envio))
             s.commit()
         return RedirectResponse("/perfis", status_code=303)
+    finally:
+        s.close()
+
+
+@app.get("/api/perfis/exportar")
+async def perfis_exportar():
+    """Configuração dos perfis em JSON, para o robô do e-mail e o PC puxarem.
+
+    É o que mantém os três bancos (Railway, Actions, PC) com os MESMOS
+    critérios: este app é a fonte da verdade e os outros sincronizam daqui.
+    Protegida pelo login como tudo mais.
+    """
+    s = Sessao()
+    try:
+        return sincronizar.exportar_perfis(s)
     finally:
         s.close()
 
