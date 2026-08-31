@@ -65,19 +65,24 @@ def _registrar_custo(job, modelo, tokens_entrada, tokens_saida, duracao_s):
     return linha
 
 
-def chamar(job, prompt_sistema, mensagem, modelo=None, max_tokens=4096,
+def chamar(job, prompt_sistema, mensagem, modelo=None, max_tokens=16000,
            json_estrito=False):
     """Uma chamada de LLM com custo logado. Devolve o texto da resposta.
 
     `job` identifica quem chamou (ex.: 'analisar_edital') — é a chave do
     relatório de custo. `json_estrito=True` valida que a resposta é JSON e
     tenta de novo (até 2×) quando não é.
+
+    Lições de produção (31/08/2026):
+    - O claude-sonnet-5 PENSA por padrão (adaptive thinking) e o raciocínio
+      consome max_tokens: com 4-8k o JSON da ficha saía truncado e virava
+      "resposta não é JSON válido" sem pista. Extração determinística roda
+      com thinking desligado e teto folgado (16k; o modelo aceita 128k).
+    - Erro HTTP sem corpo é tortura: um 400 seco escondia "workspace-id is
+      required". O corpo da resposta vai junto na exceção.
     """
+    exigir_chave()
     chave = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not chave:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY ausente no ambiente — os módulos de IA ficam "
-            "desligados sem ela (o radar e os alertas seguem normais).")
     modelo = modelo or camadas.EXTRACAO
     ultima_falha = None
     for tentativa in range(1, TENTATIVAS + 1):
@@ -89,6 +94,7 @@ def chamar(job, prompt_sistema, mensagem, modelo=None, max_tokens=4096,
         }, json={
             "model": modelo,
             "max_tokens": max_tokens,
+            "thinking": {"type": "disabled"},
             "system": prompt_sistema,
             "messages": [{"role": "user", "content": mensagem}],
         })
@@ -96,7 +102,10 @@ def chamar(job, prompt_sistema, mensagem, modelo=None, max_tokens=4096,
             ultima_falha = f"API {resposta.status_code}"
             time.sleep(5 * tentativa)
             continue
-        resposta.raise_for_status()
+        if resposta.status_code >= 400:
+            raise RuntimeError(f"Chamada de IA '{job}' recusada (HTTP "
+                               f"{resposta.status_code}): "
+                               f"{resposta.text[:300]}")
         dados = resposta.json()
         uso = dados.get("usage") or {}
         _registrar_custo(job, modelo, uso.get("input_tokens", 0),
@@ -110,6 +119,9 @@ def chamar(job, prompt_sistema, mensagem, modelo=None, max_tokens=4096,
             return _extrair_json(texto)
         except (ValueError, TypeError):
             ultima_falha = "resposta não é JSON válido"
+            log.warning("Resposta não-JSON no job '%s' (parada: %s; fim do "
+                        "texto: %.120s)", job,
+                        dados.get("stop_reason"), texto[-120:])
             mensagem = (mensagem + "\n\nATENÇÃO: responda SOMENTE com o "
                         "JSON pedido, sem texto em volta.")
     raise RuntimeError(f"Chamada de IA '{job}' falhou após "

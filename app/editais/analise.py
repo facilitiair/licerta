@@ -184,7 +184,7 @@ def analisar_edital(sessao_db, lic, forcar=False):
             job="ficha_edital",
             prompt_sistema=cliente.carregar_prompt("ficha-edital"),
             mensagem=_mensagem(lic, texto),
-            modelo=camadas.EXTRACAO, max_tokens=8192, json_estrito=True)
+            modelo=camadas.EXTRACAO, max_tokens=16000, json_estrito=True)
         dados = _validar_ficha(resposta)
     except Exception as e:  # noqa: BLE001 — falha vira erro legível na ficha
         log.exception("Análise da licitação %s falhou", lic.id)

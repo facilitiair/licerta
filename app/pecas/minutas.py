@@ -113,7 +113,7 @@ def gerar_impugnacao(sessao_db, lic, ficha_dados, usuario=None, hoje=None):
     texto = cliente.chamar(
         job="minuta_impugnacao",
         prompt_sistema=cliente.carregar_prompt("minuta-impugnacao"),
-        mensagem=mensagem, modelo=camadas.GERACAO, max_tokens=8192)
+        mensagem=mensagem, modelo=camadas.GERACAO, max_tokens=16000)
     if "MINUTA" not in texto[:400].upper():
         # A trava de rascunho é inegociável: se o modelo a omitiu, nós a
         # colocamos — nunca sai peça sem o aviso.
