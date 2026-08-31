@@ -30,6 +30,8 @@
 
   <div id="arqs{{ lic.id }}">{% include "_arquivos.html" %}</div>
 
+  {% include "_ficha_edital.html" %}
+
   {% for m in matches %}
   <form hx-post="/matches/{{ m.id }}" hx-target="#salvo{{ m.id }}"
         class="border border-slate-200 rounded-lg p-3 bg-white

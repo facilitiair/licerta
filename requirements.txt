@@ -12,6 +12,8 @@ requests>=2.31,<3.0
 openpyxl>=3.1,<4.0
 # Notificações push no aparelho (Web Push/VAPID), como as dos apps do governo
 pywebpush>=2.0,<3.0
+# Extração de texto dos PDFs de edital (módulo Editais — ficha por IA)
+pypdf>=4.0,<7.0
 # Base de fusos horários da IANA: a imagem Debian slim do Docker não traz
 # /usr/share/zoneinfo, e sem ela o app não consegue resolver America/Fortaleza.
 tzdata>=2024.1

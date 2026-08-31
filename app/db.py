@@ -210,6 +210,29 @@ class ArquivoEdital(Base):
     licitacao = relationship("Licitacao")
 
 
+class EditalFicha(Base):
+    """Ficha estruturada do edital, extraída por IA — ativo GLOBAL.
+
+    Processa uma vez, serve para todos (arquitetura, princípio 1): a ficha
+    pertence ao edital, nunca a um usuário, e o custo de IA é por documento.
+    `ficha_json` é o JSON validado da extração; `erro` preenchido = a última
+    tentativa falhou (PDF sem texto, IA fora do ar) e a ficha pode ser
+    regerada. O custo fica aqui E em data/ia_custos.jsonl.
+    """
+    __tablename__ = "edital_fichas"
+    id = Column(Integer, primary_key=True)
+    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"), nullable=False,
+                          unique=True, index=True)
+    ficha_json = Column(Text, default="")
+    erro = Column(Text, default="")
+    modelo = Column(String, default="")
+    versao_prompt = Column(String, default="")
+    custo_usd = Column(Float, default=0.0)
+    caracteres_lidos = Column(Integer, default=0)
+    gerada_em = Column(DateTime, default=agora, nullable=False)
+    licitacao = relationship("Licitacao")
+
+
 class Modalidade(Base):
     __tablename__ = "modalidades"
     codigo = Column(Integer, primary_key=True)

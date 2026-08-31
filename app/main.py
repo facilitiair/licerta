@@ -2,6 +2,7 @@
 
 Subir com:  uvicorn app.main:app  (ou  python -m app.main)
 """
+import json
 import logging
 import os
 import re
@@ -29,9 +30,11 @@ from . import sincronizar
 from .radar.coleta import (MSG_INTERROMPIDA, coleta_em_andamento,
                            coletar_em_background)
 from .config import PASTA_DADOS, VERSAO, agora, config
-from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
-                 Municipio, PerfilBusca, PerfilMatch, PushAssinatura,
-                 Sessao, Usuario, VigiaProblema, criar_tabelas)
+from .db import (ArquivoEdital, Ata, ColetaLog, EditalFicha, Licitacao,
+                 Modalidade, Municipio, PerfilBusca, PerfilMatch,
+                 PushAssinatura, Sessao, Usuario, VigiaProblema,
+                 criar_tabelas)
+from .editais.analise import SemChaveIA, analisar_edital
 from .editais.arquivos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
 from .radar.matcher import (SITUACOES_CONHECIDAS, SITUACOES_DISPUTAVEIS,
@@ -961,9 +964,53 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
             m.lido = True
         s.commit()
         arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
+        ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
         return templates.TemplateResponse(request, "_licitacao_detalhe.html",
                                           {"lic": lic, "matches": matches,
-                                           "arquivos": arquivos})
+                                           "arquivos": arquivos,
+                                           "ficha": ficha,
+                                           "dados": _dados_ficha(ficha),
+                                           "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
+def _dados_ficha(ficha):
+    """O JSON da ficha como dict para o template — ou None, sem nunca quebrar."""
+    if not (ficha and ficha.ficha_json):
+        return None
+    try:
+        return json.loads(ficha.ficha_json)
+    except ValueError:
+        return None
+
+
+@app.post("/licitacoes/{lic_id}/analisar", response_class=HTMLResponse)
+def licitacao_analisar(request: Request, lic_id: int, forcar: int = Form(0)):
+    """Gera (ou regera) a ficha do edital por IA e devolve o bloco pronto.
+
+    Roda na hora, dentro do clique: a chamada de IA leva de 20 a 60
+    segundos e o htmx segura o botão com o indicador. Ficha é ativo global
+    (1× por edital) — quem clicar depois recebe a mesma, sem custo novo.
+    """
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        try:
+            ficha = analisar_edital(s, lic, forcar=bool(forcar))
+        except SemChaveIA as e:
+            aviso = escape(str(e))
+            extra = (' <a href="/config" class="underline">Abrir '
+                     'configurações</a>' if _sou_admin(request) else "")
+            return HTMLResponse(
+                f'<div id="ficha{lic_id}" class="border border-indigo-200 '
+                f'rounded-xl bg-indigo-50/40 p-4 text-xs text-slate-600">'
+                f'🧠 {aviso}{extra}</div>')
+        return templates.TemplateResponse(request, "_ficha_edital.html", {
+            "lic": lic, "ficha": ficha, "dados": _dados_ficha(ficha),
+            "sou_admin": _sou_admin(request)})
     finally:
         s.close()
 
@@ -1240,8 +1287,17 @@ async def logs_coletas(request: Request):
     try:
         registros = (s.query(ColetaLog)
                      .order_by(ColetaLog.inicio.desc()).limit(60).all())
+        # Custo de IA visível desde o dia 1 (arquitetura §7) — só ao admin.
+        custo_ia = fichas = None
+        if _sou_admin(request):
+            from ia.cliente import custo_total
+            custo_ia = custo_total()
+            fichas = s.query(EditalFicha).filter(
+                EditalFicha.ficha_json != "").count()
         return templates.TemplateResponse(request, "logs.html",
-                                          {"registros": registros})
+                                          {"registros": registros,
+                                           "custo_ia": custo_ia,
+                                           "fichas": fichas})
     finally:
         s.close()
 

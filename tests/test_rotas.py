@@ -68,6 +68,7 @@ def test_rota_nao_da_erro_500(cliente, rota):
 
 ROTAS_POST = [
     ("/matches/999999", {"status": "novo"}),          # 404 sem 500
+    ("/licitacoes/999999/analisar", {"forcar": 0}),   # id inexistente -> 404
     ("/funil/mover/999999/novo", {}),                 # id inexistente
     ("/funil/mover/1/status_invalido", {}),           # status inválido
     ("/pesquisar/salvar", {}),                        # sem identificador -> 400

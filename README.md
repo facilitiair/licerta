@@ -154,6 +154,26 @@ A plataforma segue a arquitetura de `docs/arquitetura-plataforma.md`:
   desligados e o radar/alertas seguem normais.
 - Regras para quem desenvolve (humano ou agente): `AGENTS.md` na raiz.
 
+## 5.2 Módulo Editais — ficha do edital por IA
+
+Com a chave da API configurada (**/config → Inteligência artificial**), o
+detalhe de cada licitação ganha o botão **🧠 Analisar edital com IA**: o app
+lê os PDFs publicados no PNCP (que ele já baixa sozinho) e monta a ficha
+estruturada — exigências de habilitação por bloco, garantias, forma da
+proposta, datas, contradições internas e pontos de risco.
+
+Princípios (de `docs/arquitetura-plataforma.md`):
+
+- **Processa 1×, serve para todos**: a ficha pertence ao edital, não ao
+  usuário. O segundo clique devolve a ficha pronta, sem custo novo.
+- **IA lê, código calcula**: a IA transcreve o que está escrito; nenhum
+  prazo é "calculado" por IA.
+- **Custo visível**: cada ficha grava o próprio custo (centavos de dólar);
+  o acumulado aparece em **/logs** para o administrador e o registro
+  completo fica em `data/ia_custos.jsonl`.
+- PDF escaneado (só imagem) não gasta IA: a ficha explica e aponta o link
+  do documento.
+
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).
