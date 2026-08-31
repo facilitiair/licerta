@@ -115,3 +115,37 @@ def test_somente_srp():
     p = perfil(somente_srp=True)
     assert licitacao_casa_perfil(LicFake(srp=True), p)
     assert not licitacao_casa_perfil(LicFake(srp=False), p)
+
+
+# --- separadores: a mesma expressão escrita de formas diferentes no edital ---
+def test_espaco_no_termo_casa_hifen_no_objeto():
+    casou, _ = texto_casa("Manutenção de ar-condicionado", ['"ar condicionado"'], [])
+    assert casou
+
+
+def test_espaco_no_termo_casa_quebra_de_linha_no_objeto():
+    casou, _ = texto_casa("fornecimento de ar\ncondicionado split",
+                          ['"ar condicionado"'], [])
+    assert casou
+
+
+def test_espaco_no_termo_casa_travessao_e_barra():
+    assert texto_casa("ar–condicionado", ['"ar condicionado"'], [])[0]
+    assert texto_casa("ar/condicionado", ['"ar condicionado"'], [])[0]
+
+
+def test_separador_nao_deixa_casar_palavra_diferente():
+    assert not texto_casa("arcondicionamento de solo",
+                          ['"ar condicionado"'], [])[0]
+
+
+def test_curinga_continua_funcionando_junto_com_separador():
+    casou, _ = texto_casa("serviços de ar-condicionado central",
+                          ["ar condiciona*"], [])
+    assert casou
+
+
+def test_exclusao_tambem_enxerga_o_hifen():
+    casou, _ = texto_casa("manutenção de ar-condicionado veicular",
+                          ['"manutenção"'], ['"ar condicionado"'])
+    assert not casou

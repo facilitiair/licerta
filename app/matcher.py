@@ -33,14 +33,27 @@ def normalizar(texto):
     return texto.lower()
 
 
+# Como os editais separam as palavras de uma expressão: espaço, hífen (comum
+# e os travessões que o Word deixa passar), barra, e a quebra de linha que a
+# API às vezes devolve no meio do objeto.
+SEPARADORES = r"[\s\-–—/]+"
+_SEPARADOR = re.compile(SEPARADORES)
+
+
 def _termo_para_regex(termo):
     """Converte um termo do perfil num regex sobre o texto normalizado.
 
     - aspas apenas delimitam a expressão (a busca já é por sequência exata);
-    - '*' vira 'zero ou mais letras' — pavimenta* casa pavimentação/pavimentar.
+    - '*' vira 'zero ou mais letras' — pavimenta* casa pavimentação/pavimentar;
+    - o espaço no termo casa qualquer separador: 'ar condicionado' encontra
+      'ar-condicionado' e 'ar\ncondicionado' sem precisar de uma linha para
+      cada grafia.
     """
+    def literal(pedaco):
+        return SEPARADORES.join(re.escape(p) for p in _SEPARADOR.split(pedaco) if p)
+
     termo = normalizar(termo).strip().strip('"').strip()
-    partes = [re.escape(p) for p in termo.split("*")]
+    partes = [literal(p) for p in termo.split("*")]
     return re.compile(r"\w*".join(partes)) if len(partes) > 1 else re.compile(partes[0])
 
 
