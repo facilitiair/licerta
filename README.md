@@ -1,8 +1,17 @@
 # 📡 Radar de Licitações
 
-Aplicativo pessoal que monitora licitações públicas do Brasil inteiro pela API
+Aplicativo que monitora licitações públicas do Brasil inteiro pela API
 oficial do **PNCP**, com perfis de busca configuráveis, coleta automática
-diária e alerta no **Telegram**. Construído conforme o `SPEC.md`.
+ao longo do dia e alertas no **Telegram** e por e-mail. Construído conforme
+o `SPEC.md`.
+
+> **Produto genérico, configuração por empresa.** Nada do ramo de ninguém
+> está gravado no código: o que se monitora — estados, municípios,
+> modalidades, palavras do objeto, faixa de valor, situação, frequência de
+> cada alerta — é definido inteiramente pela tela **Perfis e alertas**, por
+> qualquer pessoa, sem tocar no código-fonte. Uma construtora, um fornecedor
+> de merenda e uma empresa de TI usam o mesmo app com perfis diferentes.
+> Uma instalação nova nasce sem perfis; a tela convida a criar o primeiro.
 
 > O PNCP agrega por lei as licitações de todos os portais (Compras.gov.br,
 > Licitanet, BLL, BNC, Portal de Compras Públicas, sistemas próprios de

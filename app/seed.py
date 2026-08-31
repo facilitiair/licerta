@@ -1,8 +1,7 @@
 """Cargas iniciais: modalidades, municípios do IBGE e perfil de exemplo."""
 import logging
 
-from .db import Modalidade, Municipio, PerfilBusca, Sessao
-from .matcher import SITUACOES_DISPUTAVEIS
+from .db import Modalidade, Municipio, Sessao
 from .pncp import MODALIDADES, baixar_municipios_ibge
 
 log = logging.getLogger("radar.seed")
@@ -28,21 +27,9 @@ def semear():
                 sessao.rollback()
                 log.warning("Não foi possível baixar municípios do IBGE: %s", e)
 
-        # Perfil de exemplo (SPEC §9, Fase 1)
-        if sessao.query(PerfilBusca).count() == 0:
-            sessao.add(PerfilBusca(
-                nome="Ar-condicionado — Piauí",
-                ufs=["PI"],
-                modalidades=[6, 8],
-                palavras_incluir=["ar condicionado", "climatização",
-                                  "refrigeração", "split"],
-                # Explícito: em banco NOVO a coluna já nasce criada, então a
-                # migração que preenche isto em bancos antigos não roda. Sem
-                # esta linha, a instalação nova nascia aceitando qualquer
-                # situação e alertava sobre licitação cancelada e revogada.
-                situacoes=list(SITUACOES_DISPUTAVEIS),
-                somente_vigentes=True,
-            ))
-            sessao.commit()
+        # Nenhum perfil de exemplo: o produto é genérico e cada empresa define
+        # o próprio ramo pela tela de Perfis. Um exemplo pré-carregado de um
+        # setor específico só confunde quem compra o app para outro objeto —
+        # a tela vazia convida a criar o primeiro perfil.
     finally:
         sessao.close()

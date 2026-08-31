@@ -64,7 +64,21 @@
     </div>
   </div>
   {% else %}
-  <p class="text-slate-500 text-sm">Nenhum perfil cadastrado.</p>
+  <div class="bg-white rounded-xl border border-slate-200 p-6 text-sm
+              text-slate-600 space-y-2">
+    <p class="font-semibold text-slate-800">Comece criando o seu primeiro
+      perfil de busca.</p>
+    <p>Um perfil diz o que interessa à <b>sua</b> empresa: os estados e
+      municípios, as modalidades, a faixa de valor e — o mais importante —
+      as palavras que descrevem o seu ramo (obras, merenda, transporte,
+      informática, o que for). Cada perfil também é um alerta, com a
+      frequência que você escolher.</p>
+    <p>Sem nenhum perfil, a coleta não sabe o que procurar e nada é
+      monitorado.</p>
+    <a href="/perfis/novo" class="inline-block bg-blue-700 text-white px-4
+        py-2 rounded-lg font-semibold hover:bg-blue-800">+ Criar o primeiro
+      perfil</a>
+  </div>
   {% endfor %}
 </div>
 {% endblock %}

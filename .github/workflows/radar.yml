@@ -18,6 +18,10 @@ jobs:
     timeout-minutes: 90
     env:
       TZ: America/Fortaleza
+      # Endereço DESTA instalação (o link "Ver todas" dos alertas e a
+      # sincronização de perfis apontam para cá). Configuração de deploy,
+      # não código: cada empresa põe o seu.
+      APP_URL: https://radar-editais-production-67c1.up.railway.app
     steps:
       - uses: actions/checkout@v4
 

@@ -16,16 +16,21 @@ from .sincronizar import baixar_do_site
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-SITE = os.environ.get(
-    "APP_URL", "https://radar-editais-production-67c1.up.railway.app")
+# Endereço do app publicado — vem do ambiente (no GitHub Actions, do env do
+# workflow). Nada de URL de uma instalação específica cravada no código: este
+# produto roda para qualquer empresa, em qualquer endereço.
+SITE = os.environ.get("APP_URL") or None
 
 if __name__ == "__main__":
     criar_tabelas()
     semear()
-    # Puxa os perfis do site antes de tudo: o app publicado é onde o Paulo
-    # edita, e sem isto o e-mail alertava por critérios velhos. Melhor
+    if not SITE:
+        print("AVISO: APP_URL não definido no ambiente — os links dos "
+              "alertas sairão errados e a sincronização de perfis não roda.")
+    # Puxa os perfis do site antes de tudo: o app publicado é onde os perfis
+    # são editados, e sem isto o e-mail alertava por critérios velhos. Melhor
     # esforço — precisa do secret APP_SENHA no GitHub; sem ele, só avisa.
-    if os.environ.get("APP_SENHA"):
+    if SITE and os.environ.get("APP_SENHA"):
         sincronizado = baixar_do_site(site=SITE)
         print(f"Perfis sincronizados do site: {'sim' if sincronizado else 'NÃO'}")
     else:

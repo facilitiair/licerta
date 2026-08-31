@@ -262,3 +262,24 @@ def test_logout_invalida_o_cookie_mesmo_sem_arquivo(monkeypatch):
     antes = m._token_sessao()
     m._girar_segredo_sessao()
     assert m._token_sessao() != antes
+
+
+def test_instalacao_nova_nasce_sem_perfil_de_exemplo(monkeypatch, tmp_path):
+    """O produto é genérico: cada empresa define o próprio ramo pela tela.
+    Um perfil de exemplo de um setor específico pré-carregado só confunde."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app import seed
+    from app.db import Base, PerfilBusca
+    eng = create_engine(f"sqlite:///{tmp_path / 'instalacao_nova.db'}")
+    Base.metadata.create_all(eng)
+    Sess = sessionmaker(bind=eng)
+    monkeypatch.setattr(seed, "Sessao", Sess)
+    monkeypatch.setattr(seed, "baixar_municipios_ibge", lambda: [])
+    seed.semear()
+    s = Sess()
+    try:
+        assert s.query(PerfilBusca).count() == 0
+    finally:
+        s.close()
