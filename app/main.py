@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
                                Response)
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import alerta as alerta_mod
@@ -83,6 +84,8 @@ async def vida(app_):
 
 
 app = FastAPI(title="Radar de Licitações", lifespan=vida)
+app.mount("/static", StaticFiles(
+    directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 
 # ---------------------------------------------------------------- autenticação

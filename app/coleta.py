@@ -80,6 +80,8 @@ def _rodar_matcher(sessao_db, perfis):
                                           licitacao_id=lic.id,
                                           termos=", ".join(termos)))
                 novos_ids.append(lic.id)
+                if len(novos_ids) % 200 == 0:
+                    sessao_db.commit()   # lotes pequenos, mesmo motivo
     return novos_ids
 
 
@@ -177,6 +179,8 @@ def _coletar_atas(sessao_db, perfis, erros):
             else:
                 sessao_db.add(Ata(**ata, perfis_casados=casados))
                 qtd += 1
+            if qtd and qtd % 200 == 0:
+                sessao_db.commit()       # lotes pequenos, mesmo motivo
         sessao_db.commit()
         log.info("Atas: %s novas compatíveis (janela de %s dias)", qtd, dias)
     except Exception as e:  # noqa: BLE001
@@ -222,6 +226,10 @@ def coletar():
                     if item["numero_controle_pncp"]:
                         _upsert(sessao_db, item)
                         qtd += 1
+                        if qtd % 200 == 0:
+                            # lotes pequenos: libera o banco para os cliques
+                            # do usuário passarem no meio da coleta
+                            sessao_db.commit()
                 sessao_db.commit()
                 log.info("PNCP %s modalidade %s: %s registros",
                          uf or "BR", modalidade, qtd)
