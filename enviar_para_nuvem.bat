@@ -1,5 +1,6 @@
 @echo off
 REM Envia sua configuracao local (perfis, alertas, triagem) para a nuvem.
+REM Funciona de qualquer pasta: usa o diretorio onde o proprio .bat esta.
 REM Rode depois de criar/editar perfis, para a nuvem usar as mudancas.
 REM
 REM Por que nao usa mais "push --force-with-lease": o "git fetch" logo antes
