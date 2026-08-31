@@ -3,6 +3,11 @@
 Baixa os documentos da API do PNCP para data/editais/<licitacao_id>/ e
 registra em arquivos_edital. Melhor esforço: falha de um arquivo não
 interrompe nada.
+
+O acervo é CACHE com teto (EDITAIS_CACHE_MB): quando estoura, os PDFs
+mais antigos saem primeiro. A URL de origem fica no banco, então o que
+sair volta com um clique em "baixar documentos". Sem o teto, um dia de
+coleta nacional encheu o volume inteiro do Railway.
 """
 import logging
 import os
@@ -10,7 +15,7 @@ import re
 
 import requests
 
-from ..config import PASTA_DADOS
+from ..config import PASTA_DADOS, config
 from ..db import ArquivoEdital
 from ..ingestao.pncp import listar_arquivos_compra
 
@@ -31,6 +36,58 @@ def _sequencial(numero_controle):
 def _nome_seguro(texto, padrao):
     nome = re.sub(r"[^\w.\-]+", "_", texto or "").strip("_")
     return (nome or padrao)[:80]
+
+
+def podar_cache(sessao_db, limite_mb=None):
+    """Mantém o cache de PDFs dentro do teto, apagando os mais antigos.
+
+    Roda no startup (o app se cura de um volume cheio ao subir) e após os
+    downloads de cada coleta. Devolve (arquivos_apagados, mb_liberados).
+    A linha em arquivos_edital sai junto do arquivo — linha apontando para
+    arquivo inexistente é mentira no banco.
+    """
+    limite = (limite_mb if limite_mb is not None
+              else config.EDITAIS_CACHE_MB) * 1024 * 1024
+    encontrados = []
+    total = 0
+    for raiz, _, nomes in os.walk(PASTA_EDITAIS):
+        for nome in nomes:
+            caminho = os.path.join(raiz, nome)
+            try:
+                info = os.stat(caminho)
+            except OSError:
+                continue
+            encontrados.append((info.st_mtime, info.st_size, caminho))
+            total += info.st_size
+    if total <= limite:
+        return 0, 0
+    apagados = liberados = 0
+    for _, tamanho, caminho in sorted(encontrados):     # mais antigo primeiro
+        if total - liberados <= limite:
+            break
+        try:
+            os.remove(caminho)
+        except OSError:
+            continue
+        liberados += tamanho
+        apagados += 1
+        relativo = os.path.relpath(caminho, PASTA_DADOS)
+        sessao_db.query(ArquivoEdital).filter_by(
+            caminho_local=relativo).delete(synchronize_session=False)
+        # No Windows o caminho relativo grava com \; no Linux, com /.
+        sessao_db.query(ArquivoEdital).filter_by(
+            caminho_local=relativo.replace("\\", "/")).delete(
+            synchronize_session=False)
+        pasta = os.path.dirname(caminho)
+        try:
+            os.rmdir(pasta)                 # só sai se ficou vazia
+        except OSError:
+            pass
+    sessao_db.commit()
+    log.warning("Cache de editais podado: %s arquivos, %.0f MB liberados "
+                "(teto %s MB)", apagados, liberados / 1e6,
+                limite / 1024 / 1024)
+    return apagados, liberados
 
 
 def baixar_arquivos(sessao_db, lic, sessao=None):

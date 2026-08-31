@@ -149,6 +149,16 @@ async def vida(app_):
         s.commit()
     finally:
         s.close()
+    # O app se cura de um volume cheio ao subir: sem espaço em disco, até
+    # gravar o .env falha (foi um 500 real em produção em 31/08/2026).
+    s = Sessao()
+    try:
+        from .editais.arquivos import podar_cache
+        podar_cache(s)
+    except Exception:  # noqa: BLE001
+        log.exception("Poda do cache no startup falhou")
+    finally:
+        s.close()
     agendador.add_job(_job_coleta, "cron", id="coleta", replace_existing=True,
                       **_gatilho_coleta())
     agendador.add_job(_job_alerta, "interval", minutes=10, id="alerta",

@@ -350,6 +350,11 @@ def coletar():
         _coletar_atas(sessao_db, perfis, erros, sessao=http)
         _baixar_editais_novos(sessao_db, novos_ids, erros, sessao=http)
         try:
+            from ..editais.arquivos import podar_cache
+            podar_cache(sessao_db)
+        except Exception:  # noqa: BLE001
+            log.exception("Poda do cache de editais falhou")
+        try:
             from .limpeza import limpar
             limpar(sessao_db)
         except Exception:  # noqa: BLE001 — faxina nunca derruba a coleta

@@ -145,6 +145,22 @@ def checar_alertas_travados(perfis, agora_, inicio_processo):
                         + ". Confira os canais de aviso do dono do perfil.")}
 
 
+def checar_disco_cheio(livre_mb):
+    """Espaço no volume de dados. Foi um incidente real: 4,4 GB de PDFs
+    encheram o volume e até gravar o .env falhava com erro 500 — sem nenhum
+    aviso. 300 MB é o fôlego mínimo para banco + WAL + downloads.
+    """
+    if livre_mb is None or livre_mb >= 300:
+        return None
+    return {"chave": "disco_cheio",
+            "titulo": f"O disco de dados está no limite ({livre_mb:.0f} MB "
+                      "livres)",
+            "detalhe": ("Sem espaço, coleta, downloads e até salvar "
+                        "configurações falham. O app poda o cache de "
+                        "editais sozinho; se o aviso persistir, aumente o "
+                        "volume ou reduza EDITAIS_CACHE_MB em /config (.env).")}
+
+
 def diagnosticar(sessao_db, agora_=None, coletando=None, inicio_processo=None):
     """Roda todas as checagens sobre o banco. Devolve a lista de problemas."""
     agora_ = agora_ or agora()
@@ -170,6 +186,13 @@ def diagnosticar(sessao_db, agora_=None, coletando=None, inicio_processo=None):
     problemas.append(checar_captura_zerada(ultimas, frescas, agora_))
     problemas.append(checar_alertas_travados(
         [p for p in perfis if p.notificar], agora_, inicio))
+    try:
+        import shutil
+        from .config import PASTA_DADOS
+        livre_mb = shutil.disk_usage(PASTA_DADOS).free / 1024 / 1024
+    except OSError:
+        livre_mb = None
+    problemas.append(checar_disco_cheio(livre_mb))
     return [p for p in problemas if p]
 
 
