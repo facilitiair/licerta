@@ -88,26 +88,6 @@
 </div>
 {% endif %}
 
-{% if docs_alerta %}
-<a href="/documentos" class="flex items-start gap-3 bg-amber-50 border
-   border-amber-300 text-amber-900 rounded-2xl px-4 py-3 mb-6 text-sm
-   hover:bg-amber-100 transition-colors">
-  <span class="text-xl">📄</span>
-  <span>
-    <b>Documento{{ 's' if docs_alerta|length != 1 }} da empresa
-      precisando de atenção:</b>
-    {% for item in docs_alerta[:3] %}
-      {{ item.doc.nome }}
-      ({{ 'vencido' if item.situacao == 'vencido'
-          else 'vence hoje' if item.dias == 0
-          else 'vence em %d dia%s' % (item.dias, 's' if item.dias != 1 else '') }}){{ ',' if not loop.last }}
-    {% endfor %}
-    {% if docs_alerta|length > 3 %} e mais {{ docs_alerta|length - 3 }}...{% endif %}
-  </span>
-  <span class="ml-auto font-semibold whitespace-nowrap">renovar →</span>
-</a>
-{% endif %}
-
 {% if fecham_hoje %}
 <a href="/agenda" class="flex items-center gap-3 bg-red-50 border
    border-red-200 text-red-800 rounded-2xl px-4 py-3 mb-6 text-sm

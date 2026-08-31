@@ -213,13 +213,6 @@ def _avisar_admins(sessao_db, texto, resumo=""):
     return chegou
 
 
-def avisar_admins(sessao_db, texto, resumo=""):
-    """Nome público: outros módulos (validades do dossiê, rotina) também
-    avisam os administradores por aqui — operação é assunto de admin.
-    Delega (em vez de apelidar) para o monkeypatch de teste valer nos dois."""
-    return _avisar_admins(sessao_db, texto, resumo=resumo)
-
-
 def vigiar(agora_=None, sessao_db=None):
     """Job periódico: diagnostica, compara com o estado anterior e avisa.
 

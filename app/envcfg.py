@@ -8,7 +8,7 @@ CHAVES = ["APP_SENHA", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
           "EMAIL_ATIVO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER",
           "SMTP_PASSWORD", "EMAIL_DESTINO", "TZ",
           "HORA_COLETA", "HORAS_ENTRE_COLETAS", "HORA_ALERTA",
-          "DIAS_JANELA_FUTURA", "ANTHROPIC_API_KEY"]
+          "DIAS_JANELA_FUTURA"]
 
 
 def valores_atuais():
@@ -27,14 +27,10 @@ def valores_atuais():
         "HORAS_ENTRE_COLETAS": str(config.HORAS_ENTRE_COLETAS),
         "HORA_ALERTA": "%02d:%02d" % config.HORA_ALERTA,
         "DIAS_JANELA_FUTURA": str(config.DIAS_JANELA_FUTURA),
-        # A chave de IA vive no ambiente (ia/cliente.py a lê na hora da
-        # chamada), não no objeto config — por isso os.environ aqui.
-        "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", ""),
     }
 
 
-SEGREDOS = {"APP_SENHA", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD",
-            "ANTHROPIC_API_KEY"}
+SEGREDOS = {"APP_SENHA", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD"}
 
 
 def _outras_chaves():
@@ -114,5 +110,4 @@ def salvar(novos):
         config.DIAS_JANELA_FUTURA = int(valores["DIAS_JANELA_FUTURA"] or 90)
     except ValueError:
         config.DIAS_JANELA_FUTURA = 90
-    os.environ["ANTHROPIC_API_KEY"] = valores["ANTHROPIC_API_KEY"]
     return valores

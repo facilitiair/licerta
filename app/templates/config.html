@@ -80,21 +80,6 @@
     <span id="resEmail"></span>
   </div>
 
-  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-    <h3 class="font-semibold">Inteligência artificial (ficha do edital)</h3>
-    <p class="text-xs text-slate-500">Com a chave configurada, o botão
-      <b>Analisar com IA</b> aparece no detalhe de cada licitação: lê os PDFs
-      do edital e monta a ficha (exigências, riscos, datas). Cada edital é
-      analisado <b>uma vez só</b> — a ficha vale para todos os usuários e o
-      custo (centavos de dólar por edital) fica registrado nela.
-      Crie a chave em console.anthropic.com → API Keys.</p>
-    <label class="block text-sm max-w-md">Chave da API (Anthropic)
-      <input type="password" name="ANTHROPIC_API_KEY" value="" autocomplete="off"
-             placeholder="{{ '•••••• (guardada) — em branco mantém' if valores.ANTHROPIC_API_KEY_DEFINIDO else 'sk-ant-...' }}"
-             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
-    </label>
-  </div>
-
   <div class="bg-white rounded-xl border border-slate-200 p-4">
     <h3 class="font-semibold mb-2">Rotina diária</h3>
     <div class="grid sm:grid-cols-4 gap-3 text-sm max-w-2xl">

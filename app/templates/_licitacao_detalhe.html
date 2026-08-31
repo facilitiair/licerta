@@ -28,23 +28,7 @@
          class="text-blue-700 underline">🔗 Sistema de origem</a>{% endif %}
   </p>
 
-  {% if alteracoes %}
-  <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs">
-    <p class="font-semibold text-orange-900 mb-1">✏️ Este edital já mudou
-      depois de coletado</p>
-    <ul class="space-y-0.5 text-orange-900">
-      {% for a in alteracoes %}
-      <li>{{ a.detectada_em.strftime('%d/%m %H:%M') }} —
-        <b>{{ rotulos_alteracao.get(a.campo, a.campo) }}</b>:
-        {{ a.valor_antigo[:120] }} → <b>{{ a.valor_novo[:120] }}</b></li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-
   <div id="arqs{{ lic.id }}">{% include "_arquivos.html" %}</div>
-
-  {% include "_ficha_edital.html" %}
 
   {% for m in matches %}
   <form hx-post="/matches/{{ m.id }}" hx-target="#salvo{{ m.id }}"

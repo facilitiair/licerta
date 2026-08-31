@@ -44,8 +44,6 @@ if __name__ == "__main__":
     # horário do GitHub Actions. O que continua valendo é a frequência.
     enviados = enviar_alertas_devidos(host=SITE, respeitar_hora=False)
     print(f"Alertas enviados: {enviados}")
-    from .documentos.validades import avisar_vencimentos
-    print(f"Documentos com aviso de validade: {avisar_vencimentos(host=SITE)}")
     # Vigilância cruzada: o vigia interno do site não enxerga o site fora do
     # ar — só alguém de fora enxerga. Este job roda fora, então confere e
     # avisa os admins (por aqui o e-mail funciona; no Railway, não).

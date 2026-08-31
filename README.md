@@ -154,56 +154,6 @@ A plataforma segue a arquitetura de `docs/arquitetura-plataforma.md`:
   desligados e o radar/alertas seguem normais.
 - Regras para quem desenvolve (humano ou agente): `AGENTS.md` na raiz.
 
-## 5.2 Módulo Editais — ficha do edital por IA
-
-Com a chave da API configurada (**/config → Inteligência artificial**), o
-detalhe de cada licitação ganha o botão **🧠 Analisar edital com IA**: o app
-lê os PDFs publicados no PNCP (que ele já baixa sozinho) e monta a ficha
-estruturada — exigências de habilitação por bloco, garantias, forma da
-proposta, datas, contradições internas e pontos de risco.
-
-Princípios (de `docs/arquitetura-plataforma.md`):
-
-- **Processa 1×, serve para todos**: a ficha pertence ao edital, não ao
-  usuário. O segundo clique devolve a ficha pronta, sem custo novo.
-- **IA lê, código calcula**: a IA transcreve o que está escrito; nenhum
-  prazo é "calculado" por IA.
-- **Custo visível**: cada ficha grava o próprio custo (centavos de dólar);
-  o acumulado aparece em **/logs** para o administrador e o registro
-  completo fica em `data/ia_custos.jsonl`.
-- PDF escaneado (só imagem) não gasta IA: a ficha explica e aponta o link
-  do documento.
-
-## 5.3 Edital que você acompanha mudou? Você fica sabendo
-
-A coleta compara cada edital recém-baixado com o que já estava no banco.
-Mudou **situação** (suspenso! revogado!), **prazo de proposta**
-(prorrogado), **valor estimado** ou **objeto**, e o edital está com você
-em *Em análise*, *Vou participar* ou favoritado → chega aviso na hora
-pelos seus canais, e o histórico da mudança aparece no detalhe da
-licitação. Edital ainda não triado não gera aviso — mudança de algo que
-você nem olhou seria só ruído.
-
-## 5.4 Dossiê da empresa — validades vigiadas
-
-Em **Documentos** (menu lateral) você sobe as certidões e documentos da
-empresa (CND, FGTS, CNDT, balanço, atestados...) com a data de validade.
-O app vigia por código — nunca por IA — e avisa os administradores aos
-**30, 15, 7, 3 e 1 dia** do vencimento, no dia, e uma vez após vencer.
-Documento vencendo também aparece em destaque no painel, para todos.
-
-Num PDF de certidão, deixe a validade em branco: o app tenta ler a data
-do próprio documento ("válida até ...") e mostra que foi sugestão, para
-você conferir. Documento que não precisa mais de vigília (versão antiga,
-contrato encerrado) se arquiva sem apagar.
-
-**Checklist automático**: quando uma licitação tem ficha de IA e o dossiê
-tem documentos, a ficha cruza cada exigência de habilitação com o
-documento correspondente — ✅ vigente, 🟧 **vale hoje mas vence antes da
-sessão** (renove já!), 🟥 vencido, ❌ falta, ❓ conferir manualmente. A
-validade é aferida na **data da sessão**, não na de hoje — e o cruzamento
-é aproximação por tipo: quem bate o martelo é você.
-
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).

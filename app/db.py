@@ -147,26 +147,6 @@ class PerfilMatch(Base):
                                        name="uq_perfil_licitacao"),)
 
 
-class LicitacaoAlteracao(Base):
-    """Mudança relevante numa licitação já conhecida — republicação,
-    suspensão, prorrogação de prazo, mudança de valor ou de objeto.
-
-    Detectada no upsert da coleta comparando campo a campo (nunca o payload
-    bruto, que muda a cada resposta). Alimenta o aviso a quem acompanha o
-    edital; `avisada` marca que o ciclo de aviso já a processou.
-    """
-    __tablename__ = "licitacao_alteracoes"
-    id = Column(Integer, primary_key=True)
-    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"), nullable=False,
-                          index=True)
-    campo = Column(String, nullable=False)
-    valor_antigo = Column(Text, default="")
-    valor_novo = Column(Text, default="")
-    detectada_em = Column(DateTime, default=agora, nullable=False)
-    avisada = Column(Boolean, default=False, nullable=False, index=True)
-    licitacao = relationship("Licitacao")
-
-
 class ColetaLog(Base):
     __tablename__ = "coletas_log"
     id = Column(Integer, primary_key=True)
@@ -227,51 +207,6 @@ class ArquivoEdital(Base):
     url_origem = Column(String)
     caminho_local = Column(String)      # relativo à pasta data/
     baixado_em = Column(DateTime, default=agora)
-    licitacao = relationship("Licitacao")
-
-
-class DocumentoEmpresa(Base):
-    """Documento do dossiê da EMPRESA (certidão, atestado, balanço...).
-
-    O documento é da empresa — a instalação inteira —, não de um usuário;
-    quem subiu fica registrado só para auditoria. A validade é vigiada por
-    CÓDIGO (arquitetura: 'IA lê, código calcula' — alerta de prazo errado
-    encerra a confiança). `ultimo_aviso_dias` guarda o último marco avisado
-    (30/15/7/3/1/0/-1=vencido) para não repetir aviso todo dia.
-    """
-    __tablename__ = "documentos_empresa"
-    id = Column(Integer, primary_key=True)
-    nome = Column(String, nullable=False)
-    tipo = Column(String, default="Outro", nullable=False)
-    caminho_local = Column(String, default="")      # relativo a data/
-    validade = Column(String, nullable=True)        # ISO AAAA-MM-DD
-    observacao = Column(Text, default="")
-    enviado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
-    arquivado = Column(Boolean, default=False, nullable=False)
-    ultimo_aviso_dias = Column(Integer, nullable=True)
-    criado_em = Column(DateTime, default=agora, nullable=False)
-
-
-class EditalFicha(Base):
-    """Ficha estruturada do edital, extraída por IA — ativo GLOBAL.
-
-    Processa uma vez, serve para todos (arquitetura, princípio 1): a ficha
-    pertence ao edital, nunca a um usuário, e o custo de IA é por documento.
-    `ficha_json` é o JSON validado da extração; `erro` preenchido = a última
-    tentativa falhou (PDF sem texto, IA fora do ar) e a ficha pode ser
-    regerada. O custo fica aqui E em data/ia_custos.jsonl.
-    """
-    __tablename__ = "edital_fichas"
-    id = Column(Integer, primary_key=True)
-    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"), nullable=False,
-                          unique=True, index=True)
-    ficha_json = Column(Text, default="")
-    erro = Column(Text, default="")
-    modelo = Column(String, default="")
-    versao_prompt = Column(String, default="")
-    custo_usd = Column(Float, default=0.0)
-    caracteres_lidos = Column(Integer, default=0)
-    gerada_em = Column(DateTime, default=agora, nullable=False)
     licitacao = relationship("Licitacao")
 
 
