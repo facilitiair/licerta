@@ -112,6 +112,11 @@ app.mount("/static", StaticFiles(
 CAMINHO_SEGREDO = os.path.join(PASTA_DADOS, ".segredo_sessao")
 
 
+# Reserva para quando a pasta de dados não aceitar escrita: sem isto, o
+# login inteiro caía com erro 500 e ninguém entrava no app — nem o dono.
+_SEGREDO_MEMORIA = secrets.token_bytes(32)
+
+
 def _segredo_sessao():
     """Chave aleatória do cookie, guardada fora do código e fora do git.
 
@@ -119,6 +124,10 @@ def _segredo_sessao():
     o cookie virava um HMAC de chave conhecida sobre a senha, então quem o
     obtivesse quebrava a senha por força bruta OFFLINE — e a mesma senha
     abre a tela que mostra o token do Telegram e a senha do e-mail.
+
+    Se não der para gravar o arquivo, usa uma chave de memória: as sessões
+    passam a valer só enquanto o processo estiver de pé, mas entrar no app
+    continua funcionando. Nunca vale a pena trancar o dono do lado de fora.
     """
     try:
         with open(CAMINHO_SEGREDO, "rb") as f:
@@ -127,16 +136,26 @@ def _segredo_sessao():
             return segredo
     except OSError:
         pass
-    segredo = secrets.token_bytes(32)
-    with open(CAMINHO_SEGREDO, "wb") as f:
-        f.write(segredo)
-    return segredo
+    try:
+        segredo = secrets.token_bytes(32)
+        with open(CAMINHO_SEGREDO, "wb") as f:
+            f.write(segredo)
+        return segredo
+    except OSError as e:
+        log.warning("Sem escrita em %s (%s); a sessão vale só até reiniciar",
+                    CAMINHO_SEGREDO, e)
+        return _SEGREDO_MEMORIA
 
 
 def _girar_segredo_sessao():
     """Invalida TODOS os cookies emitidos — é o que faz 'Sair' sair de verdade."""
-    with open(CAMINHO_SEGREDO, "wb") as f:
-        f.write(secrets.token_bytes(32))
+    global _SEGREDO_MEMORIA
+    _SEGREDO_MEMORIA = secrets.token_bytes(32)
+    try:
+        with open(CAMINHO_SEGREDO, "wb") as f:
+            f.write(_SEGREDO_MEMORIA)
+    except OSError:
+        pass          # sem arquivo, girar a chave de memória já invalidou
 
 
 def _token_sessao():

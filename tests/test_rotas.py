@@ -236,3 +236,29 @@ def test_campo_de_segredo_em_branco_mantem_o_valor(tmp_path, monkeypatch):
     envcfg.salvar({"APP_SENHA": "", "HORA_ALERTA": "08:00"})
     assert config.APP_SENHA == "senha-secreta"
     assert "APP_SENHA=senha-secreta" in caminho.read_text(encoding="utf-8")
+
+
+def test_login_funciona_mesmo_sem_poder_gravar_o_segredo(monkeypatch):
+    """Regressão: a chave de sessão é gravada num arquivo, e quando a pasta
+    de dados não aceitava escrita o login inteiro dava 500 — o dono ficava
+    trancado do lado de fora do próprio app, sem nenhuma pista."""
+    import app.main as m
+    from app.config import config
+    monkeypatch.setattr(m, "CAMINHO_SEGREDO", "Z:/nao/existe/.segredo")
+    with TestClient(m.app) as anonimo:
+        r = anonimo.post("/login", data={"senha": config.APP_SENHA},
+                         follow_redirects=False)
+        assert r.status_code < 500
+        if config.APP_SENHA:
+            assert r.status_code == 303          # entrou mesmo assim
+            assert "sessao" in r.cookies
+        # e o token continua estável dentro do processo
+        assert m._token_sessao() == m._token_sessao()
+
+
+def test_logout_invalida_o_cookie_mesmo_sem_arquivo(monkeypatch):
+    import app.main as m
+    monkeypatch.setattr(m, "CAMINHO_SEGREDO", "Z:/nao/existe/.segredo")
+    antes = m._token_sessao()
+    m._girar_segredo_sessao()
+    assert m._token_sessao() != antes
