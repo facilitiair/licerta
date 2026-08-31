@@ -17,6 +17,10 @@ log = logging.getLogger("radar.coleta")
 # Trava para o botão "Coletar agora" não disparar duas coletas ao mesmo tempo
 _coletando = threading.Lock()
 
+# Registro fechado à força quando o app sobe e acha coleta pela metade.
+# Constante compartilhada: o vigia precisa distinguir isto de fonte falhando.
+MSG_INTERROMPIDA = "coleta interrompida por reinício do aplicativo"
+
 
 def coleta_em_andamento():
     """Só LÊ o estado. Não pode adquirir a trava: o painel consulta isto por

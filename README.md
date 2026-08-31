@@ -182,6 +182,26 @@ Render e VPS funcionam igual: é um contêiner Docker comum na porta 8000.
   PNCP são descartados. Se o site do TCE mudar, o erro aparece em /logs e o
   resto segue normal.
 
+## 6.2 O radar vigia a si mesmo
+
+O pior defeito de um radar é morrer em silêncio: você confia nos alertas,
+para de olhar o painel — e perde pregão sem saber. O módulo **vigia**
+(`app/vigia.py`) roda a cada 30 minutos e avisa os **administradores**
+pelos canais deles quando detecta:
+
+- **Coleta parada** — nenhuma coleta bem-sucedida há mais de dois ciclos;
+- **Coleta falhando** — duas ou mais coletas seguidas terminando em erro;
+- **Captura zerada** — coletas dizendo "sucesso" sem gravar nada em 24h
+  (o disfarce clássico de API que mudou ou WAF novo);
+- **Alerta travado** — perfil que não é despachado há muito mais tempo
+  que a frequência dele (job morto ou canal recusando envio).
+
+Avisa quando o problema surge, relembra no máximo 1× por dia enquanto
+durar e manda o "✅ resolvido" quando passar. O administrador também vê
+uma faixa no painel. O endpoint público `/api/saude` expõe a contagem de
+problemas (sem detalhe), e a rotina do GitHub Actions confere por fora se
+o site publicado está no ar — vigilância cruzada.
+
 ## 7. Backup
 
 Todo o seu histórico está num único arquivo: **`data/radar.db`**.

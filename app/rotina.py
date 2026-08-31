@@ -12,6 +12,7 @@ from .radar.coleta import coletar
 from .db import criar_tabelas
 from .seed import semear
 from .sincronizar import baixar_do_site
+from .vigia import checar_site_publicado
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -43,3 +44,9 @@ if __name__ == "__main__":
     # horário do GitHub Actions. O que continua valendo é a frequência.
     enviados = enviar_alertas_devidos(host=SITE, respeitar_hora=False)
     print(f"Alertas enviados: {enviados}")
+    # Vigilância cruzada: o vigia interno do site não enxerga o site fora do
+    # ar — só alguém de fora enxerga. Este job roda fora, então confere e
+    # avisa os admins (por aqui o e-mail funciona; no Railway, não).
+    if SITE:
+        ok, detalhe = checar_site_publicado(SITE)
+        print(f"Site publicado: {'de pé' if ok else 'FORA DO AR'} — {detalhe}")

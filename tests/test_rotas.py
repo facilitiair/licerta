@@ -25,6 +25,7 @@ def cliente():
 
 ROTAS_GET = [
     "/login",
+    "/api/saude",
     "/",
     "/funil",
     "/agenda",

@@ -23,13 +23,15 @@ from .notificacoes import alerta as alerta_mod
 from .notificacoes import push as push_mod
 from . import usuarios as usuarios_mod
 from . import envcfg
+from . import vigia as vigia_mod
 from .ingestao import pncp_busca
 from . import sincronizar
-from .radar.coleta import coleta_em_andamento, coletar_em_background
+from .radar.coleta import (MSG_INTERROMPIDA, coleta_em_andamento,
+                           coletar_em_background)
 from .config import PASTA_DADOS, VERSAO, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
                  Municipio, PerfilBusca, PerfilMatch, PushAssinatura,
-                 Sessao, Usuario, criar_tabelas)
+                 Sessao, Usuario, VigiaProblema, criar_tabelas)
 from .editais.arquivos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
 from .radar.matcher import (SITUACOES_CONHECIDAS, SITUACOES_DISPUTAVEIS,
@@ -113,6 +115,14 @@ def _job_alerta():
         log.exception("Erro no job de alerta")
 
 
+def _job_vigia():
+    """O radar vigia a si mesmo: detecta falha silenciosa e avisa os admins."""
+    try:
+        vigia_mod.vigiar()
+    except Exception:  # noqa: BLE001
+        log.exception("Erro no job do vigia")
+
+
 @asynccontextmanager
 async def vida(app_):
     criar_tabelas()
@@ -122,13 +132,18 @@ async def vida(app_):
     try:
         s.query(ColetaLog).filter(ColetaLog.fim.is_(None)).update(
             {"fim": agora(), "sucesso": False,
-             "detalhe_erro": "coleta interrompida por reinício do aplicativo"})
+             "detalhe_erro": MSG_INTERROMPIDA})
         s.commit()
     finally:
         s.close()
     agendador.add_job(_job_coleta, "cron", id="coleta", replace_existing=True,
                       **_gatilho_coleta())
     agendador.add_job(_job_alerta, "interval", minutes=10, id="alerta",
+                      replace_existing=True)
+    # De meia em meia hora: rápido o bastante para pegar coleta morta no
+    # mesmo dia, espaçado o bastante para o primeiro ciclo já nascer fora
+    # da janela de carência do boot.
+    agendador.add_job(_job_vigia, "interval", minutes=30, id="vigia",
                       replace_existing=True)
     if not agendador.running:
         agendador.start()
@@ -206,11 +221,19 @@ ROTAS_LIVRES = ("/login", "/registrar", "/manifest.json", "/sw.js",
 async def saude():
     """Sinal de vida público e sem dado sensível: versão e hora do processo.
 
-    Serve ao healthcheck da hospedagem e ao watchdog — e a nós, para saber
-    qual versão está de pé depois de um deploy.
+    Serve ao healthcheck da hospedagem e ao vigia externo (rotina do
+    Actions) — e a nós, para saber qual versão está de pé após um deploy.
+    `problemas` é só a CONTAGEM do vigia interno: o detalhe fica atrás do
+    login, no painel e em /logs.
     """
+    s = Sessao()
+    try:
+        problemas = s.query(VigiaProblema).count()
+    finally:
+        s.close()
     return {"app": "licerta", "versao": VERSAO,
-            "hora": agora().isoformat(timespec="seconds")}
+            "hora": agora().isoformat(timespec="seconds"),
+            "problemas": problemas}
 
 
 @app.middleware("http")
@@ -384,11 +407,15 @@ async def painel(request: Request):
                 or (usuario.receber_push and usuario.assinaturas_push)),
             "coleta": bool(ultimas),       # o radar já tem dados?
         }
+        # Problemas do vigia: assunto de quem opera a instalação. Para os
+        # demais usuários o painel segue limpo — eles não têm o que fazer.
+        problemas = (s.query(VigiaProblema).order_by(VigiaProblema.desde).all()
+                     if eu(request).papel == "admin" else [])
         return templates.TemplateResponse(request, "painel.html", {
             "kpis": kpis, "proximos": proximos, "ultima_coleta": ultima,
             "ultimas": ultimas, "coletando": coleta_em_andamento(),
             "hora_coleta": config.HORA_COLETA,
-            "fecham_hoje": fecham_hoje,
+            "fecham_hoje": fecham_hoje, "problemas": problemas,
             "passos": passos, "tudo_pronto": all(passos.values()),
         })
     finally:

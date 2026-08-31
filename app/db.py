@@ -158,6 +158,21 @@ class ColetaLog(Base):
     detalhe_erro = Column(Text, default="")
 
 
+class VigiaProblema(Base):
+    """Problema de saúde do próprio radar em aberto (módulo vigia).
+
+    Uma linha por problema ativo; resolver = apagar a linha. `avisado_em`
+    é o anti-fadiga: avisa ao surgir, relembra no máximo uma vez por dia
+    enquanto durar — e só é gravado quando algum canal aceitou a mensagem.
+    """
+    __tablename__ = "vigia_problemas"
+    chave = Column(String, primary_key=True)
+    titulo = Column(String, default="", nullable=False)
+    detalhe = Column(Text, default="", nullable=False)
+    desde = Column(DateTime, nullable=False)
+    avisado_em = Column(DateTime, nullable=True)
+
+
 class Ata(Base):
     """Atas de registro de preços vigentes que casaram com algum perfil (Fase 3)."""
     __tablename__ = "atas"

@@ -23,6 +23,24 @@
   </div>
 </div>
 
+{% if problemas %}
+<!-- Saúde do radar: só o administrador vê. Falha silenciosa é o pior
+     defeito deste produto — quando o vigia acha algo, grita aqui também. -->
+<div class="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl
+            px-4 py-3 mb-6 text-sm">
+  <p class="font-bold flex items-center gap-2">🩺 O radar precisa de atenção</p>
+  <ul class="mt-1 space-y-1">
+    {% for p in problemas %}
+    <li><b>{{ p.titulo }}</b> <span class="text-amber-700">(desde
+      {{ p.desde.strftime('%d/%m %H:%M') }})</span><br>
+      <span class="text-xs">{{ p.detalhe }}</span></li>
+    {% endfor %}
+  </ul>
+  <a href="/logs" class="inline-block mt-2 text-xs font-semibold underline">
+    ver registros das coletas →</a>
+</div>
+{% endif %}
+
 {% if not tudo_pronto %}
 <!-- Primeiros passos: o guia de quem acabou de chegar. Some quando os três
      passos estão completos. -->
