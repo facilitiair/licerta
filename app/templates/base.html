@@ -18,6 +18,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
   <script src="/static/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <script src="/static/lucide.min.js"></script>
+  <script>
+    // Ícones Lucide (UI §3): desenha na carga e redesenha após cada troca
+    // de conteúdo do htmx — senão o ícone de um trecho novo fica invisível.
+    document.addEventListener("DOMContentLoaded", () => lucide.createIcons());
+    document.addEventListener("htmx:afterSettle", () => lucide.createIcons());
+  </script>
   <style>
     /* Enquanto o htmx trabalha, o alvo fica esmaecido — resposta visual
        imediata a qualquer clique, sem biblioteca extra */
@@ -32,8 +40,9 @@
   <div class="md:hidden sticky top-0 z-40 bg-slate-900 text-white px-4 py-3
               flex items-center gap-3 shadow">
     <button onclick="abrirMenu()" aria-label="Abrir menu"
-            class="text-2xl leading-none px-1">☰</button>
-    <span class="text-lg">📡</span>
+            class="px-2 py-2"><i data-lucide="menu"
+            class="lucide lucide-menu-item"></i></button>
+    <i data-lucide="radar" class="lucide lucide-menu-item"></i>
     <span class="font-bold">Licerta</span>
   </div>
 
@@ -49,60 +58,64 @@
                 -translate-x-full md:translate-x-0 transition-transform
                 duration-200 md:min-h-screen shrink-0 overflow-y-auto">
     <div class="px-5 py-5 flex items-center gap-3 border-b border-white/10">
-      <span class="text-2xl bg-blue-600/20 rounded-xl p-1.5">📡</span>
+      <span class="bg-blue-600/20 rounded-lg p-2 text-blue-300">
+        <i data-lucide="radar" class="lucide lucide-menu-item"></i></span>
       <div>
         <p class="font-bold text-white text-[15px] leading-4">Licerta</p>
         <p class="text-[11px] text-blue-300/80 tracking-wide">licitação certa</p>
       </div>
       <button onclick="fecharMenu()" aria-label="Fechar menu"
-              class="md:hidden ml-auto text-slate-400 text-xl">✕</button>
+              class="md:hidden ml-auto text-slate-400 p-2">
+        <i data-lucide="x" class="lucide"></i></button>
     </div>
 
     {% set pagina_ativa = request.url.path %}
-    {% macro item(rota, icone, rotulo) -%}
+    {% macro item(rota, nome_icone, rotulo) -%}
     <a href="{{ rota }}" onclick="fecharMenu()"
        class="group flex items-center gap-2.5 px-3 py-2 mx-2 rounded-lg
         whitespace-nowrap text-[13.5px] transition-colors
         {{ 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/40'
            if pagina_ativa == rota
            else 'hover:bg-white/10 hover:text-white' }}">
-      <span class="text-base {{ '' if pagina_ativa == rota
-                                else 'opacity-80 group-hover:opacity-100' }}">
-        {{ icone }}</span>{{ rotulo }}</a>
+      <i data-lucide="{{ nome_icone }}" class="lucide lucide-menu-item
+         {{ '' if pagina_ativa == rota
+            else 'opacity-80 group-hover:opacity-100' }}"></i>
+      {{ rotulo }}</a>
     {%- endmacro %}
 
     <nav class="flex flex-col py-2 gap-0.5">
-      {{ item('/', '📊', 'Painel do dia') }}
+      {{ item('/', 'layout-dashboard', 'Painel do dia') }}
 
       <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
                 tracking-[0.15em] text-slate-500">Radar</p>
-      {{ item('/perfis', '🎯', 'Perfis e alertas') }}
-      {{ item('/licitacoes', '🔎', 'Meu radar') }}
-      {{ item('/pesquisar', '🌐', 'Pesquisar no PNCP') }}
-      {{ item('/atas', '📜', 'Atas / carona') }}
+      {{ item('/perfis', 'target', 'Perfis e alertas') }}
+      {{ item('/licitacoes', 'search', 'Oportunidades') }}
+      {{ item('/pesquisar', 'globe', 'Pesquisar no PNCP') }}
+      {{ item('/atas', 'scroll-text', 'Atas / carona') }}
 
       <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
                 tracking-[0.15em] text-slate-500">Acompanhamento</p>
-      {{ item('/funil', '📋', 'Funil de oportunidades') }}
-      {{ item('/agenda', '📅', 'Agenda de disputas') }}
+      {{ item('/funil', 'square-kanban', 'Funil de oportunidades') }}
+      {{ item('/agenda', 'calendar-days', 'Agenda de disputas') }}
 
       <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
                 tracking-[0.15em] text-slate-500">Documentos</p>
-      {{ item('/documentos', '📄', 'Dossiê da empresa') }}
+      {{ item('/documentos', 'briefcase', 'Dossiê da empresa') }}
 
       <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
                 tracking-[0.15em] text-slate-500">Sistema</p>
-      {{ item('/conta', '🔔', 'Minha conta e avisos') }}
+      {{ item('/conta', 'bell', 'Minha conta e avisos') }}
       {% if request.state.usuario.papel == 'admin' %}
-      {{ item('/usuarios', '👥', 'Usuários') }}
-      {{ item('/config', '⚙️', 'Configurações') }}
+      {{ item('/usuarios', 'users', 'Usuários') }}
+      {{ item('/config', 'settings', 'Configurações') }}
       {% endif %}
-      {{ item('/logs', '🧾', 'Registros de coleta') }}
+      {{ item('/logs', 'activity', 'Diagnóstico') }}
     </nav>
 
     <div class="mt-auto px-5 py-4 border-t border-white/10 space-y-1">
-      <p class="text-xs text-slate-400 truncate">
-        👤 {{ request.state.usuario.nome }}</p>
+      <p class="text-xs text-slate-400 truncate flex items-center gap-1.5">
+        <i data-lucide="user" class="lucide"></i>
+        {{ request.state.usuario.nome }}</p>
       <a href="/logout" class="text-xs text-slate-500 hover:text-white
          transition-colors">Sair da conta →</a>
     </div>

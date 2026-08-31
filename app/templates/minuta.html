@@ -3,14 +3,14 @@
 {% block conteudo %}
 <div class="bg-red-50 border-2 border-red-300 text-red-900 rounded-2xl
             px-4 py-3 mb-4 text-sm">
-  <b>⚠️ MINUTA GERADA POR IA — RASCUNHO.</b> Não protocole sem revisão de
+  <b><i data-lucide="triangle-alert" class="lucide"></i> MINUTA — RASCUNHO.</b> Não protocole sem revisão de
   advogado ou responsável habilitado. Confira números de processo,
   endereçamento, prazos e cada citação legal. Campos entre
   <code>[PREENCHER]</code> exigem a sua informação.
 </div>
 
 <div class="flex items-center gap-3 flex-wrap mb-3">
-  <h1 class="text-lg font-bold">📜 Minuta de {{ minuta.tipo }}</h1>
+  <h1 class="text-lg font-bold"><i data-lucide="scroll-text" class="lucide"></i> Minuta de {{ minuta.tipo }}</h1>
   <span class="text-xs text-slate-500">
     {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }} —
     {{ lic.orgao_nome }} · gerada em
@@ -20,11 +20,11 @@
   <span class="ml-auto flex gap-2">
     <a href="/minutas/{{ minuta.id }}/baixar"
        class="border border-blue-700 text-blue-700 px-3 py-1.5 rounded-lg
-              text-xs font-semibold hover:bg-blue-50">⬇ Baixar (.md)</a>
-    <button onclick="navigator.clipboard.writeText(document.getElementById('texto').innerText).then(() => this.innerText = '✔ Copiado')"
+              text-xs font-semibold hover:bg-blue-50"><i data-lucide="download" class="lucide"></i> Baixar (.md)</a>
+    <button onclick="navigator.clipboard.writeText(document.getElementById('texto').innerText).then(() => this.innerText = 'Copiado')"
             class="border border-slate-400 text-slate-600 px-3 py-1.5
                    rounded-lg text-xs font-semibold hover:bg-slate-50">
-      ⧉ Copiar</button>
+      <i data-lucide="copy" class="lucide"></i> Copiar</button>
   </span>
 </div>
 

@@ -9,7 +9,7 @@
 {% if enviado %}
 <p class="mb-4 text-sm rounded-lg px-3 py-2
    {{ 'bg-green-100 text-green-800' if enviado == 'sim' else 'bg-slate-100 text-slate-700' }}">
-  {{ '✔ Alerta enviado — confira o Telegram.' if enviado == 'sim'
+  {{ '<i data-lucide="check" class="lucide"></i> Alerta enviado — confira o Telegram.' if enviado == 'sim'
      else 'Nada novo para enviar neste alerta agora.' }}</p>
 {% endif %}
 <div class="space-y-3">
@@ -22,9 +22,9 @@
             {{ 'bg-green-100 text-green-800' if p.ativo else 'bg-slate-200 text-slate-600' }}">
         {{ 'ativo' if p.ativo else 'inativo' }}</span>
       {% if p.notificar %}<span class="text-xs px-2 py-0.5 rounded-full
-            bg-blue-100 text-blue-800">🔔 {{ resumo_frequencia(p) }}</span>
+            bg-blue-100 text-blue-800"><i data-lucide="bell" class="lucide"></i> {{ resumo_frequencia(p) }}</span>
       {% else %}<span class="text-xs px-2 py-0.5 rounded-full
-            bg-slate-100 text-slate-500">🔕 sem alerta</span>{% endif %}
+            bg-slate-100 text-slate-500">sem alerta</span>{% endif %}
     </div>
     <p class="text-xs text-slate-500 mt-1">
       {{ p.ufs|join(', ') if p.ufs else 'Brasil inteiro' }}
@@ -37,20 +37,20 @@
     </p>
     <div class="flex gap-2 mt-3 text-sm">
       <a href="/perfis/{{ p.id }}" class="px-3 py-1 border border-slate-300
-            rounded-lg hover:bg-slate-50">✏️ Editar</a>
+            rounded-lg hover:bg-slate-50"><i data-lucide="pencil" class="lucide"></i> Editar</a>
       <form method="post" action="/perfis/{{ p.id }}/toggle">
         <button class="px-3 py-1 border border-slate-300 rounded-lg
-              hover:bg-slate-50">{{ '⏸ Desativar' if p.ativo else '▶ Ativar' }}</button>
+              hover:bg-slate-50">{{ 'Desativar' if p.ativo else 'Ativar' }}</button>
       </form>
       {% if p.notificar %}
       <form method="post" action="/perfis/{{ p.id }}/enviar">
         <button class="px-3 py-1 border border-blue-300 text-blue-700
-              rounded-lg hover:bg-blue-50">📤 Enviar agora</button>
+              rounded-lg hover:bg-blue-50"><i data-lucide="send" class="lucide"></i> Enviar agora</button>
       </form>
       {% endif %}
       <form method="post" action="/perfis/{{ p.id }}/duplicar">
         <button class="px-3 py-1 border border-slate-300 rounded-lg
-              hover:bg-slate-50">📋 Duplicar</button>
+              hover:bg-slate-50"><i data-lucide="clipboard-list" class="lucide"></i> Duplicar</button>
       </form>
       {# O nome vai em data-*, não interpolado no onsubmit: um perfil criado
          pela pesquisa com apóstrofo no nome ("Busca: poço d'água") gerava
@@ -59,7 +59,7 @@
             data-nome="{{ p.nome }}"
             onsubmit="return confirm('Excluir o perfil ' + this.dataset.nome + '? Os matches dele também serão removidos.')">
         <button class="px-3 py-1 border border-red-300 text-red-700
-              rounded-lg hover:bg-red-50">🗑 Excluir</button>
+              rounded-lg hover:bg-red-50"><i data-lucide="trash-2" class="lucide"></i> Excluir</button>
       </form>
     </div>
   </div>

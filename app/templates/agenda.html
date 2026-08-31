@@ -10,7 +10,7 @@
   <h2 class="font-bold text-sm mb-2
       {{ 'text-red-600' if dia.dias_ate is not none and dia.dias_ate <= 3
          else 'text-slate-700' }}">
-    📅 {{ dia.rotulo }}
+    <i data-lucide="calendar-days" class="lucide"></i> {{ dia.rotulo }}
     {% if dia.dias_ate == 1 %}— AMANHÃ{% elif dia.dias_ate == 0 %}— HOJE{% else %}
       — em {{ dia.dias_ate }} dias{% endif %}
   </h2>

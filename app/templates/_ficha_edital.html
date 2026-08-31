@@ -1,23 +1,27 @@
-<div id="ficha{{ lic.id }}" class="border border-indigo-200 rounded-xl bg-indigo-50/40">
+{% import "_componentes.html" as c %}
+<div id="ficha{{ lic.id }}" class="card"
+     style="border-color: var(--cor-primaria-borda);
+            background: var(--cor-primaria-suave)">
 {% if dados %}
   <div class="p-4 space-y-3 text-sm">
     <div class="flex items-center gap-2 flex-wrap">
-      <h3 class="font-bold text-indigo-900">🧠 Ficha do edital (IA)</h3>
-      <span class="text-[11px] text-slate-500">gerada
+      <h3 class="font-bold text-blue-900 inline-flex items-center gap-1.5">
+        <i data-lucide="file-search" class="lucide"></i> Ficha do edital</h3>
+      <span class="text-[11px] text-slate-500">análise automática de
         {{ ficha.gerada_em.strftime('%d/%m/%Y %H:%M') }}
         {% if sou_admin %} · {{ ficha.modelo }} ·
           US$ {{ '%.4f' % (ficha.custo_usd or 0) }}{% endif %}</span>
       <button hx-post="/licitacoes/{{ lic.id }}/analisar" hx-vals='{"forcar": 1}'
               hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
               hx-disabled-elt="this"
-              hx-confirm="Regerar a ficha? A análise é paga por edital."
-              class="ml-auto text-[11px] text-indigo-700 underline">↻ regerar</button>
+              hx-confirm="Refazer a ficha? Cada análise tem custo (centavos)."
+              class="ml-auto text-[11px] text-blue-700 underline">refazer</button>
     </div>
 
     {% if dados.analise_incompleta %}
-    <p class="bg-amber-100 border border-amber-300 text-amber-900 rounded-lg
-              px-3 py-2 text-xs"><b>Análise incompleta:</b>
-      {{ dados.analise_incompleta }}</p>
+    {% call c.faixa('atencao', 'triangle-alert') %}
+      <b>Análise incompleta:</b> {{ dados.analise_incompleta }}
+    {% endcall %}
     {% endif %}
 
     <p class="whitespace-pre-wrap">{{ dados.resumo }}</p>
@@ -25,9 +29,8 @@
     <div class="flex gap-1.5 flex-wrap text-[11px]">
       {% macro selo(rotulo, valor) -%}
         {% if valor is not none and valor != '' %}
-        <span class="bg-white border border-indigo-200 rounded-full px-2 py-0.5">
-          {{ rotulo }}: <b>{{ 'sim' if valor is true else
-                              'não' if valor is false else valor }}</b></span>
+        {{ c.badge(rotulo + ': ' + ('sim' if valor is true else
+                   'não' if valor is false else valor|string)) }}
         {% endif %}
       {%- endmacro %}
       {{ selo('Lei', dados.lei_base) }}
@@ -59,41 +62,44 @@
                               ('limite_impugnacao', 'Limite p/ impugnação'),
                               ('limite_esclarecimentos', 'Limite p/ esclarecimentos')] %}
         {% if dados.datas.get(nome) %}<p><b>{{ rotulo }}:</b>
-          {{ dados.datas[nome] }}</p>{% endif %}
+          {{ dados.datas[nome]|quando }}</p>{% endif %}
       {% endfor %}
     </div>
 
     {% if prazos %}
-    <div class="text-xs rounded-lg px-3 py-2 border
-        {{ 'bg-slate-100 border-slate-200 text-slate-600' if prazos.sessao_passou
-           else 'bg-red-50 border-red-200 text-red-900'
-             if prazos.impugnacao_passou or prazos.dias_uteis_restantes <= 3
-           else 'bg-blue-50 border-blue-200 text-blue-900' }}">
+    {% call c.faixa('neutro' if prazos.sessao_passou
+                    else ('critico' if acompanho and
+                          (prazos.impugnacao_passou or
+                           prazos.dias_uteis_restantes <= 3)
+                          else 'atencao' if prazos.impugnacao_passou or
+                               prazos.dias_uteis_restantes <= 3
+                          else 'info'), 'alarm-clock') %}
       {% if prazos.sessao_passou %}
-        ⛔ <b>A sessão já passou</b> — esta ficha agora é material de estudo,
+        <b>A sessão já passou</b> — esta ficha agora é material de estudo,
         não de decisão.
       {% else %}
-        ⏱️ <b>{{ prazos.dias_uteis_restantes }} dia{{ 's' if
-          prazos.dias_uteis_restantes != 1 }} ÚTE{{ 'IS' if
-          prazos.dias_uteis_restantes != 1 else 'IL' }}</b> até a sessão ·
+        <b>{{ prazos.dias_uteis_restantes }} dia{{ 's' if
+          prazos.dias_uteis_restantes != 1 }} úte{{ 'is' if
+          prazos.dias_uteis_restantes != 1 else 'il' }}</b> até a sessão ·
         impugnação/esclarecimento até
         <b>{{ prazos.limite_impugnacao.strftime('%d/%m/%Y') }}</b>
         (3 dias úteis antes — art. 164)
-        {% if prazos.impugnacao_passou %}<b>— prazo de impugnação JÁ PASSOU</b>
-        {% elif prazos.dias_uteis_para_impugnar == 0 %}<b>— HOJE é o último
-          dia para impugnar!</b>{% endif %}
+        {% if prazos.impugnacao_passou %}<b>— o prazo de impugnação já passou</b>
+        {% elif prazos.dias_uteis_para_impugnar == 0 %}<b>— hoje é o último
+          dia para impugnar</b>{% endif %}
       {% endif %}
       <span class="block text-[10px] opacity-70 mt-0.5">Conta com feriados
-        nacionais; feriado estadual/municipal do órgão pode recuar as datas —
-        confirme o expediente local.</span>
-    </div>
+        nacionais; feriado do estado ou município do órgão pode recuar as
+        datas — confirme o expediente local.</span>
+    {% endcall %}
     {% endif %}
 
     {% if dados.riscos %}
-    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-      <p class="font-semibold text-amber-900 text-xs mb-1">⚠️ Pontos de risco
-        ({{ dados.riscos|length }})</p>
-      <ul class="text-xs text-amber-900 space-y-1 list-disc ml-4">
+    <div class="faixa faixa-atencao" style="display: block">
+      <p class="font-semibold text-xs mb-1 inline-flex items-center gap-1">
+        <i data-lucide="triangle-alert" class="lucide"></i>
+        Pontos de risco ({{ dados.riscos|length }})</p>
+      <ul class="text-xs space-y-1 list-disc ml-4">
         {% for r in dados.riscos %}
         <li><b>{{ r.clausula or '—' }}</b>: {{ r.motivo or r }}</li>
         {% endfor %}
@@ -103,68 +109,50 @@
         <button hx-post="/licitacoes/{{ lic.id }}/minuta"
                 hx-target="#minutamsg{{ lic.id }}" hx-swap="innerHTML"
                 hx-disabled-elt="this"
-                hx-confirm="Gerar a minuta de impugnação destes riscos? A geração é paga (centavos por peça) e o resultado é RASCUNHO para revisão."
-                class="border border-amber-700 text-amber-900 px-3 py-1.5
-                       rounded-lg text-xs font-semibold hover:bg-amber-100">
-          📜 Gerar minuta de impugnação (IA)
-          <span class="htmx-indicator">⏳ redigindo (até 1 min)...</span>
+                hx-confirm="Gerar a minuta de impugnação destes riscos? A geração é paga (centavos por peça) e o resultado é um rascunho para revisão."
+                class="btn-sec" style="min-height: 36px;
+                       border-color: var(--atencao); color: var(--atencao)">
+          <i data-lucide="file-pen" class="lucide"></i>
+          Gerar minuta de impugnação
+          <span class="htmx-indicator">— redigindo (até 1 min)...</span>
         </button>
-        <span class="text-[10px] text-amber-800">Sai como minuta — revisão
-          por pessoa habilitada é obrigatória.</span>
+        <span class="text-[10px]">Sai como minuta — revisão por pessoa
+          habilitada é obrigatória.</span>
       </div>
       <div id="minutamsg{{ lic.id }}" class="mt-2"></div>
       {% endif %}
     </div>
     {% endif %}
 
-    {% macro lista(titulo, itens, aberto=false) -%}
-      {% if itens %}
-      <details class="bg-white border border-slate-200 rounded-lg"
-               {{ 'open' if aberto }}>
-        <summary class="cursor-pointer px-3 py-2 text-xs font-semibold">
-          {{ titulo }} ({{ itens|length }})</summary>
-        <ul class="text-xs px-3 pb-2 space-y-1 list-disc ml-4">
-          {% for item in itens %}<li>{{ item }}</li>{% endfor %}
-        </ul>
-      </details>
-      {% endif %}
-    {%- endmacro %}
-    <div class="space-y-1.5">
-      {{ lista('📋 Habilitação jurídica', dados.habilitacao.juridica) }}
-      {{ lista('🧾 Fiscal, social e trabalhista',
-               dados.habilitacao.fiscal_social_trabalhista) }}
-      {{ lista('🛠️ Qualificação técnica', dados.habilitacao.tecnica, true) }}
-      {{ lista('💰 Econômico-financeira',
-               dados.habilitacao.economico_financeira) }}
-      {{ lista('📄 Forma da proposta', dados.proposta_forma) }}
-      {{ lista('🔎 Pontos de atenção', dados.pontos_atencao) }}
-      {{ lista('❌ Anexos citados que NÃO vieram',
-               dados.anexos_citados_ausentes) }}
-    </div>
     {% if checklist %}
     {% set ok = checklist | selectattr('veredito', 'equalto', 'ok') | list | length %}
-    <details class="bg-white border border-slate-200 rounded-lg" open>
+    <details class="card" open>
       <summary class="cursor-pointer px-3 py-2 text-xs font-semibold">
-        ✅ Checklist contra o dossiê — {{ ok }}/{{ checklist|length }}
+        Checklist contra o dossiê — {{ ok }}/{{ checklist|length }}
         exigências com documento vigente</summary>
       <ul class="text-xs px-3 pb-2 space-y-1.5">
         {% for item in checklist %}
         <li class="flex gap-2">
-          <span>{{ {'ok': '✅', 'vence_antes': '🟧', 'vencido': '🟥',
-                    'falta': '❌', 'conferir': '❓'}[item.veredito] }}</span>
+          <i data-lucide="{{ {'ok': 'circle-check', 'vence_antes': 'clock-alert',
+                              'vencido': 'circle-x', 'falta': 'circle-alert',
+                              'conferir': 'circle-help'}[item.veredito] }}"
+             class="lucide {{ {'ok': 'text-green-700',
+                               'vence_antes': 'text-amber-600',
+                               'vencido': 'text-red-700',
+                               'falta': 'text-amber-600',
+                               'conferir': 'text-slate-400'}[item.veredito] }}"></i>
           <span class="min-w-0">
             {{ item.exigencia }}
             {% if item.veredito == 'ok' %}
               <b class="text-green-700">— {{ item.doc.nome }}</b>
             {% elif item.veredito == 'vence_antes' %}
-              <b class="text-orange-700">— {{ item.doc.nome }} vale hoje,
-              mas VENCE ANTES da sessão ({{ item.doc.validade }}) — renove
+              <b class="text-amber-700">— {{ item.doc.nome }} vale hoje, mas
+              vence antes da sessão ({{ item.doc.validade|quando }}) — renove
               já</b>
             {% elif item.veredito == 'vencido' %}
-              <b class="text-red-700">— {{ item.doc.nome }} está VENCIDO
-              ({{ item.doc.validade }})</b>
+              <b class="text-red-700">— {{ item.doc.nome }} está vencido</b>
             {% elif item.veredito == 'falta' %}
-              <b class="text-red-700">— nenhum {{ item.tipo }} no dossiê</b>
+              <b class="text-amber-700">— nenhum {{ item.tipo }} no dossiê</b>
             {% else %}
               <span class="text-slate-500">— sem correspondência automática:
               conferir manualmente</span>
@@ -174,45 +162,64 @@
         {% endfor %}
       </ul>
       <p class="text-[11px] text-slate-400 px-3 pb-2">
-        Validade aferida na data da sessão{{ ' (%s)' %
+        Validade conferida na data da sessão{{ ' (%s)' %
         checklist_sessao.strftime('%d/%m/%Y') if checklist_sessao }} —
-        aproximação automática por tipo de documento; o mapa não substitui a
-        leitura. <a href="/documentos" class="underline">Dossiê →</a></p>
+        aproximação por tipo de documento; a leitura final é sua.
+        <a href="/documentos" class="underline">Dossiê →</a></p>
     </details>
     {% elif dados and not tem_dossie %}
-    <p class="text-[11px] text-slate-500">💡 Cadastre as certidões da empresa
-      em <a href="/documentos" class="underline font-semibold">Documentos</a>
-      e este bloco passa a cruzar cada exigência com o seu dossiê.</p>
+    <p class="text-[11px] text-slate-500">Cadastre as certidões da empresa em
+      <a href="/documentos" class="underline font-semibold">Dossiê da
+      empresa</a> e este bloco passa a conferir cada exigência para você.</p>
     {% endif %}
-    <p class="text-[11px] text-slate-500">A ficha é extração automática do
-      texto publicado — confira sempre no edital antes de decidir. Prazos
-      valem como escritos no documento.</p>
+
+    {% macro lista(titulo, itens, aberto=false) -%}
+      {% if itens %}
+      <details class="card" {{ 'open' if aberto }}>
+        <summary class="cursor-pointer px-3 py-2 text-xs font-semibold">
+          {{ titulo }} ({{ itens|length }})</summary>
+        <ul class="text-xs px-3 pb-2 space-y-1 list-disc ml-4">
+          {% for item in itens %}<li>{{ item }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    {%- endmacro %}
+    <div class="space-y-1.5">
+      {{ lista('Habilitação jurídica', dados.habilitacao.juridica) }}
+      {{ lista('Fiscal, social e trabalhista',
+               dados.habilitacao.fiscal_social_trabalhista) }}
+      {{ lista('Qualificação técnica', dados.habilitacao.tecnica, true) }}
+      {{ lista('Econômico-financeira',
+               dados.habilitacao.economico_financeira) }}
+      {{ lista('Forma da proposta', dados.proposta_forma) }}
+      {{ lista('Pontos de atenção', dados.pontos_atencao) }}
+      {{ lista('Anexos citados que não vieram',
+               dados.anexos_citados_ausentes) }}
+    </div>
+    <p class="text-[11px] text-slate-500">A ficha é um resumo automático do
+      texto publicado — confira sempre no edital antes de decidir.</p>
   </div>
 
 {% elif ficha and ficha.erro %}
-  <div class="p-4 text-sm">
-    <p class="text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2
-              text-xs mb-2">🧠 {{ ficha.erro }}</p>
+  <div class="p-4 text-sm space-y-2">
+    {% call c.faixa('atencao', 'file-x') %}{{ ficha.erro }}{% endcall %}
     <button hx-post="/licitacoes/{{ lic.id }}/analisar" hx-vals='{"forcar": 1}'
             hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
-            hx-disabled-elt="this"
-            class="border border-indigo-700 text-indigo-700 px-3 py-1.5
-                   rounded-lg text-xs font-semibold hover:bg-indigo-50">
-      ↻ Tentar de novo <span class="htmx-indicator">⏳ analisando...</span></button>
+            hx-disabled-elt="this" class="btn-sec" style="min-height: 36px">
+      <i data-lucide="rotate-cw" class="lucide"></i> Tentar de novo
+      <span class="htmx-indicator">— analisando (até 1 min)...</span></button>
   </div>
 
 {% else %}
   <div class="p-4 flex items-center gap-3 flex-wrap text-sm">
     <button hx-post="/licitacoes/{{ lic.id }}/analisar"
             hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
-            hx-disabled-elt="this"
-            class="bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm
-                   font-semibold hover:bg-indigo-800">
-      🧠 Analisar edital com IA
-      <span class="htmx-indicator">⏳ lendo os PDFs (até 1 min)...</span></button>
-    <span class="text-xs text-slate-500">Lê os documentos publicados e monta a
-      ficha: exigências de habilitação, garantias, riscos e datas.
-      Uma vez por edital — a ficha fica salva para todos.</span>
+            hx-disabled-elt="this" class="btn">
+      <i data-lucide="file-search" class="lucide"></i> Analisar edital
+      <span class="htmx-indicator">— lendo o edital (até 1 min)...</span></button>
+    <span class="text-xs text-slate-500">Lê os documentos publicados e monta
+      a ficha: exigências de habilitação, garantias, riscos e datas. Uma vez
+      por edital — a ficha fica salva para todos.</span>
   </div>
 {% endif %}
 </div>

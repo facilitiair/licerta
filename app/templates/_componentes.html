@@ -1,0 +1,63 @@
+{# Componentes base da Licerta (AGENTS.md, Regras de UI §1).
+   ÚNICO lugar com HTML de botão, badge, ícone, estado vazio e afins.
+   PROIBIDO recriar variações locais nas telas — se faltar algo, o
+   componente cresce AQUI. As classes vivem em static/tokens.css. #}
+
+{# Ícone Lucide. Nome em https://lucide.dev/icons. `menu=true` = 20px. #}
+{% macro icone(nome, menu=false) -%}
+<i data-lucide="{{ nome }}"
+   class="lucide{{ ' lucide-menu-item' if menu }}" aria-hidden="true"></i>
+{%- endmacro %}
+
+{# Botão primário — NO MÁXIMO 1 por card/seção (§4). #}
+{% macro botao(rotulo, icone_nome=None, tipo='submit', extra='') -%}
+<button type="{{ tipo }}" class="btn" {{ extra|safe }}>
+  {%- if icone_nome %}{{ icone(icone_nome) }}{% endif %} {{ rotulo }}</button>
+{%- endmacro %}
+
+{# Botão secundário (outline) — as demais ações. #}
+{% macro botao_sec(rotulo, icone_nome=None, tipo='submit', extra='') -%}
+<button type="{{ tipo }}" class="btn-sec" {{ extra|safe }}>
+  {%- if icone_nome %}{{ icone(icone_nome) }}{% endif %} {{ rotulo }}</button>
+{%- endmacro %}
+
+{# Badge. `tom` em: neutro | primario | sucesso | atencao | critico.
+   Critico obedece a §5: só prazo de disputa própria e certidão <= 7d. #}
+{% macro badge(texto, tom='neutro', icone_nome=None) -%}
+<span class="badge{{ ' badge-' + tom if tom != 'neutro' }}">
+  {%- if icone_nome %}{{ icone(icone_nome) }}{% endif %}{{ texto }}</span>
+{%- endmacro %}
+
+{# Faixa de aviso. `tom` em: info | sucesso | atencao | critico. #}
+{% macro faixa(tom, icone_nome=None) -%}
+<div class="faixa faixa-{{ tom }}">
+  {%- if icone_nome %}{{ icone(icone_nome) }}{% endif %}
+  <div>{{ caller() }}</div>
+</div>
+{%- endmacro %}
+
+{# Estado vazio (§9): sempre com frase útil e, se houver, próxima ação. #}
+{% macro estado_vazio(frase, icone_nome='inbox', rota=None, rotulo=None) -%}
+<div class="estado-vazio">
+  {{ icone(icone_nome) }}
+  <p>{{ frase }}</p>
+  {% if rota %}<a href="{{ rota }}" class="btn-sec"
+     style="margin-top: var(--e-2)">{{ rotulo }}</a>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Erro em linguagem humana + repetir (§9). Nunca vazar erro técnico. #}
+{% macro estado_erro(acao_extra='') -%}
+<div class="estado-vazio">
+  {{ icone('cloud-off') }}
+  <p>Não conseguimos atualizar agora. Tentaremos de novo em instantes.</p>
+  {% if acao_extra %}{{ acao_extra|safe }}{% endif %}
+</div>
+{%- endmacro %}
+
+{# Skeleton de carregamento (§9). `linhas` retângulos pulsantes. #}
+{% macro skeleton(linhas=3) -%}
+<div style="display:grid; gap: var(--e-1); padding: var(--e-2)">
+  {% for _ in range(linhas) %}<div class="skeleton"></div>{% endfor %}
+</div>
+{%- endmacro %}

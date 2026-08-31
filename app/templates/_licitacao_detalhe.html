@@ -1,45 +1,53 @@
+{% import "_componentes.html" as c %}
 <div class="p-4 text-sm space-y-3">
   <div class="grid sm:grid-cols-2 gap-x-8 gap-y-1">
-    <p><b>Nº controle PNCP:</b> {{ lic.numero_controle_pncp }}</p>
-    <p><b>Processo:</b> {{ lic.processo or '—' }}</p>
+    <p><b>Nº no PNCP:</b> {{ lic.numero_controle_pncp }}</p>
+    {% if lic.processo %}<p><b>Processo:</b> {{ lic.processo }}</p>{% endif %}
     <p><b>Compra:</b> {{ lic.numero_compra }}/{{ lic.ano_compra }}</p>
-    <p><b>Órgão:</b> {{ lic.orgao_nome }} ({{ lic.orgao_cnpj }})</p>
-    <p><b>Unidade:</b> {{ lic.unidade_nome or '—' }}</p>
-    <p><b>Local:</b> {{ lic.municipio_nome }}/{{ lic.uf }}
-       (IBGE {{ lic.municipio_ibge }})</p>
-    <p><b>Publicação:</b> {{ (lic.data_publicacao_pncp or '—')[:16].replace('T',' ') }}</p>
-    <p><b>Abertura:</b> {{ (lic.data_abertura_proposta or '—')[:16].replace('T',' ') }}</p>
-    <p><b>Encerramento:</b>
-       {{ (lic.data_encerramento_proposta or '—')[:16].replace('T',' ') }}</p>
+    <p class="truncar" title="{{ lic.orgao_nome or '' }}"><b>Órgão:</b>
+      {{ lic.orgao_nome|sentenca }}</p>
+    {% if lic.unidade_nome %}<p class="truncar"
+      title="{{ lic.unidade_nome }}"><b>Unidade:</b>
+      {{ lic.unidade_nome|sentenca }}</p>{% endif %}
+    <p><b>Local:</b> {{ lic.municipio_nome }}/{{ lic.uf }}</p>
+    <p><b>Publicado:</b> {{ lic.data_publicacao_pncp|quando }}</p>
+    <p><b>Propostas de:</b> {{ lic.data_abertura_proposta|quando }}</p>
+    <p><b>até:</b> {{ lic.data_encerramento_proposta|quando }}</p>
     <p><b>SRP:</b> {{ 'sim' if lic.srp else 'não' }}</p>
-    <p><b>Situação no portal:</b> {{ lic.situacao or '—' }}</p>
-    <p><b>Coletado em:</b> {{ lic.coletado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p><b>Situação no portal:</b> {{ lic.situacao or 'não informada' }}</p>
+    <p><b>No radar desde:</b> {{ lic.coletado_em.strftime('%d/%m %H:%M') }}</p>
+    {% if lic.valor_total_estimado %}
     <p><b>Valor estimado:</b>
-       {{ 'R$ {:,.2f}'.format(lic.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.')
-          if lic.valor_total_estimado else 'não informado' }}</p>
+       {{ 'R$ {:,.2f}'.format(lic.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.') }}</p>
+    {% endif %}
   </div>
-  <p class="whitespace-pre-wrap"><b>Objeto completo:</b> {{ lic.objeto }}</p>
+  <p class="whitespace-pre-wrap"><b>Objeto completo:</b>
+    {{ lic.objeto|sentenca }}</p>
   <p class="flex gap-4">
     {% if lic.link_pncp %}
-      <a href="{{ lic.link_pncp }}" target="_blank"
-         class="text-blue-700 underline">🔗 Página no PNCP</a>{% endif %}
+      <a href="{{ lic.link_pncp }}" target="_blank" class="text-blue-700
+         underline inline-flex items-center gap-1">
+        <i data-lucide="external-link" class="lucide"></i> Página no PNCP</a>
+    {% endif %}
     {% if lic.link_sistema_origem %}
       <a href="{{ lic.link_sistema_origem }}" target="_blank"
-         class="text-blue-700 underline">🔗 Sistema de origem</a>{% endif %}
+         class="text-blue-700 underline inline-flex items-center gap-1">
+        <i data-lucide="external-link" class="lucide"></i> Sistema de origem</a>
+    {% endif %}
   </p>
 
   {% if alteracoes %}
-  <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs">
-    <p class="font-semibold text-orange-900 mb-1">✏️ Este edital já mudou
-      depois de coletado</p>
-    <ul class="space-y-0.5 text-orange-900">
+  {% call c.faixa('atencao', 'file-diff') %}
+    <p class="font-semibold text-xs mb-1">Este edital mudou depois de entrar
+      no radar</p>
+    <ul class="space-y-0.5 text-xs">
       {% for a in alteracoes %}
       <li>{{ a.detectada_em.strftime('%d/%m %H:%M') }} —
         <b>{{ rotulos_alteracao.get(a.campo, a.campo) }}</b>:
         {{ a.valor_antigo[:120] }} → <b>{{ a.valor_novo[:120] }}</b></li>
       {% endfor %}
     </ul>
-  </div>
+  {% endcall %}
   {% endif %}
 
   <div id="arqs{{ lic.id }}">{% include "_arquivos.html" %}</div>
@@ -47,8 +55,8 @@
   {% include "_ficha_edital.html" %}
 
   {% if minutas %}
-  <div class="text-xs bg-white border border-slate-200 rounded-lg px-3 py-2">
-    <b>📜 Minutas geradas:</b>
+  <div class="card text-xs px-3 py-2">
+    <b>Minutas geradas:</b>
     {% for m in minutas %}
     <a href="/minutas/{{ m.id }}" class="text-blue-700 underline ml-2">
       {{ m.tipo }} de {{ m.criada_em.strftime('%d/%m %H:%M') }}</a>
@@ -58,15 +66,14 @@
 
   {% for m in matches %}
   <form hx-post="/matches/{{ m.id }}" hx-target="#salvo{{ m.id }}"
-        class="border border-slate-200 rounded-lg p-3 bg-white
-               flex gap-3 flex-wrap items-end">
+        class="card p-3 flex gap-3 flex-wrap items-end">
     <span class="text-xs text-slate-500 w-full">
-      Perfil: <b>{{ m.perfil.nome }}</b> · match em
+      Perfil: <b>{{ m.perfil.nome }}</b> · encontrado em
       {{ m.data_match.strftime('%d/%m/%Y') }}
       {% if m.termos %} · casou pelas palavras:
-        <b class="text-purple-700">{{ m.termos }}</b>{% endif %}</span>
-    <label>Status<br>
-      <select name="status" class="border border-slate-300 rounded-lg px-2 py-1">
+        <b class="text-blue-700">{{ m.termos }}</b>{% endif %}</span>
+    <label>Minha triagem<br>
+      <select name="status" class="select" style="min-height: 36px">
         {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
         <option value="{{ st }}" {{ 'selected' if m.status == st }}>
           {{ st.replace('_', ' ') }}</option>
@@ -74,21 +81,24 @@
       </select>
     </label>
     <label class="flex items-center gap-1 pb-1.5">
-      <input type="checkbox" name="favorito" {{ 'checked' if m.favorito }}> ⭐ favorito
+      <input type="checkbox" name="favorito" {{ 'checked' if m.favorito }}>
+      <i data-lucide="star" class="lucide text-amber-500"></i> favorito
     </label>
     <label class="flex-1 min-w-48">Anotação<br>
       <input name="anotacao" value="{{ m.anotacao or '' }}"
              placeholder="suas observações..."
-             class="w-full border border-slate-300 rounded-lg px-2 py-1">
+             class="input w-full" style="min-height: 36px">
     </label>
-    <button class="bg-blue-700 text-white px-3 py-1.5 rounded-lg">Salvar</button>
+    <button class="btn" style="min-height: 36px">Salvar triagem</button>
     <span id="salvo{{ m.id }}"></span>
   </form>
   {% endfor %}
 
+  {% if sou_admin %}
   <details class="text-xs">
-    <summary class="cursor-pointer text-slate-500">JSON bruto da API</summary>
+    <summary class="cursor-pointer text-slate-500">Dados brutos (suporte)</summary>
     <pre class="bg-slate-900 text-green-200 rounded-lg p-3 overflow-x-auto
                 mt-1">{{ lic.payload_json }}</pre>
   </details>
+  {% endif %}
 </div>

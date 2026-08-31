@@ -2,7 +2,7 @@
   <b class="text-sm">Documentos:</b>
   {% for a in arquivos %}
     <a href="/arquivos/{{ a.id }}"
-       class="text-blue-700 underline text-sm">📄 {{ a.tipo }} — {{ a.titulo }}</a>
+       class="text-blue-700 underline text-sm"><i data-lucide="file-text" class="lucide"></i> {{ a.tipo }} — {{ a.titulo }}</a>
   {% else %}
     <span class="text-sm text-slate-500">nenhum baixado ainda.</span>
   {% endfor %}
@@ -10,7 +10,7 @@
   <button hx-post="/licitacoes/{{ lic.id }}/baixar" hx-target="#arqs{{ lic.id }}"
           hx-swap="innerHTML" hx-indicator="#ind{{ lic.id }}"
           class="border border-blue-700 text-blue-700 px-3 py-1 rounded-lg
-                 text-xs hover:bg-blue-50">⬇ Buscar documentos no PNCP</button>
+                 text-xs hover:bg-blue-50"><i data-lucide="download" class="lucide"></i> Buscar documentos no PNCP</button>
   <span id="ind{{ lic.id }}" class="htmx-indicator text-xs text-slate-500">
     baixando...</span>
   {% endif %}

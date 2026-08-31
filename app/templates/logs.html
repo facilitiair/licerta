@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Logs — Licerta{% endblock %}
 {% block conteudo %}
-<h2 class="font-bold text-lg mb-1">Registros de coleta</h2>
-<p class="text-xs text-slate-500 mb-3">Diagnóstico do robô: cada linha é uma
-  rodada de coleta, com duração e eventuais erros. Você só precisa vir aqui
-  se algo parecer errado.</p>
+<h2 class="font-bold text-lg mb-1">Diagnóstico</h2>
+<p class="text-xs text-slate-500 mb-3">Cada linha é uma atualização
+  automática, com duração e eventuais erros. Você só precisa vir aqui se
+  algo parecer errado.</p>
 {% if custo_ia is not none %}
 <p class="text-xs bg-indigo-50 border border-indigo-200 text-indigo-900
-          rounded-lg px-3 py-2 mb-3">🧠 IA até agora: <b>{{ fichas }}</b>
+          rounded-lg px-3 py-2 mb-3"><i data-lucide="file-search" class="lucide"></i> Análises até agora: <b>{{ fichas }}</b>
   ficha{{ 's' if fichas != 1 }} de edital gerada{{ 's' if fichas != 1 }} ·
   custo acumulado <b>US$ {{ '%.2f' % custo_ia }}</b>
   (registro completo em <code>data/ia_custos.jsonl</code>).</p>
@@ -31,9 +31,9 @@
       <td class="px-3 py-2">
         {{ '%.0fs' % (r.fim - r.inicio).total_seconds() if r.fim else 'em andamento...' }}</td>
       <td class="px-3 py-2">
-        {% if not r.fim %}⏳
-        {% elif r.sucesso %}<span class="text-green-700 font-semibold">✔ sucesso</span>
-        {% else %}<span class="text-red-700 font-semibold">✖ com erros</span>{% endif %}</td>
+        {% if not r.fim %}<i data-lucide="hourglass" class="lucide"></i>
+        {% elif r.sucesso %}<span class="text-green-700 font-semibold"><i data-lucide="check" class="lucide"></i> sucesso</span>
+        {% else %}<span class="text-red-700 font-semibold"><i data-lucide="x" class="lucide"></i> com erros</span>{% endif %}</td>
       <td class="px-3 py-2">{{ r.qtd_novas }}</td>
       <td class="px-3 py-2">
         {{ r.qtd_erros }}

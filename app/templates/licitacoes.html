@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 {% block titulo %}Licitações — Licerta{% endblock %}
 {% block conteudo %}
-<h2 class="font-bold text-lg mb-1">Meu radar ({{ total }})</h2>
+{% import "_componentes.html" as c %}
+<h2 class="font-bold text-lg mb-1">Oportunidades</h2>
 <p class="text-xs text-slate-500 mb-3">Aqui ficam as licitações que os seus
-  <a href="/perfis" class="text-blue-700 underline">perfis</a> coletaram
+  <a href="/perfis" class="text-blue-700 underline">perfis</a> encontraram
   (hoje: os estados configurados neles). Para buscar em <b>qualquer estado,
   cidade ou órgão do Brasil</b>, use a tela
-  <a href="/pesquisar" class="text-blue-700 underline">🌐 Pesquisar PNCP</a>.</p>
+  <a href="/pesquisar" class="text-blue-700 underline">Pesquisar no PNCP</a>.</p>
 
 <form method="get" action="/licitacoes"
       class="bg-white rounded-xl border border-slate-200 p-3 mb-4
              flex gap-2 flex-wrap items-end text-sm">
   <label>Perfil<br>
-    <select name="perfil_id" class="border border-slate-300 rounded-lg px-2 py-1.5">
+    <select name="perfil_id" class="select">
       <option value="">— todos —</option>
       {% for p in perfis %}
       <option value="{{ p.id }}" {{ 'selected' if filtros.perfil_id == p.id|string }}>
@@ -21,7 +22,7 @@
     </select>
   </label>
   <label>Minha triagem<br>
-    <select name="status" class="border border-slate-300 rounded-lg px-2 py-1.5">
+    <select name="status" class="select">
       <option value="">— todas —</option>
       {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
       <option value="{{ st }}" {{ 'selected' if filtros.status == st }}>
@@ -30,7 +31,7 @@
     </select>
   </label>
   <label>Situação no portal<br>
-    <select name="situacao" class="border border-slate-300 rounded-lg px-2 py-1.5">
+    <select name="situacao" class="select">
       <option value="">— todas —</option>
       {% for sit in situacoes %}
       <option {{ 'selected' if filtros.situacao == sit }}>{{ sit }}</option>
@@ -38,7 +39,7 @@
     </select>
   </label>
   <label>Estado<br>
-    <select name="uf" class="border border-slate-300 rounded-lg px-2 py-1.5">
+    <select name="uf" class="select">
       <option value="">— todos —</option>
       {% for uf in ufs %}
       <option {{ 'selected' if filtros.uf == uf }}>{{ uf }}</option>
@@ -48,10 +49,10 @@
   <label>Cidade<br>
     <input type="text" name="municipio" value="{{ filtros.municipio }}"
            placeholder="ex.: Teresina" size="12"
-           class="border border-slate-300 rounded-lg px-2 py-1.5">
+           class="select">
   </label>
   <label>Modalidade<br>
-    <select name="modalidade" class="border border-slate-300 rounded-lg px-2 py-1.5">
+    <select name="modalidade" class="select">
       <option value="">— todas —</option>
       {% for m in modalidades %}
       <option value="{{ m.codigo }}"
@@ -61,26 +62,26 @@
   </label>
   <label>Encerra de<br>
     <input type="date" name="data_ini" value="{{ filtros.data_ini }}"
-           class="border border-slate-300 rounded-lg px-2 py-1.5">
+           class="select">
   </label>
   <label>até<br>
     <input type="date" name="data_fim" value="{{ filtros.data_fim }}"
-           class="border border-slate-300 rounded-lg px-2 py-1.5">
+           class="select">
   </label>
   <label class="flex-1 min-w-40">Busca no objeto
     <span class="text-slate-400">(todas as palavras; acentos não importam)</span><br>
     <input type="search" name="q" value="{{ filtros.q }}"
            placeholder="ex.: pavimentacao asfaltica"
-           class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
+           class="input w-full">
   </label>
   <input type="hidden" name="ordenar" value="{{ filtros.ordenar }}">
-  <button class="bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold">Filtrar</button>
-  <a href="/licitacoes" class="text-slate-500 underline px-1">limpar</a>
+  <button class="btn">Filtrar</button>
+  <a href="/licitacoes?tudo=1" class="text-slate-500 underline px-1">ver tudo</a>
   <span class="ml-auto flex gap-2">
     <a href="/licitacoes/exportar?formato=csv&{{ query }}"
-       class="border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50">⬇ CSV</a>
+       class="btn-sec"><i data-lucide="download" class="lucide"></i> CSV</a>
     <a href="/licitacoes/exportar?formato=xlsx&{{ query }}"
-       class="border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50">⬇ XLSX</a>
+       class="btn-sec"><i data-lucide="download" class="lucide"></i> XLSX</a>
   </span>
 </form>
 
@@ -109,11 +110,11 @@
     <tr>
       <th class="px-3 py-2">
         {% call menu_coluna('Encerra', 'encerramento') %}
-          {{ item_menu(link(ordenar='encerramento_asc'), '⬆ Mais próximo primeiro',
+          {{ item_menu(link(ordenar='encerramento_asc'), '↑ Mais próximo primeiro',
                        filtros.ordenar == 'encerramento_asc') }}
-          {{ item_menu(link(ordenar='encerramento_desc'), '⬇ Mais distante primeiro',
+          {{ item_menu(link(ordenar='encerramento_desc'), '↓ Mais distante primeiro',
                        filtros.ordenar == 'encerramento_desc') }}
-          {{ item_menu(link(ordenar='publicacao_desc'), '🆕 Publicação mais recente',
+          {{ item_menu(link(ordenar='publicacao_desc'), 'Publicação mais recente',
                        filtros.ordenar == 'publicacao_desc') }}
           <div class="border-t border-slate-100"></div>
           {{ item_menu(link(data_ini=hoje, data_fim=em7), 'Encerram em 7 dias') }}
@@ -124,9 +125,9 @@
       </th>
       <th class="px-3 py-2">
         {% call menu_coluna('Modalidade', 'modalidade') %}
-          {{ item_menu(link(ordenar='modalidade_asc'), '⬆ A → Z',
+          {{ item_menu(link(ordenar='modalidade_asc'), '↑ A → Z',
                        filtros.ordenar == 'modalidade_asc') }}
-          {{ item_menu(link(ordenar='modalidade_desc'), '⬇ Z → A',
+          {{ item_menu(link(ordenar='modalidade_desc'), '↓ Z → A',
                        filtros.ordenar == 'modalidade_desc') }}
           <div class="border-t border-slate-100"></div>
           {{ item_menu(link(modalidade=''), '— todas as modalidades —',
@@ -145,9 +146,9 @@
       </th>
       <th class="px-3 py-2">
         {% call menu_coluna('Estado', 'uf') %}
-          {{ item_menu(link(ordenar='uf_asc'), '⬆ A → Z (padrão)',
+          {{ item_menu(link(ordenar='uf_asc'), '↑ A → Z (padrão)',
                        filtros.ordenar in ('uf_asc', '')) }}
-          {{ item_menu(link(ordenar='uf_desc'), '⬇ Z → A',
+          {{ item_menu(link(ordenar='uf_desc'), '↓ Z → A',
                        filtros.ordenar == 'uf_desc') }}
           <div class="border-t border-slate-100"></div>
           {{ item_menu(link(uf=''), '— todos os estados —', not filtros.uf) }}
@@ -158,17 +159,17 @@
       </th>
       <th class="px-3 py-2">
         {% call menu_coluna('Município / Órgão', 'municipio') %}
-          {{ item_menu(link(ordenar='municipio_asc'), '⬆ Município A → Z',
+          {{ item_menu(link(ordenar='municipio_asc'), '↑ Município A → Z',
                        filtros.ordenar == 'municipio_asc') }}
-          {{ item_menu(link(ordenar='municipio_desc'), '⬇ Município Z → A',
+          {{ item_menu(link(ordenar='municipio_desc'), '↓ Município Z → A',
                        filtros.ordenar == 'municipio_desc') }}
-          {{ item_menu(link(ordenar='orgao_asc'), '⬆ Órgão A → Z',
+          {{ item_menu(link(ordenar='orgao_asc'), '↑ Órgão A → Z',
                        filtros.ordenar == 'orgao_asc') }}
         {% endcall %}
       </th>
       <th class="px-3 py-2 w-1/2">
         {% call menu_coluna('Objeto', 'objeto') %}
-          {{ item_menu(link(ordenar='objeto_asc'), '⬆ A → Z',
+          {{ item_menu(link(ordenar='objeto_asc'), '↑ A → Z',
                        filtros.ordenar == 'objeto_asc') }}
           <div class="border-t border-slate-100"></div>
           {{ item_menu(link(status=''), 'Triagem: todas', not filtros.status) }}
@@ -180,9 +181,9 @@
       </th>
       <th class="px-3 py-2 text-right">
         {% call menu_coluna('Valor', 'valor') %}
-          {{ item_menu(link(ordenar='valor_asc'), '⬆ Menor → maior',
+          {{ item_menu(link(ordenar='valor_asc'), '↑ Menor → maior',
                        filtros.ordenar == 'valor_asc') }}
-          {{ item_menu(link(ordenar='valor_desc'), '⬇ Maior → menor',
+          {{ item_menu(link(ordenar='valor_desc'), '↓ Maior → menor',
                        filtros.ordenar == 'valor_desc') }}
         {% endcall %}
       </th>
@@ -193,33 +194,38 @@
     {% for l in linhas %}
     {% set m = matches.get(l.id) %}
     <tr class="hover:bg-blue-50/40 align-top">
-      {% set dias = ((l.data_encerramento_proposta or '')[:10] >= hoje) %}
+      {% set vigente = ((l.data_encerramento_proposta or '')[:10] >= hoje) %}
+      {% set fecha_hoje = (l.data_encerramento_proposta or '')[:10] == hoje %}
       <td class="px-3 py-2 whitespace-nowrap">
-        <span class="px-1.5 py-0.5 rounded-md text-xs font-medium
-          {{ 'bg-red-100 text-red-700' if (l.data_encerramento_proposta or '')[:10] == hoje
-             else 'bg-slate-100 text-slate-700' if dias else 'text-slate-400' }}">
-          {{ l.data_encerramento_proposta|quando }}</span></td>
+        {# Vermelho reservado (UI §5): só quando EU marquei "vou participar" #}
+        {{ c.badge(l.data_encerramento_proposta|quando,
+                   'critico' if fecha_hoje and m and m.status == 'vou_participar'
+                   else 'atencao' if fecha_hoje
+                   else 'neutro' if vigente else 'neutro') }}</td>
       <td class="px-3 py-2">{{ l.modalidade_nome }}
         {% if l.srp %}<span class="text-xs text-blue-700">SRP</span>{% endif %}
-        {% if l.situacao %}<br><span class="text-[10px] px-1.5 rounded-full
-          {{ 'bg-red-100 text-red-700' if 'anulad' in l.situacao.lower()
-             or 'revogad' in l.situacao.lower() or 'suspens' in l.situacao.lower()
-             else 'bg-slate-100 text-slate-600' }}">{{ l.situacao }}</span>{% endif %}</td>
+        {% if l.situacao %}<br>
+          {{ c.badge(l.situacao,
+                     'atencao' if 'anulad' in l.situacao.lower()
+                       or 'revogad' in l.situacao.lower()
+                       or 'suspens' in l.situacao.lower() else 'neutro') }}
+        {% endif %}</td>
       <td class="px-3 py-2">{{ l.uf }}</td>
-      <td class="px-3 py-2">{{ l.municipio_nome }}<br>
-        <span class="text-xs text-slate-500">{{ l.orgao_nome or '' }}</span></td>
+      <td class="px-3 py-2 max-w-48">
+        <span class="block truncar" title="{{ l.municipio_nome or '' }}">
+          {{ l.municipio_nome or '' }}</span>
+        <span class="block truncar text-xs text-slate-500"
+              title="{{ l.orgao_nome or '' }}">{{ l.orgao_nome|sentenca }}</span></td>
       <td class="px-3 py-2">
         {% if m %}
-          <span class="text-xs px-1.5 py-0.5 rounded-full mr-1
-            {{ {'novo': 'bg-amber-100 text-amber-800',
-                'analisando': 'bg-blue-100 text-blue-800',
-                'vou_participar': 'bg-green-100 text-green-800',
-                'descartado': 'bg-slate-200 text-slate-500'}[m.status] }}">
-            {{ m.status.replace('_', ' ') }}</span>
-          {% if m.favorito %}⭐{% endif %}
+          {{ c.badge(m.status.replace('_', ' '),
+                     {'novo': 'atencao', 'analisando': 'primario',
+                      'vou_participar': 'sucesso'}.get(m.status, 'neutro')) }}
+          {% if m.favorito %}<i data-lucide="star"
+             class="lucide text-amber-500"></i>{% endif %}
         {% endif %}
         <span class="line-clamp-2 text-slate-700"
-              title="{{ l.objeto or '' }}">{{ l.objeto or '' }}</span></td>
+              title="{{ l.objeto or '' }}">{{ l.objeto|sentenca }}</span></td>
       <td class="px-3 py-2 text-right whitespace-nowrap font-medium">
         {{ l.valor_total_estimado|dinheiro }}</td>
       <td class="px-3 py-2">
@@ -231,9 +237,16 @@
     </tr>
     <tr><td colspan="7" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
     {% else %}
-    <tr><td colspan="7" class="px-3 py-4 text-center text-sm text-slate-500">
-      Nada coletado no seu radar com esses filtros
-      {% if vivo %}— mas buscamos ao vivo no PNCP e encontramos ⤵{% endif %}
+    <tr><td colspan="7">
+      {% if vivo %}
+      <p class="px-3 py-4 text-center text-sm text-slate-500">Nada por aqui
+        com esses filtros — mas buscamos ao vivo no PNCP e encontramos, logo
+        abaixo.</p>
+      {% else %}
+      {{ c.estado_vazio('Nenhuma oportunidade com esses filtros. Afrouxe os
+                         filtros ou busque em todo o Brasil.',
+                        'search-x', '/pesquisar', 'Pesquisar no PNCP') }}
+      {% endif %}
     </td></tr>
     {% endfor %}
   </tbody>
@@ -256,30 +269,34 @@
 
 {% if vivo %}
 <div class="mt-6">
-  <h3 class="font-bold mb-1">🌐 Encontrados ao vivo no PNCP
-    ({{ '{:,}'.format(vivo_total).replace(',', '.') }} no total — mostrando
-    os {{ vivo|length }} mais recentes)</h3>
-  <p class="text-xs text-slate-500 mb-3">Salve os que interessarem — entram no
-    seu radar, funil e agenda. Para ver os demais ou refinar mais, use a
+  <h3 class="font-bold mb-1">Encontrados ao vivo no PNCP</h3>
+  <p class="text-xs text-slate-500 mb-3">Salve os que interessarem — entram
+    nas suas oportunidades, funil e agenda. Para ver mais ou refinar, use a
     <a href="/pesquisar?{% if filtros.q %}q={{ filtros.q }}&{% endif %}{% if filtros.uf %}ufs={{ filtros.uf }}&{% endif %}status=abertas"
        class="text-blue-700 underline">pesquisa completa</a>.</p>
   <div class="space-y-2">
     {% for it in vivo %}
-    <div class="bg-white rounded-xl border border-blue-200 p-4">
-      <p class="text-xs text-slate-500">
+    <div class="card p-4" style="border-color: var(--cor-primaria-borda)">
+      <p class="text-xs text-slate-500 truncar"
+         title="{{ it.orgao_nome or '' }}">
         {{ it.modalidade_nome }} · {{ it.municipio_nome }}/{{ it.uf }} ·
-        {{ it.orgao_nome }} · {{ it.situacao }}</p>
-      <p class="text-sm my-1">{{ it.objeto }}</p>
+        {{ it.orgao_nome|sentenca }} · {{ it.situacao }}</p>
+      <p class="text-sm my-1" title="{{ it.objeto or '' }}">{{ it.objeto|sentenca }}</p>
       <div class="flex gap-4 items-center flex-wrap text-xs">
-        <span>💰 {{ 'R$ {:,.2f}'.format(it.valor_total_estimado)
-                    .replace(',', 'X').replace('.', ',').replace('X', '.')
-                    if it.valor_total_estimado else 'valor não informado' }}</span>
-        <span>⏱️ até {{ (it.data_encerramento_proposta or 'ver edital')[:16].replace('T',' ') }}</span>
+        {% if it.valor_total_estimado %}
+        <span class="font-medium">{{ it.valor_total_estimado|dinheiro }}</span>
+        {% endif %}
+        <span class="inline-flex items-center gap-1">
+          <i data-lucide="alarm-clock" class="lucide"></i>
+          até {{ it.data_encerramento_proposta|quando if
+                 it.data_encerramento_proposta else 'ver edital' }}</span>
         {% if it.link_pncp %}
         <a href="{{ it.link_pncp }}" target="_blank"
-           class="text-blue-700 underline">🔗 abrir edital</a>{% endif %}
+           class="text-blue-700 underline inline-flex items-center gap-1">
+          <i data-lucide="external-link" class="lucide"></i> abrir edital</a>{% endif %}
         {% if it.ja_salvo %}
-          <span class="text-green-700 font-semibold">✔ no radar</span>
+          <span class="text-green-700 font-semibold inline-flex items-center
+                gap-1"><i data-lucide="check" class="lucide"></i> salvo</span>
         {% else %}
         <form hx-post="/pesquisar/salvar" hx-swap="outerHTML" class="inline">
           {% for campo in ['numero_controle_pncp','objeto','modalidade_nome',
@@ -289,8 +306,8 @@
                            'link_pncp','situacao','valor_total_estimado'] %}
           <input type="hidden" name="{{ campo }}" value="{{ it[campo] or '' }}">
           {% endfor %}
-          <button class="border border-green-700 text-green-700 px-3 py-1
-                         rounded-lg hover:bg-green-50">⭐ Salvar no radar</button>
+          <button class="btn-sec" style="min-height: 36px">
+            <i data-lucide="star" class="lucide"></i> Salvar interesse</button>
         </form>
         {% endif %}
       </div>

@@ -186,9 +186,12 @@ def analisar_edital(sessao_db, lic, forcar=False):
             mensagem=_mensagem(lic, texto),
             modelo=camadas.EXTRACAO, max_tokens=16000, json_estrito=True)
         dados = _validar_ficha(resposta)
-    except Exception as e:  # noqa: BLE001 — falha vira erro legível na ficha
+    except Exception:  # noqa: BLE001 — falha vira erro legível na ficha
+        # O motivo técnico fica no log (e no aviso do vigia, se persistir);
+        # a tela fala a língua do usuário (UI §7), nunca HTTP nem stack.
         log.exception("Análise da licitação %s falhou", lic.id)
-        ficha.erro = f"A análise falhou: {e}"
+        ficha.erro = ("A análise não terminou desta vez. Tente de novo em "
+                      "instantes.")
         ficha.gerada_em = agora()
         sessao_db.commit()
         return ficha

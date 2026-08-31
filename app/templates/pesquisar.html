@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Pesquisar PNCP — Licerta{% endblock %}
 {% block conteudo %}
-<h1 class="text-xl font-bold mb-1">🌐 Pesquisar no PNCP</h1>
+<h1 class="text-xl font-bold mb-1"><i data-lucide="globe" class="lucide"></i> Pesquisar no PNCP</h1>
 <p class="text-xs text-slate-500 mb-4">Busca <b>ao vivo</b> no portal nacional —
   qualquer objeto, qualquer lugar do Brasil, independente dos seus perfis.</p>
 
@@ -14,7 +14,7 @@
            placeholder="O que procura? ex.: perfuração de poço, climatização, merenda escolar..."
            class="flex-1 min-w-64 border border-slate-300 rounded-lg px-3 py-2.5">
     <button class="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold
-                   hover:bg-blue-700">🔍 Pesquisar</button>
+                   hover:bg-blue-700"><i data-lucide="search" class="lucide"></i> Pesquisar</button>
     <a href="/pesquisar" class="text-slate-500 underline text-xs">limpar tudo</a>
   </div>
   <div class="flex gap-5 flex-wrap items-center text-xs">
@@ -39,7 +39,7 @@
   <!-- Estados -->
   <details {{ 'open' if f_ufs }} class="border-t border-slate-100 pt-3">
     <summary class="cursor-pointer font-semibold text-xs text-slate-600">
-      📍 Estados {{ '(' ~ f_ufs|join(', ') ~ ')' if f_ufs else '(Brasil inteiro)' }}
+      <i data-lucide="map-pin" class="lucide"></i> Estados {{ '(' ~ f_ufs|join(', ') ~ ')' if f_ufs else '(Brasil inteiro)' }}
     </summary>
     <div class="grid grid-cols-5 sm:grid-cols-9 gap-1 mt-2 text-xs">
       {% for u in ufs %}
@@ -53,7 +53,7 @@
   <!-- Modalidades e esfera -->
   <details {{ 'open' if f_mods or f_esferas }} class="border-t border-slate-100 pt-3">
     <summary class="cursor-pointer font-semibold text-xs text-slate-600">
-      ⚖️ Modalidades e esfera
+      <i data-lucide="scale" class="lucide"></i> Modalidades e esfera
       {{ '(' ~ (f_mods|length + f_esferas|length) ~ ' filtro(s))' if f_mods or f_esferas else '(todas)' }}
     </summary>
     <div class="grid sm:grid-cols-3 gap-1 mt-2 text-xs">
@@ -76,7 +76,7 @@
   <!-- Municípios e órgãos (IDs oficiais do portal, com autocomplete) -->
   <details {{ 'open' if f_muns or f_orgs }} class="border-t border-slate-100 pt-3">
     <summary class="cursor-pointer font-semibold text-xs text-slate-600">
-      🏛 Municípios e órgãos
+      <i data-lucide="landmark" class="lucide"></i> Municípios e órgãos
       {{ '(' ~ (f_muns|length + f_orgs|length) ~ ' selecionado(s))'
          if f_muns or f_orgs else '(todos)' }}</summary>
     <div class="grid sm:grid-cols-2 gap-4 mt-2 text-xs">
@@ -125,7 +125,7 @@
   <details {{ 'open' if valor_min or valor_max }}
            class="border-t border-slate-100 pt-3">
     <summary class="cursor-pointer font-semibold text-xs text-slate-600">
-      💰 Faixa de valor</summary>
+      Faixa de valor</summary>
     <div class="flex gap-3 flex-wrap mt-2 text-xs items-end">
       <input type="hidden" name="cidade" value="">
       <label>Valor mínimo (R$)<br>
@@ -186,7 +186,7 @@
   <a href="/perfis/novo?{{ query_perfil }}"
      class="ml-auto text-xs border border-purple-600 text-purple-700 px-3 py-1.5
             rounded-lg hover:bg-purple-50 font-semibold">
-    🎯 Monitorar esta busca (criar perfil)</a>
+    <i data-lucide="target" class="lucide"></i> Monitorar esta busca (criar perfil)</a>
 </div>
 {% endif %}
 
@@ -198,15 +198,15 @@
       {{ it.orgao_nome }} · {{ it.situacao }}</p>
     <p class="text-sm my-1">{{ it.objeto }}</p>
     <div class="flex gap-4 items-center flex-wrap text-xs">
-      <span>💰 {{ 'R$ {:,.2f}'.format(it.valor_total_estimado)
+      <span>{{ 'R$ {:,.2f}'.format(it.valor_total_estimado)
                   .replace(',', 'X').replace('.', ',').replace('X', '.')
                   if it.valor_total_estimado else 'valor não informado' }}</span>
-      <span>⏱️ propostas até {{ (it.data_encerramento_proposta or 'ver edital')[:16].replace('T',' ') }}</span>
+      <span><i data-lucide="alarm-clock" class="lucide"></i> propostas até {{ (it.data_encerramento_proposta or 'ver edital')[:16].replace('T',' ') }}</span>
       {% if it.link_pncp %}
       <a href="{{ it.link_pncp }}" target="_blank"
-         class="text-blue-700 underline">🔗 abrir edital</a>{% endif %}
+         class="text-blue-700 underline"><i data-lucide="external-link" class="lucide"></i> abrir edital</a>{% endif %}
       {% if it.ja_salvo %}
-        <span class="text-green-700 font-semibold">✔ no radar</span>
+        <span class="text-green-700 font-semibold"><i data-lucide="check" class="lucide"></i> no radar</span>
       {% else %}
       <form hx-post="/pesquisar/salvar" hx-swap="outerHTML" class="inline">
         {% for campo in ['numero_controle_pncp','objeto','modalidade_nome',
@@ -217,7 +217,7 @@
         <input type="hidden" name="{{ campo }}" value="{{ it[campo] or '' }}">
         {% endfor %}
         <button class="border border-green-700 text-green-700 px-3 py-1
-                       rounded-lg hover:bg-green-50">⭐ Salvar no radar</button>
+                       rounded-lg hover:bg-green-50"><i data-lucide="star" class="lucide"></i> Salvar no radar</button>
       </form>
       {% endif %}
     </div>
@@ -230,7 +230,7 @@
     {% elif not consultou %}
     <p class="text-slate-500 text-sm">Monte sua busca acima e clique em
       Pesquisar. Dica: achou uma busca boa? Use
-      <b>🎯 Monitorar esta busca</b> para o radar vigiá-la todo dia.</p>
+      <b><i data-lucide="target" class="lucide"></i> Monitorar esta busca</b> para o radar vigiá-la todo dia.</p>
     {% endif %}
   {% endfor %}
 </div>

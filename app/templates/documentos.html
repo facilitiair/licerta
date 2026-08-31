@@ -1,35 +1,35 @@
 {% extends "base.html" %}
 {% block titulo %}Documentos — Licerta{% endblock %}
 {% block conteudo %}
-<h1 class="text-xl font-bold mb-1">📄 Documentos da empresa</h1>
-<p class="text-xs text-slate-500 mb-4">Certidões, atestados e afins do
-  dossiê — da empresa inteira, não de cada usuário. O app vigia as
-  validades e avisa os administradores aos 30, 15, 7, 3 e 1 dia do
-  vencimento (e no dia). A validade é calculada por código, nunca por IA.</p>
+{% import "_componentes.html" as c %}
+<h1 class="text-xl font-bold mb-1">Dossiê da empresa</h1>
+<p class="text-xs text-slate-500 mb-4">Certidões, atestados e afins —
+  da empresa inteira, não de cada usuário. Vigiamos as validades e
+  avisamos aos 30, 15, 7, 3 e 1 dia do vencimento (e no dia).</p>
 
 {% if aviso %}
 <p class="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-4
-          py-2 text-sm mb-4">💡 {{ aviso }}</p>
+          py-2 text-sm mb-4"><i data-lucide="lightbulb" class="lucide"></i> {{ aviso }}</p>
 {% endif %}
 
 <form method="post" action="/documentos" enctype="multipart/form-data"
-      class="bg-white rounded-2xl border-2 border-blue-200 p-4 mb-6
+      class="card p-4 mb-6
              flex gap-3 flex-wrap items-end text-sm">
   <label class="flex-1 min-w-52">Arquivo (PDF)<br>
     <input type="file" name="arquivo" accept=".pdf,.jpg,.png,.jpeg"
            class="mt-1 w-full text-xs"></label>
   <label class="flex-1 min-w-40">Nome<br>
     <input name="nome" placeholder="ex.: CND Federal set/2026"
-           class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5"></label>
+           class="input w-full mt-1" style="min-height: 36px"></label>
   <label>Tipo<br>
-    <select name="tipo" class="mt-1 border border-slate-300 rounded-lg px-2 py-1.5">
+    <select name="tipo" class="select mt-1" style="min-height: 36px">
       {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
     </select></label>
   <label>Válido até<br>
     <input type="date" name="validade"
-           class="mt-1 border border-slate-300 rounded-lg px-2 py-1.5"></label>
-  <button class="bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold
-                 hover:bg-blue-800">⬆ Adicionar</button>
+           class="select mt-1" style="min-height: 36px"></label>
+  <button class="btn"><i data-lucide="upload" class="lucide"></i>
+    Adicionar documento</button>
   <p class="w-full text-[11px] text-slate-400 -mt-1">Deixe a validade em
     branco num PDF de certidão: o app tenta ler a data do próprio documento
     e avisa que foi sugestão.</p>
@@ -44,10 +44,11 @@
          else 'border-amber-300' if item.situacao == 'vencendo'
          else 'border-slate-200' }}">
     <summary class="cursor-pointer px-4 py-3 flex items-center gap-3 text-sm">
-      <span>{{ '🗄️' if d.arquivado
-               else '🟥' if item.situacao == 'vencido'
-               else '🟧' if item.situacao == 'vencendo'
-               else '🟩' if item.situacao == 'vigente' else '⬜' }}</span>
+      {% if d.arquivado %}<i data-lucide="archive" class="lucide text-slate-400"></i>
+      {% elif item.situacao == 'vencido' %}<i data-lucide="circle-x" class="lucide text-red-600"></i>
+      {% elif item.situacao == 'vencendo' %}<i data-lucide="clock-alert" class="lucide text-amber-500"></i>
+      {% elif item.situacao == 'vigente' %}<i data-lucide="circle-check" class="lucide text-green-600"></i>
+      {% else %}<i data-lucide="circle-help" class="lucide text-slate-300"></i>{% endif %}
       <span class="font-semibold">{{ d.nome }}</span>
       <span class="text-xs text-slate-500">{{ d.tipo }}</span>
       <span class="ml-auto text-xs
@@ -64,9 +65,9 @@
             class="flex gap-3 flex-wrap items-end text-sm">
         <label class="flex-1 min-w-40">Nome<br>
           <input name="nome" value="{{ d.nome }}"
-                 class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5"></label>
+                 class="input w-full mt-1" style="min-height: 36px"></label>
         <label>Tipo<br>
-          <select name="tipo" class="mt-1 border border-slate-300 rounded-lg px-2 py-1.5">
+          <select name="tipo" class="select mt-1" style="min-height: 36px">
             {% for t in tipos %}
             <option {{ 'selected' if d.tipo == t }}>{{ t }}</option>
             {% endfor %}
@@ -74,20 +75,20 @@
           </select></label>
         <label>Válido até<br>
           <input type="date" name="validade" value="{{ d.validade or '' }}"
-                 class="mt-1 border border-slate-300 rounded-lg px-2 py-1.5"></label>
+                 class="select mt-1" style="min-height: 36px"></label>
         <label class="flex-1 min-w-48">Observação<br>
           <input name="observacao" value="{{ d.observacao or '' }}"
-                 class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5"></label>
-        <button class="bg-blue-700 text-white px-3 py-1.5 rounded-lg">Salvar</button>
+                 class="input w-full mt-1" style="min-height: 36px"></label>
+        <button class="btn" style="min-height: 36px">Salvar alterações</button>
       </form>
       <div class="flex gap-4 text-xs items-center">
         {% if d.caminho_local %}
         <a href="/documentos/{{ d.id }}/arquivo" target="_blank"
-           class="text-blue-700 underline">📎 Abrir arquivo</a>
+           class="text-blue-700 underline"><i data-lucide="paperclip" class="lucide"></i> Abrir arquivo</a>
         {% else %}<span class="text-slate-400">sem arquivo anexado</span>{% endif %}
         <form method="post" action="/documentos/{{ d.id }}/arquivar">
           <button class="text-slate-500 underline">
-            {{ 'Restaurar' if d.arquivado else '🗄️ Arquivar (não vigiar mais)' }}
+            {{ 'Restaurar' if d.arquivado else 'Arquivar (não vigiar mais)' }}
           </button>
         </form>
         <span class="text-slate-400 ml-auto">adicionado em
@@ -96,10 +97,10 @@
     </div>
   </details>
   {% else %}
-  <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center
-              text-sm text-slate-500">
-    Nenhum documento ainda. Suba a primeira certidão acima — o app passa a
-    vigiar o vencimento sozinho.
+  <div class="card">
+    {{ c.estado_vazio('Nenhum documento ainda. Suba a primeira certidão
+                       acima — passamos a vigiar o vencimento para você.',
+                      'folder-open') }}
   </div>
   {% endfor %}
 </div>

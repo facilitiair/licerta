@@ -124,7 +124,10 @@ def test_ia_fora_do_ar_vira_erro_e_pode_tentar_de_novo(sessao, lic, ia_dublada,
         raise RuntimeError("API 500")
     monkeypatch.setattr(analise.cliente, "chamar", explode)
     ficha = analise.analisar_edital(sessao, lic)
-    assert "falhou" in ficha.erro and not ficha.ficha_json
+    # A tela fala a língua do usuário (UI §7): nada de HTTP nem stack —
+    # o motivo técnico vai para o log.
+    assert "não terminou" in ficha.erro and not ficha.ficha_json
+    assert "500" not in ficha.erro
     # a IA volta: a MESMA linha é reaproveitada (erro pendente não trava)
     monkeypatch.setattr(analise.cliente, "chamar",
                         lambda *a, **k: '{"resumo": "agora foi"}')

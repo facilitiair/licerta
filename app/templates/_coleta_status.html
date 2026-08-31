@@ -1,11 +1,12 @@
 {% if coletando %}
   <span class="inline-flex items-center gap-2 text-amber-700 text-sm"
         hx-get="/coleta/status" hx-trigger="every 5s" hx-swap="outerHTML">
-    ⏳ Coletando do PNCP... (a página atualiza sozinha)
+    <i data-lucide="loader-circle" class="lucide animate-spin"></i>
+    Buscando novidades... (a página atualiza sozinha)
   </span>
 {% else %}
-  <span class="text-sm text-green-700"
+  <span class="inline-flex items-center gap-2 text-sm text-green-700"
         hx-get="/" hx-trigger="load" hx-target="body" hx-swap="innerHTML">
-    ✅ Coleta concluída — atualizando...
+    <i data-lucide="check" class="lucide"></i> Tudo atualizado — recarregando...
   </span>
 {% endif %}

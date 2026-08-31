@@ -21,15 +21,15 @@
         {{ 'ativo' if u.ativo else 'desativado' }}</span>
       <span class="text-xs text-slate-400">
         {{ u.perfis|length }} perfil(is)
-        · canais: {{ '✈️' if u.telegram_chat_id }}
-        {{ '✉️' if u.email_alertas }}
-        {{ '📱' if u.assinaturas_push }}</span>
+        · canais: {{ 'Telegram' if u.telegram_chat_id }}
+        {{ '<i data-lucide="mail" class="lucide"></i>️' if u.email_alertas }}
+        {{ 'push' if u.assinaturas_push }}</span>
     </div>
     <div class="flex gap-2 mt-3 text-sm flex-wrap">
       {% if u.id != meu_id %}
       <form method="post" action="/usuarios/{{ u.id }}/toggle">
         <button class="px-3 py-1 border border-slate-300 rounded-lg
-              hover:bg-slate-50">{{ '⏸ Desativar' if u.ativo else '▶ Reativar' }}</button>
+              hover:bg-slate-50">{{ 'Desativar' if u.ativo else 'Reativar' }}</button>
       </form>
       {% endif %}
       <form method="post" action="/usuarios/{{ u.id }}/senha" class="flex gap-2">
@@ -37,7 +37,7 @@
                minlength="6" required
                class="border border-slate-300 rounded-lg px-2 py-1 w-40">
         <button class="px-3 py-1 border border-slate-300 rounded-lg
-              hover:bg-slate-50">🔑 Redefinir senha</button>
+              hover:bg-slate-50"><i data-lucide="key-round" class="lucide"></i> Redefinir senha</button>
       </form>
     </div>
   </div>

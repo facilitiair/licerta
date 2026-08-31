@@ -1,0 +1,133 @@
+/* Tokens de design da Licerta (AGENTS.md, Regras de UI §2).
+   ÚNICA fonte de cor, raio, sombra e escala. Nenhuma tela define valor
+   solto: mudou a identidade, muda-se AQUI. */
+:root {
+  /* Cor primária (o azul atual do produto) */
+  --cor-primaria: #1d4ed8;        /* blue-700 */
+  --cor-primaria-forte: #1e40af;  /* hover */
+  --cor-primaria-suave: #eff6ff;  /* fundos */
+  --cor-primaria-borda: #bfdbfe;
+
+  /* Cinzas: texto e superfícies */
+  --texto: #1e293b;               /* slate-800 */
+  --texto-suave: #64748b;         /* slate-500 */
+  --texto-fraco: #94a3b8;         /* slate-400 */
+  --superficie: #ffffff;
+  --fundo: #f1f5f9;               /* slate-100 */
+  --borda: #e2e8f0;               /* slate-200 */
+  --menu-fundo: #0f172a;          /* slate-900 (barra lateral) */
+
+  /* Semânticas — verde sucesso, âmbar atenção, vermelho crítico.
+     VERMELHO é reservado (§5): prazo de disputa marcada "vou participar"
+     e certidão vencendo em <= 7 dias. Mais nada. */
+  --sucesso: #15803d;
+  --sucesso-suave: #f0fdf4;
+  --sucesso-borda: #bbf7d0;
+  --atencao: #b45309;
+  --atencao-suave: #fffbeb;
+  --atencao-borda: #fde68a;
+  --critico: #b91c1c;
+  --critico-suave: #fef2f2;
+  --critico-borda: #fecaca;
+
+  /* Bordas, raio e sombra (uma só) */
+  --raio-card: 8px;
+  --raio-botao: 6px;
+  --sombra: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+
+  /* Tipografia: 1 família; tamanhos 13/14/16/20/24; regular e semibold */
+  --fonte: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+           "Helvetica Neue", Arial, sans-serif;
+  --t-13: 13px; --t-14: 14px; --t-16: 16px; --t-20: 20px; --t-24: 24px;
+
+  /* Espaçamento: múltiplos de 8 */
+  --e-1: 8px; --e-2: 16px; --e-3: 24px; --e-4: 32px;
+}
+
+/* ---------------------------------------------------- componentes base */
+body { font-family: var(--fonte); color: var(--texto); }
+
+.card {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-card);
+  box-shadow: var(--sombra);
+}
+
+.btn, .btn-sec, .btn-perigo {
+  display: inline-flex; align-items: center; gap: var(--e-1);
+  border-radius: var(--raio-botao);
+  font-size: var(--t-14); font-weight: 600;
+  padding: var(--e-1) var(--e-2);
+  min-height: 44px;                 /* alvo de toque (§11) */
+  cursor: pointer; border: 1px solid transparent;
+  transition: background-color .15s, border-color .15s;
+}
+.btn { background: var(--cor-primaria); color: #fff; }
+.btn:hover { background: var(--cor-primaria-forte); }
+.btn-sec { background: var(--superficie); color: var(--cor-primaria);
+           border-color: var(--cor-primaria); }
+.btn-sec:hover { background: var(--cor-primaria-suave); }
+/* Perigo: só em confirmação destrutiva (§4/§5) */
+.btn-perigo { background: var(--critico); color: #fff; }
+.btn:disabled, .btn-sec:disabled { opacity: .5; cursor: default; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: var(--raio-botao);
+  font-size: var(--t-13); font-weight: 600;
+  padding: 0 var(--e-1); line-height: 22px;
+  background: var(--fundo); color: var(--texto-suave);
+  border: 1px solid var(--borda);
+}
+.badge-sucesso { background: var(--sucesso-suave); color: var(--sucesso);
+                 border-color: var(--sucesso-borda); }
+.badge-atencao { background: var(--atencao-suave); color: var(--atencao);
+                 border-color: var(--atencao-borda); }
+.badge-critico { background: var(--critico-suave); color: var(--critico);
+                 border-color: var(--critico-borda); }
+.badge-primario { background: var(--cor-primaria-suave);
+                  color: var(--cor-primaria);
+                  border-color: var(--cor-primaria-borda); }
+
+.input, .select {
+  border: 1px solid var(--borda); border-radius: var(--raio-card);
+  font-size: var(--t-14); padding: var(--e-1) var(--e-2);
+  background: var(--superficie); color: var(--texto);
+  min-height: 44px;
+}
+.input:focus, .select:focus {
+  outline: 2px solid var(--cor-primaria-borda); border-color: var(--cor-primaria);
+}
+
+/* Faixas de aviso (uma definição; a cor vem da semântica) */
+.faixa { display: flex; gap: var(--e-1); align-items: flex-start;
+         border: 1px solid var(--borda); border-radius: var(--raio-card);
+         padding: var(--e-1) var(--e-2); font-size: var(--t-14); }
+.faixa-atencao { background: var(--atencao-suave);
+                 border-color: var(--atencao-borda); color: var(--atencao); }
+.faixa-critico { background: var(--critico-suave);
+                 border-color: var(--critico-borda); color: var(--critico); }
+.faixa-sucesso { background: var(--sucesso-suave);
+                 border-color: var(--sucesso-borda); color: var(--sucesso); }
+.faixa-info    { background: var(--cor-primaria-suave);
+                 border-color: var(--cor-primaria-borda);
+                 color: var(--cor-primaria-forte); }
+
+/* Estado vazio (§9): frase útil + próxima ação */
+.estado-vazio { text-align: center; padding: var(--e-4) var(--e-3);
+                color: var(--texto-suave); font-size: var(--t-14); }
+.estado-vazio .lucide { width: 24px; height: 24px; margin: 0 auto var(--e-1); }
+
+/* Skeleton de carregamento (§9): nunca tela branca */
+.skeleton { background: var(--borda); border-radius: var(--raio-botao);
+            animation: pulsar 1.4s ease-in-out infinite; min-height: 16px; }
+@keyframes pulsar { 0%,100% { opacity: .6 } 50% { opacity: 1 } }
+
+/* Ícones Lucide: herdam a cor do texto (§3) */
+.lucide { width: 16px; height: 16px; stroke-width: 2;
+          flex-shrink: 0; vertical-align: -2px; }
+.lucide-menu-item { width: 20px; height: 20px; }
+
+/* Truncar com reticências (§6/§8) — o title do elemento faz o tooltip */
+.truncar { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

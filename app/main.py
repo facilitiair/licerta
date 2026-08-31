@@ -51,21 +51,26 @@ templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 
+DIAS_CURTOS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
 def _filtro_quando(iso):
-    """Data ISO no jeito que uma pessoa lê: 'hoje 08:00', 'amanhã', '05/09'."""
+    """Data ISO como gente lê (UI §6): 'hoje 08:00', 'amanhã', 'qui 04/09'."""
     if not iso:
-        return "—"
+        return ""
     try:
         dia, hora = iso[:10], iso[11:16]
         alvo = datetime.strptime(dia, "%Y-%m-%d").date()
-        hoje = agora().date()
-        dif = (alvo - hoje).days
+        hoje_ = agora().date()
+        dif = (alvo - hoje_).days
         if dif == 0:
             rotulo = "hoje"
         elif dif == 1:
             rotulo = "amanhã"
+        elif 1 < dif <= 6:
+            rotulo = f"{DIAS_CURTOS[alvo.weekday()]} {alvo.strftime('%d/%m')}"
         else:
-            rotulo = alvo.strftime("%d/%m") + ("" if alvo.year == hoje.year
+            rotulo = alvo.strftime("%d/%m") + ("" if alvo.year == hoje_.year
                                                else alvo.strftime("/%Y"))
         return f"{rotulo} {hora}".strip() if hora else rotulo
     except (ValueError, TypeError):
@@ -74,7 +79,7 @@ def _filtro_quando(iso):
 
 def _filtro_dinheiro(valor):
     if not valor:
-        return "—"          # zero e nulo são igualmente "não informado"
+        return ""           # ausência de valor = célula vazia (UI §6)
     if valor >= 1_000_000:
         return f"R$ {valor / 1_000_000:.1f} mi".replace(".", ",")
     if valor >= 1_000:
@@ -82,8 +87,11 @@ def _filtro_dinheiro(valor):
     return f"R$ {valor:.0f}"
 
 
+from .texto import sentenca as _filtro_sentenca  # noqa: E402
+
 templates.env.filters["quando"] = _filtro_quando
 templates.env.filters["dinheiro"] = _filtro_dinheiro
+templates.env.filters["sentenca"] = _filtro_sentenca
 
 agendador = BackgroundScheduler(timezone=config.TZ)
 
@@ -413,6 +421,12 @@ async def painel(request: Request):
         fecham_hoje = sum(1 for m in urgentes
                           if (m.licitacao.data_encerramento_proposta
                               or "")[:10] == hoje)
+        # Vermelho é reservado (UI §5): a faixa só é crítica se algo que o
+        # usuário MARCOU "vou participar" fecha hoje; novidade não triada
+        # fechando hoje é atenção (âmbar), não alarme.
+        fecha_hoje_disputa = any(
+            m.status == "vou_participar" for m in urgentes
+            if (m.licitacao.data_encerramento_proposta or "")[:10] == hoje)
         # A última coleta CONCLUÍDA, com ou sem tropeços: uma varredura que
         # trouxe 900 editais e falhou numa combinação continua sendo coleta.
         ultima = (s.query(ColetaLog).filter(ColetaLog.fim.isnot(None))
@@ -450,7 +464,8 @@ async def painel(request: Request):
             "kpis": kpis, "proximos": proximos, "ultima_coleta": ultima,
             "ultimas": ultimas, "coletando": coleta_em_andamento(),
             "hora_coleta": config.HORA_COLETA,
-            "fecham_hoje": fecham_hoje, "problemas": problemas,
+            "fecham_hoje": fecham_hoje,
+            "fecha_hoje_disputa": fecha_hoje_disputa, "problemas": problemas,
             "docs_alerta": docs_alerta,
             "passos": passos, "tudo_pronto": all(passos.values()),
         })
@@ -459,9 +474,9 @@ async def painel(request: Request):
 
 
 # ---------------------------------------------------------- funil (kanban)
-COLUNAS_FUNIL = [("novo", "🟡 Novas"), ("analisando", "🔵 Em análise"),
-                 ("vou_participar", "🟢 Vou participar"),
-                 ("descartado", "⚪ Descartadas")]
+COLUNAS_FUNIL = [("novo", "Novas"), ("analisando", "Em análise"),
+                 ("vou_participar", "Vou participar"),
+                 ("descartado", "Descartadas")]
 
 
 def _contexto_funil(s, usuario):
@@ -913,6 +928,14 @@ def licitacoes_lista(request: Request, pagina: int = 1):
     s = Sessao()
     try:
         filtros = _filtros_da_request(request)
+        # Filtro padrão sensato (UI §8): sem nenhum critério na URL, a tela
+        # abre com o que interessa — encerramento nos próximos 30 dias — em
+        # vez da mangueira completa. O filtro fica visível nos campos de
+        # data e o "limpar" leva a ?tudo=1, que mostra tudo mesmo.
+        if not request.query_params:
+            filtros["data_ini"] = agora().strftime("%Y-%m-%d")
+            filtros["data_fim"] = (agora()
+                                   + timedelta(days=30)).strftime("%Y-%m-%d")
         consulta = _consulta_licitacoes(s, filtros)
         total = consulta.count()
         linhas = consulta.offset((pagina - 1) * POR_PAGINA).limit(POR_PAGINA).all()
@@ -1014,6 +1037,9 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
                                            "rotulos_alteracao": CAMPOS_VIGIADOS,
                                            "minutas": minutas,
                                            "sou_admin": _sou_admin(request),
+                                           "acompanho": any(
+                                               m.status == "vou_participar"
+                                               for m in matches),
                                            **_contexto_checklist(s, dados, lic)})
     finally:
         s.close()
@@ -1075,9 +1101,14 @@ def licitacao_analisar(request: Request, lic_id: int, forcar: int = Form(0)):
                 f'rounded-xl bg-indigo-50/40 p-4 text-xs text-slate-600">'
                 f'🧠 {aviso}{extra}</div>')
         dados = _dados_ficha(ficha)
+        acompanho = (s.query(PerfilMatch).join(PerfilBusca)
+                     .filter(PerfilMatch.licitacao_id == lic_id,
+                             PerfilBusca.usuario_id == eu(request).id,
+                             PerfilMatch.status == "vou_participar")
+                     .count() > 0)
         return templates.TemplateResponse(request, "_ficha_edital.html", {
             "lic": lic, "ficha": ficha, "dados": dados,
-            "sou_admin": _sou_admin(request),
+            "sou_admin": _sou_admin(request), "acompanho": acompanho,
             **_contexto_checklist(s, dados, lic)})
     finally:
         s.close()

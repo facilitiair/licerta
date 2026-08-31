@@ -15,26 +15,29 @@
                   shadow-sm hover:shadow transition-shadow">
         <p class="text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
           <span class="font-semibold text-slate-600">{{ lic.municipio_nome or '?' }}/{{ lic.uf }}</span>
-          · {{ m.perfil.nome }} {% if m.favorito %}⭐{% endif %}
+          · {{ m.perfil.nome }} {% if m.favorito %}<i data-lucide="star" class="lucide"></i>{% endif %}
           {% if lic.situacao and lic.situacao not in ('Divulgada', 'Aberta') %}
-          <span class="px-1.5 rounded-full font-semibold bg-red-100
-                text-red-700">{{ lic.situacao }}</span>{% endif %}
+          <span class="px-1.5 rounded-full font-semibold bg-amber-100
+                text-amber-800">{{ lic.situacao }}</span>{% endif %}
         </p>
         <p class="my-1.5 leading-snug line-clamp-3 text-slate-700"
-           title="{{ lic.objeto or '' }}">{{ lic.objeto or '' }}</p>
+           title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</p>
         <p class="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
           <span class="font-semibold text-slate-700">{{ lic.valor_total_estimado|dinheiro }}</span>
           <span class="px-1.5 py-0.5 rounded-md
-            {{ 'bg-red-100 text-red-700 font-bold' if c.dias is not none and c.dias <= 1
-               else 'bg-orange-100 text-orange-700' if c.dias is not none and c.dias <= 3
+            {{ 'bg-red-100 text-red-700 font-bold'
+                 if c.dias is not none and c.dias <= 1
+                    and col.status == 'vou_participar'
+               else 'bg-amber-100 text-amber-800'
+                 if c.dias is not none and c.dias <= 3
                else 'bg-slate-100' }}">
-            ⏳ {{ lic.data_encerramento_proposta|quando }}</span>
+            <i data-lucide="hourglass" class="lucide"></i> {{ lic.data_encerramento_proposta|quando }}</span>
           {% if lic.link_pncp or lic.link_sistema_origem %}
           <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
              class="text-blue-700 underline">edital ↗</a>{% endif %}
         </p>
         <div class="flex gap-1 mt-2 flex-wrap">
-          {% set rotulos = {'novo': '↩ nova', 'analisando': '🔍 analisar',
+          {% set rotulos = {'novo': '↩ nova', 'analisando': 'analisar',
                             'vou_participar': '✓ participar',
                             'descartado': '✕ descartar'} %}
           {% set estilos = {'novo': 'hover:bg-amber-50 hover:border-amber-300',
@@ -53,7 +56,7 @@
         </div>
       </div>
       {% else %}
-      <p class="text-[11px] text-slate-400 px-2 pb-2">vazio</p>
+      <p class="text-[11px] text-slate-400 px-2 pb-2">nada aqui</p>
       {% endfor %}
     </div>
   </div>
