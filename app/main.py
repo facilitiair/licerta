@@ -50,6 +50,18 @@ def _job_coleta():
         log.exception("Erro no job de coleta")
 
 
+def _gatilho_coleta():
+    """Horas em que a coleta roda: a partir da HORA_COLETA, de N em N horas.
+
+    Com N=24 vira a coleta única de sempre; com N=3 o banco fica fresco o dia
+    todo, que é o que impede um edital das 9h de só ser visto amanhã.
+    """
+    h, m = config.HORA_COLETA
+    passo = config.HORAS_ENTRE_COLETAS
+    horas = sorted({(h + i * passo) % 24 for i in range(24 // passo or 1)})
+    return {"hour": ",".join(str(x) for x in horas), "minute": m}
+
+
 def _job_alerta():
     """Roda de 10 em 10 minutos e envia os alertas cuja hora chegou.
 
@@ -74,16 +86,15 @@ async def vida(app_):
         s.commit()
     finally:
         s.close()
-    h, m = config.HORA_COLETA
-    agendador.add_job(_job_coleta, "cron", hour=h, minute=m, id="coleta",
-                      replace_existing=True)
+    agendador.add_job(_job_coleta, "cron", id="coleta", replace_existing=True,
+                      **_gatilho_coleta())
     agendador.add_job(_job_alerta, "interval", minutes=10, id="alerta",
                       replace_existing=True)
     if not agendador.running:
         agendador.start()
-    log.info("Agendador ativo: coleta %02d:%02d; alertas conferidos a cada "
+    log.info("Agendador ativo: coleta às %sh; alertas conferidos a cada "
              "10 min, cada um na sua frequência (%s)",
-             *config.HORA_COLETA, config.TZ)
+             _gatilho_coleta()["hour"], config.TZ)
     yield
     if agendador.running:
         agendador.shutdown(wait=False)
@@ -311,6 +322,7 @@ def _form_para_perfil(form):
         "notificar": form.get("notificar") == "on",
         "frequencia": (form.get("frequencia") if form.get("frequencia")
                        in alerta_mod.FREQUENCIAS else "diario"),
+        "intervalo_horas": inteiro("intervalo_horas", 3, 1, 12),
         "dia_semana": inteiro("dia_semana", 0, 0, 6),
         "dia_mes": inteiro("dia_mes", 1, 1, 28),
         "mes_ano": inteiro("mes_ano", 1, 1, 12),
@@ -378,8 +390,8 @@ async def perfil_novo(request: Request):
                 palavras_excluir=[], somente_srp=False, modo_busca="e",
                 ordenacao="encerramento_asc", ativo=True, notificar=True,
                 situacoes=list(SITUACOES_DISPUTAVEIS), somente_vigentes=True,
-                frequencia="diario", dia_semana=0, dia_mes=1, mes_ano=1,
-                hora_envio="")
+                frequencia="diario", intervalo_horas=3, dia_semana=0,
+                dia_mes=1, mes_ano=1, hora_envio="")
         return templates.TemplateResponse(request, "perfil_form.html", contexto)
     finally:
         s.close()
@@ -466,6 +478,7 @@ async def perfil_duplicar(perfil_id: int):
                 situacoes=list(original.situacoes or []),
                 somente_vigentes=original.somente_vigentes,
                 notificar=original.notificar, frequencia=original.frequencia,
+                intervalo_horas=original.intervalo_horas,
                 dia_semana=original.dia_semana, dia_mes=original.dia_mes,
                 mes_ano=original.mes_ano, hora_envio=original.hora_envio))
             s.commit()
@@ -957,8 +970,7 @@ async def config_salvar(request: Request):
     envcfg.salvar(dict(form))
     # Reagenda a coleta com o novo horário, sem reiniciar. O job de alertas
     # é de intervalo fixo: quem manda na hora é cada perfil.
-    h, m = config.HORA_COLETA
-    agendador.reschedule_job("coleta", trigger="cron", hour=h, minute=m)
+    agendador.reschedule_job("coleta", trigger="cron", **_gatilho_coleta())
     return RedirectResponse("/config?salvo=1", status_code=303)
 
 

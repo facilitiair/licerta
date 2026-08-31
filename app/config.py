@@ -11,6 +11,14 @@ os.makedirs(PASTA_DADOS, exist_ok=True)
 CAMINHO_DB = os.path.join(PASTA_DADOS, "radar.db")
 
 
+def _inteiro(valor, padrao, minimo, maximo):
+    """Lê um número do .env, preso a uma faixa segura."""
+    try:
+        return max(minimo, min(maximo, int(valor)))
+    except (TypeError, ValueError):
+        return padrao
+
+
 def _hora(valor, padrao):
     """Interpreta 'HH:MM' do .env; volta ao padrão se estiver malformado."""
     try:
@@ -33,6 +41,9 @@ class Config:
     TZ = os.environ.get("TZ", "America/Fortaleza")
     HORA_COLETA = _hora(os.environ.get("HORA_COLETA"), (6, 0))
     HORA_ALERTA = _hora(os.environ.get("HORA_ALERTA"), (7, 0))
+    # Editais saem o dia inteiro. Coletar só de manhã atrasa o aviso em até
+    # um dia; repetindo a cada N horas o banco fica fresco o dia todo.
+    HORAS_ENTRE_COLETAS = _inteiro(os.environ.get("HORAS_ENTRE_COLETAS"), 3, 1, 24)
     DIAS_JANELA_FUTURA = int(os.environ.get("DIAS_JANELA_FUTURA", "90") or 90)
     # Endereço público do app — usado no rodapé "Ver todas" dos alertas.
     # No Railway, RAILWAY_PUBLIC_DOMAIN já vem preenchido automaticamente.

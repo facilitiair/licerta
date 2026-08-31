@@ -23,8 +23,9 @@ LIMITE_POR_PERFIL = 10
 LIMITE_OBJETO = 180
 LIMITE_TELEGRAM = 4096
 
-FREQUENCIAS = {"diario": "Todo dia", "semanal": "Uma vez por semana",
-               "mensal": "Uma vez por mês", "anual": "Uma vez por ano"}
+FREQUENCIAS = {"horas": "Várias vezes por dia", "diario": "Todo dia",
+               "semanal": "Uma vez por semana", "mensal": "Uma vez por mês",
+               "anual": "Uma vez por ano"}
 DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
                "sexta-feira", "sábado", "domingo"]
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
@@ -106,6 +107,8 @@ def resumo_frequencia(perfil):
     """Frase curta descrevendo quando este alerta sai (usada na interface)."""
     freq = getattr(perfil, "frequencia", None) or "diario"
     hora = "%02d:%02d" % _hora_do_perfil(perfil)
+    if freq == "horas":
+        return f"A cada {_intervalo_horas(perfil)}h, a partir das {hora}"
     if freq == "semanal":
         return f"Toda {DIAS_SEMANA[(perfil.dia_semana or 0) % 7]}, às {hora}"
     if freq == "mensal":
@@ -116,8 +119,20 @@ def resumo_frequencia(perfil):
     return f"Todo dia, às {hora}"
 
 
+def _intervalo_horas(perfil):
+    """De quantas em quantas horas repete, na frequência 'várias vezes/dia'."""
+    try:
+        return max(1, min(12, int(getattr(perfil, "intervalo_horas", 3) or 3)))
+    except (TypeError, ValueError):
+        return 3
+
+
 def _hora_do_perfil(perfil):
-    """Hora própria do alerta; em branco, usa a HORA_ALERTA geral do .env."""
+    """Hora própria do alerta; em branco, usa a HORA_ALERTA geral do .env.
+
+    Na frequência 'várias vezes por dia' é a hora do PRIMEIRO envio: nada
+    de aviso às 3 da manhã.
+    """
     texto = (getattr(perfil, "hora_envio", "") or "").strip()
     try:
         h, m = texto.split(":")
@@ -134,9 +149,14 @@ def alerta_devido(perfil, agora=None, respeitar_hora=True):
     if respeitar_hora and (agora.hour, agora.minute) < _hora_do_perfil(perfil):
         return False
     ultimo = getattr(perfil, "ultimo_envio", None)
+    freq = getattr(perfil, "frequencia", None) or "diario"
+    if freq == "horas":
+        # a única frequência que repete no mesmo dia: conta pelo relógio,
+        # não pela data. A hora do perfil já barrou a madrugada acima.
+        return (not ultimo or (agora - ultimo).total_seconds()
+                >= _intervalo_horas(perfil) * 3600)
     if ultimo and ultimo.date() == agora.date():
         return False                       # este alerta já saiu hoje
-    freq = getattr(perfil, "frequencia", None) or "diario"
     if not ultimo or (agora.date() - ultimo.date()).days >= \
             JANELA_ATRASO.get(freq, 1):
         return True                        # nunca saiu, ou o ciclo já venceu

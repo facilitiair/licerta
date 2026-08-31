@@ -40,6 +40,7 @@ class PerfilFake:
         self.situacoes = []
         self.somente_vigentes = True
         self.frequencia = "diario"
+        self.intervalo_horas = 3
         self.dia_semana = 0
         self.dia_mes = 1
         self.mes_ano = 1
@@ -166,6 +167,38 @@ def test_perfil_sem_notificar_nunca_sai():
 
 def test_perfil_inativo_nunca_sai():
     assert not alerta_devido(PerfilFake(ativo=False), AGORA)
+
+
+def test_varias_vezes_por_dia_repete_apos_o_intervalo():
+    """A única frequência que pode sair mais de uma vez no mesmo dia."""
+    perfil = PerfilFake(frequencia="horas", intervalo_horas=3,
+                        hora_envio="07:00",
+                        ultimo_envio=datetime(2026, 8, 31, 7, 0))
+    assert not alerta_devido(perfil, datetime(2026, 8, 31, 9, 30))  # 2h30
+    assert alerta_devido(perfil, datetime(2026, 8, 31, 10, 0))      # 3h
+
+
+def test_varias_vezes_por_dia_nao_toca_de_madrugada():
+    """A hora do perfil vira o primeiro envio do dia: nada às 3 da manhã."""
+    perfil = PerfilFake(frequencia="horas", intervalo_horas=3,
+                        hora_envio="07:00",
+                        ultimo_envio=datetime(2026, 8, 30, 22, 0))
+    assert not alerta_devido(perfil, datetime(2026, 8, 31, 3, 0))
+    assert alerta_devido(perfil, datetime(2026, 8, 31, 7, 0))
+
+
+def test_varias_vezes_por_dia_sem_envio_anterior_sai_na_primeira_hora():
+    perfil = PerfilFake(frequencia="horas", hora_envio="07:00")
+    assert alerta_devido(perfil, datetime(2026, 8, 31, 7, 0))
+
+
+def test_intervalo_fora_da_faixa_cai_no_padrao():
+    for valor in (0, 99, None, "abc"):
+        perfil = PerfilFake(frequencia="horas", intervalo_horas=valor,
+                            hora_envio="07:00",
+                            ultimo_envio=datetime(2026, 8, 31, 7, 0))
+        # qualquer que seja o saneamento, 12h depois já pode sair de novo
+        assert alerta_devido(perfil, datetime(2026, 8, 31, 19, 0))
 
 
 def test_semanal_so_sai_no_dia_marcado():
@@ -301,6 +334,9 @@ def test_falha_no_canal_nao_marca_como_avisado(monkeypatch):
 # ------------------------------------------------------------------- resumo
 def test_resumo_descreve_a_agenda_em_portugues():
     assert resumo_frequencia(PerfilFake()) == "Todo dia, às 07:00"
+    assert resumo_frequencia(
+        PerfilFake(frequencia="horas", intervalo_horas=3)) == \
+        "A cada 3h, a partir das 07:00"
     assert resumo_frequencia(PerfilFake(frequencia="semanal", dia_semana=2)) == \
         "Toda quarta-feira, às 07:00"
     assert resumo_frequencia(PerfilFake(frequencia="mensal", dia_mes=5)) == \

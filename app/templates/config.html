@@ -76,10 +76,14 @@
 
   <div class="bg-white rounded-xl border border-slate-200 p-4">
     <h3 class="font-semibold mb-2">Rotina diária</h3>
-    <div class="grid sm:grid-cols-3 gap-3 text-sm max-w-xl">
-      <label>Hora da coleta
+    <div class="grid sm:grid-cols-4 gap-3 text-sm max-w-2xl">
+      <label>Primeira coleta do dia
         <input name="HORA_COLETA" value="{{ valores.HORA_COLETA }}"
                placeholder="06:00"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Coletar a cada (horas)
+        <input name="HORAS_ENTRE_COLETAS" value="{{ valores.HORAS_ENTRE_COLETAS }}"
+               inputmode="numeric" placeholder="3"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
       <label>Hora padrão dos alertas
         <input name="HORA_ALERTA" value="{{ valores.HORA_ALERTA }}"
@@ -91,6 +95,9 @@
     </div>
     <p class="text-xs text-slate-500 mt-2">Fuso: {{ valores.TZ }}
       (mude a chave TZ no arquivo .env se precisar).
+      Editais saem o dia inteiro: coletar de poucas em poucas horas é o que
+      impede um edital das 9h de só aparecer amanhã. Use 24 para voltar a
+      uma coleta por dia.
       A hora acima só vale para os alertas que não escolheram uma própria —
       cada perfil tem a sua frequência e o seu horário em
       <a href="/perfis" class="underline">Perfis e alertas</a>.</p>

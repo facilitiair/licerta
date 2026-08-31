@@ -56,13 +56,23 @@ Em **Perfis e alertas** cada perfil é também um alerta independente, com:
   Cancelada, anulada e revogada ficam de fora.
 - **Só o que ainda está em aberto** — descarta o que já passou do prazo de
   proposta. Deixe ligado: é o que impede edital vencido de virar mensagem.
-- **Frequência e hora** — todo dia, uma vez por semana (escolhendo o dia),
-  uma vez por mês (escolhendo o dia) ou uma vez por ano (dia e mês).
+- **Frequência e hora** — várias vezes por dia (a cada 1 a 12 horas, a partir
+  de um horário, para não tocar de madrugada), todo dia, uma vez por semana
+  (escolhendo o dia), uma vez por mês (escolhendo o dia) ou uma vez por ano
+  (dia e mês).
 - **Receber alerta deste perfil** — desmarque para o perfil continuar
   garimpando para o painel sem mandar nada no Telegram.
 
 Um ciclo sem nada novo não gera mensagem. O botão **Enviar agora** dispara o
 alerta fora da agenda, útil para conferir se está tudo certo.
+
+> **Por que a coleta repete durante o dia:** editais são publicados a qualquer
+> hora. Como a coleta pergunta ao PNCP "o que está com proposta aberta agora?",
+> nada se perde — mas com uma coleta só de manhã, um edital lançado às 9h só
+> apareceria no aviso do dia seguinte, cerca de 22 horas depois. Na base atual
+> a mediana da janela de proposta é de quase 15 dias e menos de 1% fecha em
+> até 72 horas, então o risco de perder é mínimo; o que se perde é tempo de
+> preparação, e é isso que a coleta a cada 3 horas devolve.
 
 > **Dica de recorte:** uma palavra genérica sozinha (ex.: `manutenção`) no modo
 > "qualquer uma basta" casa manutenção de elevador, de frota, de prédio.
@@ -75,7 +85,8 @@ alerta fora da agenda, útil para conferir se está tudo certo.
 | `APP_SENHA` | Senha do painel. Vazia = sem login (só use em casa). |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alertas no Telegram. |
 | `EMAIL_ATIVO` + `SMTP_*` | Alerta também por e-mail (opcional, Fase 2). |
-| `HORA_COLETA` | Hora da coleta diária (HH:MM). |
+| `HORA_COLETA` | Hora da **primeira** coleta do dia (HH:MM). |
+| `HORAS_ENTRE_COLETAS` | Repete a coleta de N em N horas (padrão 3; use 24 para uma só). |
 | `HORA_ALERTA` | Hora padrão dos alertas que não escolheram uma própria. |
 | `DIAS_JANELA_FUTURA` | Busca propostas que encerram em até N dias (padrão 90). |
 

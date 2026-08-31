@@ -102,7 +102,8 @@ Baixe a lista oficial de municípios do IBGE (`https://servicodados.ibge.gov.br/
 | situacoes | json | lista de situações aceitas; vazio = qualquer uma |
 | somente_vigentes | bool | descarta o que já passou do prazo de proposta |
 | notificar | bool | manda alerta deste perfil |
-| frequencia | text | `diario`, `semanal`, `mensal`, `anual` |
+| frequencia | text | `horas`, `diario`, `semanal`, `mensal`, `anual` |
+| intervalo_horas | int | de quantas em quantas horas repete, na frequência `horas` (1–12) |
 | dia_semana / dia_mes / mes_ano | int | quando a frequência exige (0=segunda; dia 1–28) |
 | hora_envio | text | `HH:MM`; vazio = usa `HORA_ALERTA` do `.env` |
 | ultimo_envio | datetime | evita repetir o alerta no mesmo ciclo |
@@ -145,7 +146,9 @@ Ambos os horários configuráveis no `.env`. Botão "Coletar agora" no painel di
 
 ## 6. Alertas (um por perfil)
 
-Cada perfil é também um alerta independente: tem sua frequência (diária, semanal, mensal ou anual), sua hora e seu recorte. O agendador confere a cada 10 minutos quem está na vez (`alerta_devido`) e envia só esses.
+Cada perfil é também um alerta independente: tem sua frequência (várias vezes por dia, diária, semanal, mensal ou anual), sua hora e seu recorte. O agendador confere a cada 10 minutos quem está na vez (`alerta_devido`) e envia só esses.
+
+`horas` é a única frequência que repete no mesmo dia: conta pelo relógio desde o último envio, e a hora do perfil vira o **primeiro** envio do dia — sem isso o alerta tocaria de madrugada. A coleta precisa acompanhar (`HORAS_ENTRE_COLETAS`); um alerta de 3 em 3 horas sobre um banco atualizado uma vez por dia não encontra nada de novo.
 
 Regras que valem em todo envio:
 

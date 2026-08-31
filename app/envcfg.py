@@ -1,7 +1,7 @@
 """Tela /config: grava o .env e aplica as mudanças sem reiniciar o app."""
 import os
 
-from .config import RAIZ, _hora, config
+from .config import RAIZ, _hora, _inteiro, config
 
 CAMINHO_ENV = os.path.join(RAIZ, ".env")
 
@@ -9,7 +9,8 @@ CAMINHO_ENV = os.path.join(RAIZ, ".env")
 CHAVES = ["APP_SENHA", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
           "EMAIL_ATIVO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER",
           "SMTP_PASSWORD", "EMAIL_DESTINO", "TZ",
-          "HORA_COLETA", "HORA_ALERTA", "DIAS_JANELA_FUTURA"]
+          "HORA_COLETA", "HORAS_ENTRE_COLETAS", "HORA_ALERTA",
+          "DIAS_JANELA_FUTURA"]
 
 
 def valores_atuais():
@@ -25,6 +26,7 @@ def valores_atuais():
         "EMAIL_DESTINO": config.EMAIL_DESTINO,
         "TZ": config.TZ,
         "HORA_COLETA": "%02d:%02d" % config.HORA_COLETA,
+        "HORAS_ENTRE_COLETAS": str(config.HORAS_ENTRE_COLETAS),
         "HORA_ALERTA": "%02d:%02d" % config.HORA_ALERTA,
         "DIAS_JANELA_FUTURA": str(config.DIAS_JANELA_FUTURA),
     }
@@ -54,6 +56,8 @@ def salvar(novos):
     config.SMTP_PASSWORD = valores["SMTP_PASSWORD"]
     config.EMAIL_DESTINO = valores["EMAIL_DESTINO"]
     config.HORA_COLETA = _hora(valores["HORA_COLETA"], (6, 0))
+    config.HORAS_ENTRE_COLETAS = _inteiro(valores["HORAS_ENTRE_COLETAS"],
+                                          3, 1, 24)
     config.HORA_ALERTA = _hora(valores["HORA_ALERTA"], (7, 0))
     try:
         config.DIAS_JANELA_FUTURA = int(valores["DIAS_JANELA_FUTURA"] or 90)

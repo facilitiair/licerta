@@ -97,3 +97,17 @@ def test_login_senha_errada_nao_entra():
                          follow_redirects=False)
         assert r.status_code == 200          # volta ao formulário com erro
         assert "sessao" not in r.cookies
+
+
+def test_gatilho_da_coleta_respeita_o_intervalo():
+    """A coleta repete ao longo do dia; 24 volta à coleta única."""
+    from app.config import config
+    from app.main import _gatilho_coleta
+    original = config.HORAS_ENTRE_COLETAS
+    try:
+        config.HORAS_ENTRE_COLETAS = 3
+        assert _gatilho_coleta()["hour"] == "0,3,6,9,12,15,18,21"
+        config.HORAS_ENTRE_COLETAS = 24
+        assert _gatilho_coleta()["hour"] == str(config.HORA_COLETA[0])
+    finally:
+        config.HORAS_ENTRE_COLETAS = original

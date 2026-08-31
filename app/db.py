@@ -47,6 +47,7 @@ class PerfilBusca(Base):
     # --- agendamento do alerta deste perfil ---
     notificar = Column(Boolean, default=True, nullable=False)
     frequencia = Column(String, default="diario", nullable=False)
+    intervalo_horas = Column(Integer, default=3, nullable=False)  # freq 'horas'
     dia_semana = Column(Integer, default=0, nullable=False)   # 0=segunda
     dia_mes = Column(Integer, default=1, nullable=False)      # 1..28
     mes_ano = Column(Integer, default=1, nullable=False)      # 1..12 (anual)
@@ -183,6 +184,7 @@ def _migrar():
                          ("situacoes", "TEXT DEFAULT '[]'"),
                          ("somente_vigentes", "BOOLEAN DEFAULT 1"),
                          ("frequencia", "TEXT DEFAULT 'diario'"),
+                         ("intervalo_horas", "INTEGER DEFAULT 3"),
                          ("dia_semana", "INTEGER DEFAULT 0"),
                          ("dia_mes", "INTEGER DEFAULT 1"),
                          ("mes_ano", "INTEGER DEFAULT 1"),

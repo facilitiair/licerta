@@ -68,10 +68,20 @@
         </select>
       </label>
       <label class="block">
-        <span class="text-sm font-semibold">Hora do envio</span>
+        <span class="text-sm font-semibold" id="rotuloHora">Hora do envio</span>
         <input type="time" name="hora_envio"
                value="{{ perfil.hora_envio if perfil and perfil.hora_envio else hora_padrao }}"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+      </label>
+      <label class="block" id="campoIntervalo">
+        <span class="text-sm font-semibold">Repetir a cada</span>
+        <select name="intervalo_horas"
+                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
+          {% set atual = perfil.intervalo_horas if perfil else 3 %}
+          {% for n in [1, 2, 3, 4, 6, 8, 12] %}
+          <option value="{{ n }}" {{ 'selected' if atual == n }}>{{ n }} hora{{ 's' if n > 1 }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="block" id="campoDiaSemana">
         <span class="text-sm font-semibold">Dia da semana</span>
@@ -240,12 +250,16 @@
   // Só mostra os campos que a frequência escolhida realmente usa
   function mostrarCamposFreq(){
     const freq = document.getElementById('frequencia').value;
+    document.getElementById('campoIntervalo').style.display =
+      freq === 'horas' ? '' : 'none';
     document.getElementById('campoDiaSemana').style.display =
       freq === 'semanal' ? '' : 'none';
     document.getElementById('campoDiaMes').style.display =
       (freq === 'mensal' || freq === 'anual') ? '' : 'none';
     document.getElementById('campoMes').style.display =
       freq === 'anual' ? '' : 'none';
+    document.getElementById('rotuloHora').textContent =
+      freq === 'horas' ? 'Primeiro envio do dia' : 'Hora do envio';
   }
   mostrarCamposFreq();
 
