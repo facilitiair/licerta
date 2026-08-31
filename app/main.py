@@ -68,14 +68,18 @@ async def vida(app_):
     finally:
         s.close()
     h, m = config.HORA_COLETA
-    agendador.add_job(_job_coleta, "cron", hour=h, minute=m, id="coleta")
+    agendador.add_job(_job_coleta, "cron", hour=h, minute=m, id="coleta",
+                      replace_existing=True)
     h, m = config.HORA_ALERTA
-    agendador.add_job(_job_alerta, "cron", hour=h, minute=m, id="alerta")
-    agendador.start()
+    agendador.add_job(_job_alerta, "cron", hour=h, minute=m, id="alerta",
+                      replace_existing=True)
+    if not agendador.running:
+        agendador.start()
     log.info("Agendador ativo: coleta %02d:%02d, alerta %02d:%02d (%s)",
              *config.HORA_COLETA, *config.HORA_ALERTA, config.TZ)
     yield
-    agendador.shutdown(wait=False)
+    if agendador.running:
+        agendador.shutdown(wait=False)
 
 
 app = FastAPI(title="Radar de Licitações", lifespan=vida)
@@ -265,7 +269,10 @@ def _form_para_perfil(form):
 
     def numero(nome):
         bruto = (form.get(nome) or "").replace(".", "").replace(",", ".").strip()
-        return float(bruto) if bruto else None
+        try:
+            return float(bruto) if bruto else None
+        except ValueError:
+            return None            # texto inválido no campo de valor: ignora
 
     return {
         "nome": form.get("nome", "").strip() or "Sem nome",
@@ -351,9 +358,9 @@ async def perfil_salvar(request: Request):
     dados = _form_para_perfil(form)
     s = Sessao()
     try:
-        perfil_id = form.get("perfil_id")
-        if perfil_id:
-            perfil = s.get(PerfilBusca, int(perfil_id))
+        perfil_id = form.get("perfil_id", "")
+        perfil = s.get(PerfilBusca, int(perfil_id)) if perfil_id.isdigit() else None
+        if perfil:
             for campo, valor in dados.items():
                 setattr(perfil, campo, valor)
         else:
@@ -480,6 +487,10 @@ POR_PAGINA = 50
 def _consulta_licitacoes(s, filtros):
     """Monta a consulta a partir dos filtros da tela (também usada na exportação)."""
     consulta = s.query(Licitacao)
+    # entradas numéricas vindas da URL: ignora silenciosamente o que não for número
+    for campo in ("perfil_id", "modalidade"):
+        if filtros.get(campo) and not str(filtros[campo]).isdigit():
+            filtros[campo] = ""
     if filtros.get("perfil_id"):
         consulta = consulta.join(
             PerfilMatch, (PerfilMatch.licitacao_id == Licitacao.id) &
@@ -524,6 +535,7 @@ def _filtros_da_request(request):
 
 @app.get("/licitacoes", response_class=HTMLResponse)
 async def licitacoes_lista(request: Request, pagina: int = 1):
+    pagina = max(1, pagina)
     s = Sessao()
     try:
         filtros = _filtros_da_request(request)
@@ -650,6 +662,7 @@ async def arquivo_download(arquivo_id: int):
 @app.get("/atas", response_class=HTMLResponse)
 async def atas_lista(request: Request, q: str = "", adesao: str = "",
                      pagina: int = 1):
+    pagina = max(1, pagina)
     s = Sessao()
     try:
         hoje = datetime.now().strftime("%Y-%m-%d")

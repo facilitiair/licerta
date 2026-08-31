@@ -1,6 +1,10 @@
 """Exportação dos resultados filtrados em CSV e XLSX (SPEC §7)."""
 import csv
 import io
+import re
+
+# O Excel proíbe caracteres de controle — e o PNCP às vezes os envia no objeto
+_ILEGAIS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 COLUNAS = [
     ("numero_controle_pncp", "Nº controle PNCP"),
@@ -29,6 +33,8 @@ def _linha(lic):
         v = getattr(lic, campo, None)
         if campo == "srp":
             v = "sim" if v else "não"
+        if isinstance(v, str):
+            v = _ILEGAIS.sub(" ", v)
         valores.append("" if v is None else v)
     return valores
 

@@ -46,11 +46,17 @@ def salvar(novos):
     config.TELEGRAM_CHAT_ID = valores["TELEGRAM_CHAT_ID"]
     config.EMAIL_ATIVO = valores["EMAIL_ATIVO"].lower() == "true"
     config.SMTP_HOST = valores["SMTP_HOST"]
-    config.SMTP_PORT = int(valores["SMTP_PORT"] or 587)
+    try:
+        config.SMTP_PORT = int(valores["SMTP_PORT"] or 587)
+    except ValueError:
+        config.SMTP_PORT = 587
     config.SMTP_USER = valores["SMTP_USER"]
     config.SMTP_PASSWORD = valores["SMTP_PASSWORD"]
     config.EMAIL_DESTINO = valores["EMAIL_DESTINO"]
     config.HORA_COLETA = _hora(valores["HORA_COLETA"], (6, 0))
     config.HORA_ALERTA = _hora(valores["HORA_ALERTA"], (7, 0))
-    config.DIAS_JANELA_FUTURA = int(valores["DIAS_JANELA_FUTURA"] or 90)
+    try:
+        config.DIAS_JANELA_FUTURA = int(valores["DIAS_JANELA_FUTURA"] or 90)
+    except ValueError:
+        config.DIAS_JANELA_FUTURA = 90
     return valores
