@@ -53,14 +53,20 @@ jobs:
         run: |
           git config user.name "radar-bot"
           git config user.email "actions@github.com"
-          # Se o PC do Paulo empurrou durante a rodada, um push direto falha e
-          # o estado dos alertas desta rodada se perde em silêncio (workflow
-          # vermelho que ninguém vê). Rebaixa o HEAD para o remoto mantendo o
-          # banco recém-gravado e tenta de novo — banco é binário, não há
-          # merge possível, e o combinado é que a última escrita vence.
+          # Se alguém empurrou durante a rodada, um push direto falha e o
+          # estado dos alertas desta rodada se perde em silêncio (workflow
+          # vermelho que ninguém vê). Guarda o banco recém-gravado, alinha a
+          # árvore INTEIRA ao remoto e recoloca só o banco — banco é binário,
+          # não há merge possível, e o combinado é que a última escrita vence.
+          #
+          # NUNCA voltar ao reset --soft aqui: ele mantinha o índice do
+          # checkout antigo e o commit levava a ÁRVORE VELHA junto — em
+          # 31/08/2026 isso reverteu 4 commits de código em silêncio.
+          cp data/radar.db /tmp/radar-desta-rodada.db
           for tentativa in 1 2 3; do
             git fetch origin main
-            git reset --soft origin/main
+            git reset --hard origin/main
+            cp /tmp/radar-desta-rodada.db data/radar.db
             git add data/radar.db
             if git diff --cached --quiet; then
               echo "Banco sem mudanças; nada a publicar."
