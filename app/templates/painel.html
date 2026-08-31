@@ -2,7 +2,7 @@
 {% block conteudo %}
 <div class="flex items-center gap-4 flex-wrap mb-5">
   <div>
-    <h1 class="text-xl font-bold">Dashboard</h1>
+    <h1 class="text-xl font-bold">Painel</h1>
     <p class="text-xs text-slate-500">Última coleta:
       {{ ultima_coleta.fim.strftime('%d/%m/%Y %H:%M') if ultima_coleta else 'nunca' }}
       · próxima automática às {{ '%02d:%02d' % hora_coleta }}</p>

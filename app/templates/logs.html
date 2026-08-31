@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block titulo %}Logs — Radar{% endblock %}
 {% block conteudo %}
-<h2 class="font-bold text-lg mb-3">Histórico de coletas</h2>
+<h2 class="font-bold text-lg mb-1">Registros de coleta</h2>
+<p class="text-xs text-slate-500 mb-3">Diagnóstico do robô: cada linha é uma
+  rodada de coleta, com duração e eventuais erros. Você só precisa vir aqui
+  se algo parecer errado.</p>
 <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
 <table class="w-full text-sm">
   <thead class="bg-slate-50 text-left text-xs text-slate-600">

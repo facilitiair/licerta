@@ -10,36 +10,51 @@
 <body class="bg-slate-100 text-slate-800 min-h-screen md:flex">
 
   <!-- Barra lateral (vira barra superior no celular) -->
-  <aside class="bg-slate-900 text-slate-300 md:w-56 md:min-h-screen shrink-0">
-    <div class="px-4 py-4 flex items-center gap-2 border-b border-slate-700/60">
-      <span class="text-xl">📡</span>
+  <aside class="bg-gradient-to-b from-slate-900 via-slate-900 to-[#0d1b34]
+                text-slate-300 md:w-60 md:min-h-screen shrink-0 md:flex md:flex-col">
+    <div class="px-5 py-5 flex items-center gap-3 border-b border-white/10">
+      <span class="text-2xl bg-blue-600/20 rounded-xl p-1.5">📡</span>
       <div>
-        <p class="font-bold text-white leading-4">Radar</p>
-        <p class="text-[11px] text-slate-400">de Licitações</p>
+        <p class="font-bold text-white text-[15px] leading-4">Radar</p>
+        <p class="text-[11px] text-blue-300/80 tracking-wide">de Licitações</p>
       </div>
     </div>
-    <nav class="flex md:flex-col overflow-x-auto md:overflow-visible
-                text-sm px-2 py-2 gap-1">
-      {% set pagina_ativa = request.url.path %}
-      {% macro item(rota, icone, rotulo) -%}
-      <a href="{{ rota }}" class="flex items-center gap-2 px-3 py-2 rounded-lg
-          whitespace-nowrap hover:bg-slate-800 hover:text-white
-          {{ 'bg-blue-600 text-white font-semibold'
-             if pagina_ativa == rota else '' }}">
-        <span>{{ icone }}</span>{{ rotulo }}</a>
-      {%- endmacro %}
-      {{ item('/', '📊', 'Dashboard') }}
-      {{ item('/pesquisar', '🌐', 'Pesquisar PNCP') }}
+
+    {% set pagina_ativa = request.url.path %}
+    {% macro item(rota, icone, rotulo) -%}
+    <a href="{{ rota }}" class="group flex items-center gap-2.5 px-3 py-2 mx-2
+        rounded-lg whitespace-nowrap text-[13.5px] transition-colors
+        {{ 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/40'
+           if pagina_ativa == rota
+           else 'hover:bg-white/10 hover:text-white' }}">
+      <span class="text-base {{ '' if pagina_ativa == rota
+                                else 'opacity-80 group-hover:opacity-100' }}">
+        {{ icone }}</span>{{ rotulo }}</a>
+    {%- endmacro %}
+
+    <nav class="flex md:flex-col overflow-x-auto md:overflow-visible py-2 gap-0.5">
+      <p class="hidden md:block px-5 pt-2 pb-1 text-[10px] font-bold uppercase
+                tracking-[0.15em] text-slate-500">Acompanhar</p>
+      {{ item('/', '📊', 'Painel') }}
+      {{ item('/funil', '📋', 'Funil de oportunidades') }}
+      {{ item('/agenda', '📅', 'Agenda de disputas') }}
+
+      <p class="hidden md:block px-5 pt-4 pb-1 text-[10px] font-bold uppercase
+                tracking-[0.15em] text-slate-500">Encontrar</p>
+      {{ item('/pesquisar', '🌐', 'Pesquisar no PNCP') }}
       {{ item('/licitacoes', '🔎', 'Meu radar') }}
-      {{ item('/funil', '📋', 'Funil') }}
-      {{ item('/agenda', '📅', 'Agenda') }}
       {{ item('/atas', '📜', 'Atas / carona') }}
       {{ item('/perfis', '🎯', 'Perfis de busca') }}
-      {{ item('/logs', '🧾', 'Logs') }}
-      {{ item('/config', '⚙️', 'Config') }}
+
+      <p class="hidden md:block px-5 pt-4 pb-1 text-[10px] font-bold uppercase
+                tracking-[0.15em] text-slate-500">Sistema</p>
+      {{ item('/config', '⚙️', 'Configurações') }}
+      {{ item('/logs', '🧾', 'Registros de coleta') }}
     </nav>
-    <div class="hidden md:block px-4 py-3 mt-auto">
-      <a href="/logout" class="text-xs text-slate-500 hover:text-white">Sair →</a>
+
+    <div class="hidden md:block mt-auto px-5 py-4 border-t border-white/10">
+      <a href="/logout" class="text-xs text-slate-500 hover:text-white
+         transition-colors">Sair da conta →</a>
     </div>
   </aside>
 
