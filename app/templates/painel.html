@@ -19,6 +19,65 @@
   </div>
 </div>
 
+{% if not tudo_pronto %}
+<!-- Primeiros passos: o guia de quem acabou de chegar. Some quando os três
+     passos estão completos. -->
+<div class="bg-white rounded-2xl border-2 border-blue-200 p-5 mb-6">
+  <h2 class="font-bold mb-1">👋 {{ 'Bem-vindo! Três passos e o radar começa a
+    trabalhar para você' if not passos.perfil else 'Quase lá — falta pouco
+    para o radar trabalhar sozinho' }}</h2>
+  <div class="grid sm:grid-cols-3 gap-3 mt-3 text-sm">
+    {% macro passo(feito, numero, titulo, texto, rota, botao) -%}
+    <div class="rounded-xl border p-3
+                {{ 'border-green-200 bg-green-50/60' if feito
+                   else 'border-slate-200' }}">
+      <p class="font-semibold flex items-center gap-2">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center
+              text-xs {{ 'bg-green-600 text-white' if feito
+                         else 'bg-blue-600 text-white' }}">
+          {{ '✓' if feito else numero }}</span>
+        {{ titulo }}</p>
+      <p class="text-xs text-slate-500 mt-1">{{ texto }}</p>
+      {% if not feito %}
+      <a href="{{ rota }}" class="inline-block mt-2 bg-blue-700 text-white
+         px-3 py-1.5 rounded-lg text-xs font-semibold
+         hover:bg-blue-800">{{ botao }}</a>
+      {% endif %}
+    </div>
+    {%- endmacro %}
+    {{ passo(passos.perfil, '1', 'Diga o que interessa',
+             'Crie um perfil de busca com as palavras do seu ramo, os estados
+              e a frequência dos alertas.',
+             '/perfis/novo', '+ Criar meu primeiro perfil') }}
+    {{ passo(passos.avisos, '2', 'Escolha como ser avisado',
+             'Notificação no celular, Telegram ou e-mail — ative pelo menos
+              um canal, com botão de teste.',
+             '/conta', '🔔 Ativar meus avisos') }}
+    {{ passo(passos.coleta, '3', 'Primeira coleta',
+             'O radar varre o PNCP sozinho ao longo do dia; a primeira você
+              pode disparar agora mesmo.',
+             '#', '') }}
+  </div>
+  {% if passos.perfil and not passos.coleta %}
+  <button hx-post="/coletar" hx-target="#statusColeta" hx-swap="innerHTML"
+          class="mt-3 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm
+                 font-semibold hover:bg-blue-800">🔄 Rodar a primeira coleta</button>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if fecham_hoje %}
+<a href="/agenda" class="flex items-center gap-3 bg-red-50 border
+   border-red-200 text-red-800 rounded-2xl px-4 py-3 mb-6 text-sm
+   hover:bg-red-100 transition-colors">
+  <span class="text-xl">🔥</span>
+  <span><b>{{ fecham_hoje }} oportunidade{{ 's' if fecham_hoje != 1 }}
+    fecha{{ 'm' if fecham_hoje != 1 }} HOJE.</b>
+    Veja a agenda e não perca o prazo.</span>
+  <span class="ml-auto font-semibold">ver agenda →</span>
+</a>
+{% endif %}
+
 <!-- Indicadores -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
   {% macro kpi(icone, rotulo, valor, cor, fundo, rota) -%}

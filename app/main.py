@@ -349,14 +349,33 @@ async def painel(request: Request):
                     for m in ativos.limit(8)]
         kpis = {"novas": conta("novo"), "analisando": conta("analisando"),
                 "participar": conta("vou_participar"), "urgentes": len(urgentes)}
+        fecham_hoje = sum(1 for m in urgentes
+                          if (m.licitacao.data_encerramento_proposta
+                              or "")[:10] == hoje)
         ultima = (s.query(ColetaLog).filter_by(sucesso=True)
                   .order_by(ColetaLog.fim.desc()).first())
         ultimas = (s.query(Licitacao)
                    .order_by(Licitacao.coletado_em.desc()).limit(8).all())
+        # Primeiros passos: a tela inicial de quem acabou de chegar precisa
+        # dizer O QUE FAZER, não mostrar zeros. Some sozinha quando os três
+        # passos estão completos.
+        usuario = s.get(Usuario, eu(request).id)
+        passos = {
+            "perfil": s.query(PerfilBusca).filter(
+                meus, PerfilBusca.nome != sincronizar.PERFIL_SISTEMA
+            ).count() > 0,
+            "avisos": bool(
+                (usuario.receber_telegram and usuario.telegram_chat_id)
+                or (usuario.receber_email and usuario.email_alertas)
+                or (usuario.receber_push and usuario.assinaturas_push)),
+            "coleta": ultima is not None,
+        }
         return templates.TemplateResponse(request, "painel.html", {
             "kpis": kpis, "proximos": proximos, "ultima_coleta": ultima,
             "ultimas": ultimas, "coletando": coleta_em_andamento(),
             "hora_coleta": config.HORA_COLETA,
+            "fecham_hoje": fecham_hoje,
+            "passos": passos, "tudo_pronto": all(passos.values()),
         })
     finally:
         s.close()

@@ -211,3 +211,39 @@ def test_despacho_respeita_canal_desligado(monkeypatch):
                         lambda *a, **k: pytest.fail("email desligado"))
     assert alerta.despachar_canais(None, Perfil(), "t", 1, False) == \
         (False, False, False)
+
+
+def test_tela_inicial_guia_o_usuario_novo():
+    """Quem acabou de chegar não pode ver zeros: vê os três primeiros passos,
+    com o que já foi feito marcado."""
+    s = Sessao()
+    novato = Usuario(nome="Novato", email="novato@teste.local",
+                     senha_hash=gerar_hash("novato-123"),
+                     email_alertas="", receber_email=False)
+    s.add(novato)
+    s.commit()
+    uid = novato.id
+    s.close()
+    try:
+        with TestClient(app) as c:
+            c.post("/login", data={"email": "novato@teste.local",
+                                   "senha": "novato-123"},
+                   follow_redirects=False)
+            html = c.get("/").text
+            assert "Bem-vindo" in html
+            assert "Diga o que interessa" in html
+            assert "Escolha como ser avisado" in html
+            assert "Criar meu primeiro perfil" in html
+    finally:
+        s = Sessao()
+        alvo = s.get(Usuario, uid)
+        if alvo:
+            s.delete(alvo)
+        s.commit()
+        s.close()
+
+
+def test_tela_inicial_do_usuario_completo_nao_mostra_o_guia(como_admin):
+    """Com perfil, canal e coleta feitos, o guia sai da frente."""
+    html = como_admin.get("/").text
+    assert "Diga o que interessa" not in html
