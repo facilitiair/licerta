@@ -46,6 +46,15 @@ if __name__ == "__main__":
     print(f"Alertas enviados: {enviados}")
     from .documentos.validades import avisar_vencimentos
     print(f"Documentos com aviso de validade: {avisar_vencimentos(host=SITE)}")
+    # Faxina antes de publicar: o radar.db vai para o repositório e o
+    # GitHub corta o push em 100 MB — encolher aqui é o que evita o teto.
+    from .db import Sessao
+    from .radar.limpeza import limpar
+    sessao_faxina = Sessao()
+    try:
+        print(f"Faxina: {limpar(sessao_faxina)}")
+    finally:
+        sessao_faxina.close()
     # Vigilância cruzada: o vigia interno do site não enxerga o site fora do
     # ar — só alguém de fora enxerga. Este job roda fora, então confere e
     # avisa os admins (por aqui o e-mail funciona; no Railway, não).

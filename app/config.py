@@ -47,7 +47,7 @@ def _hora(valor, padrao):
 
 
 # Versão do produto — bump manual a cada leva de mudanças relevante.
-VERSAO = "0.15.0"
+VERSAO = "0.16.0"
 
 
 class Config:
@@ -70,6 +70,10 @@ class Config:
     # Editais saem o dia inteiro. Coletar só de manhã atrasa o aviso em até
     # um dia; repetindo a cada N horas o banco fica fresco o dia todo.
     HORAS_ENTRE_COLETAS = _inteiro(os.environ.get("HORAS_ENTRE_COLETAS"), 3, 1, 24)
+    # Faxina: licitação encerrada há mais de N dias sem interação é removida
+    # (o banco viaja para o GitHub, que corta o push em 100 MB).
+    DIAS_RETER_ENCERRADAS = _inteiro(os.environ.get("DIAS_RETER_ENCERRADAS"),
+                                     30, 7, 365)
     DIAS_JANELA_FUTURA = int(os.environ.get("DIAS_JANELA_FUTURA", "90") or 90)
     # Endereço público do app — usado no rodapé "Ver todas" dos alertas.
     # No Railway, RAILWAY_PUBLIC_DOMAIN já vem preenchido automaticamente.

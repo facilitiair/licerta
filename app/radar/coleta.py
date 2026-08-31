@@ -349,6 +349,11 @@ def coletar():
         avisar_alteracoes(sessao_db)
         _coletar_atas(sessao_db, perfis, erros, sessao=http)
         _baixar_editais_novos(sessao_db, novos_ids, erros, sessao=http)
+        try:
+            from .limpeza import limpar
+            limpar(sessao_db)
+        except Exception:  # noqa: BLE001 — faxina nunca derruba a coleta
+            log.exception("Faxina do banco falhou")
         registro.sucesso = len(erros) == 0
     except Exception as e:  # noqa: BLE001 — última linha de defesa
         if sessao_db is not None:
