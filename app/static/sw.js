@@ -1,10 +1,10 @@
-/* Service worker do Radar de Licitações: recebe o push e mostra o aviso
+/* Service worker da Licerta: recebe o push e mostra o aviso
    na tela do aparelho, mesmo com o site fechado. */
 
 self.addEventListener('push', (evento) => {
   let dados = {};
   try { dados = evento.data ? evento.data.json() : {}; } catch (e) { /* texto cru */ }
-  const titulo = dados.titulo || '📡 Radar de Licitações';
+  const titulo = dados.titulo || '📡 Licerta';
   const opcoes = {
     body: dados.corpo || 'Há novidades no seu radar.',
     icon: '/static/icone-192.png',

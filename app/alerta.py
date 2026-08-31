@@ -349,7 +349,7 @@ def enviar_email(texto, destino=None):
         return False
     try:
         msg = MIMEText(_texto_para_html(texto), "html", "utf-8")
-        msg["Subject"] = f"Radar de Licitações — {agora_local().strftime('%d/%m/%Y')}"
+        msg["Subject"] = f"Licerta — {agora_local().strftime('%d/%m/%Y')}"
         msg["From"] = config.SMTP_USER
         msg["To"] = para
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:

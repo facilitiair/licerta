@@ -1,9 +1,12 @@
-# 📡 Radar de Licitações
+# 📡 Licerta
 
-Aplicativo que monitora licitações públicas do Brasil inteiro pela API
-oficial do **PNCP**, com perfis de busca configuráveis, coleta automática
-ao longo do dia e alertas no **Telegram** e por e-mail. Construído conforme
-o `SPEC.md`.
+**Licerta** ("licitação certa") é uma plataforma de licitações públicas em
+construção por fases — veja `docs/arquitetura-plataforma.md`. O **Radar** é
+o primeiro módulo em produção: monitora o Brasil inteiro pela API oficial
+do **PNCP**, com perfis de busca configuráveis, coleta automática ao longo
+do dia e alertas por **push no celular**, **Telegram** e e-mail. Próximos
+módulos: Editais (ficha analisada por IA), Acompanhamento, Documentos,
+Inteligência e Peças — a camada de prompts já vive em `ia/`.
 
 > **Multiusuário.** Cada pessoa da empresa tem sua conta, seus perfis de
 > busca e seus canais de aviso: **notificação push no celular** (como as dos

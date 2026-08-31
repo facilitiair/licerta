@@ -1,7 +1,7 @@
 {
-  "name": "Radar de Licitações",
-  "short_name": "Radar",
-  "description": "Oportunidades de licitação pública, com alertas no aparelho",
+  "name": "Licerta",
+  "short_name": "Licerta",
+  "description": "Licerta — plataforma de licitações públicas: radar, alertas e análise",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1d4ed8",

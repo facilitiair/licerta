@@ -1,4 +1,4 @@
-"""Radar de Licitações — servidor web (FastAPI) + agendador (APScheduler).
+"""Licerta — servidor web (FastAPI) + agendador (APScheduler).
 
 Subir com:  uvicorn app.main:app  (ou  python -m app.main)
 """
@@ -140,7 +140,7 @@ async def vida(app_):
         agendador.shutdown(wait=False)
 
 
-app = FastAPI(title="Radar de Licitações", lifespan=vida)
+app = FastAPI(title="Licerta", lifespan=vida)
 app.mount("/static", StaticFiles(
     directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
@@ -1233,7 +1233,7 @@ async def config_salvar(request: Request):
 @app.post("/config/testar", response_class=HTMLResponse)
 def config_testar(request: Request, canal: str = Form("telegram")):
     """Botão 'Enviar mensagem de teste' (SPEC §7)."""
-    texto = ("📡 Radar de Licitações — mensagem de teste.\n"
+    texto = ("📡 Licerta — mensagem de teste.\n"
              "Se você recebeu isto, o canal está configurado corretamente. ✅")
     if canal == "email":
         ok = alerta_mod.enviar_email(texto)
@@ -1392,8 +1392,8 @@ def telegram_confirmar(request: Request):
                 usuario.telegram_codigo = ""
                 s.commit()
                 alerta_mod.enviar_telegram(
-                    "✅ Pronto! Seus alertas do Radar de Licitações vão "
-                    "chegar aqui.", chat_id=usuario.telegram_chat_id)
+                    "✅ Pronto! Seus alertas da Licerta vão chegar aqui.",
+                    chat_id=usuario.telegram_chat_id)
                 return _resposta_html(True, "Conectado! Mandei uma mensagem "
                                             "de boas-vindas no seu Telegram.",
                                       "")
@@ -1422,7 +1422,7 @@ def conta_testar(request: Request, canal: str):
     s = Sessao()
     try:
         usuario = s.get(Usuario, eu(request).id)
-        texto = ("📡 Radar de Licitações — teste dos seus alertas.\n"
+        texto = ("📡 Licerta — teste dos seus alertas.\n"
                  "Se chegou, este canal está pronto. ✅")
         if canal == "telegram":
             if not usuario.telegram_chat_id:
@@ -1440,7 +1440,7 @@ def conta_testar(request: Request, canal: str):
                                   "sair só pela rotina diária.")
         if canal == "push":
             entregues = push_mod.enviar_push(
-                s, usuario, "📡 Radar de Licitações",
+                s, usuario, "📡 Licerta",
                 "Teste: os avisos no aparelho estão funcionando ✅", url="/")
             return _resposta_html(entregues > 0,
                                   f"Enviado para {entregues} aparelho(s).",

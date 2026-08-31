@@ -83,7 +83,7 @@ def salvar(novos):
         valores[c] = novo
     guardadas = _outras_chaves()
     with open(CAMINHO_ENV, "w", encoding="utf-8") as f:
-        f.write("# Gerado pela tela /config do Radar de Licitações\n")
+        f.write("# Gerado pela tela /config da Licerta\n")
         for chave in CHAVES:
             f.write(f"{chave}={valores[chave]}\n")
         for chave, valor in guardadas.items():
