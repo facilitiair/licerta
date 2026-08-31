@@ -8,6 +8,7 @@ import requests
 from ..config import agora, config
 from ..db import Ata, ColetaLog, Licitacao, PerfilBusca, PerfilMatch, Sessao
 from ..editais.arquivos import baixar_arquivos
+from .alteracoes import avisar_alteracoes, registrar as registrar_alteracoes
 from .matcher import licitacao_casa_perfil, normalizar, texto_casa
 from ..ingestao.pncp import MODALIDADES, atas_atualizadas, propostas_abertas
 from ..ingestao.tcepi import coletar_mural, municipio_do_orgao
@@ -58,6 +59,9 @@ def _upsert(sessao_db, item):
     lic = sessao_db.query(Licitacao).filter_by(
         numero_controle_pncp=item["numero_controle_pncp"]).first()
     if lic:
+        # Antes de sobrescrever: mudança relevante vira registro e, depois,
+        # aviso a quem acompanha (republicação/suspensão/prorrogação).
+        registrar_alteracoes(sessao_db, lic, item)
         for campo, valor in item.items():
             if valor is None and getattr(lic, campo, None) is not None:
                 continue
@@ -340,6 +344,9 @@ def coletar():
         novos_ids = _rodar_matcher(sessao_db, perfis)
         novas = len(novos_ids)
         sessao_db.commit()
+        # Editais acompanhados que mudaram nesta rodada: aviso na hora.
+        # Nunca derruba a coleta (a própria função engole e loga).
+        avisar_alteracoes(sessao_db)
         _coletar_atas(sessao_db, perfis, erros, sessao=http)
         _baixar_editais_novos(sessao_db, novos_ids, erros, sessao=http)
         registro.sucesso = len(erros) == 0

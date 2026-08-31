@@ -31,8 +31,8 @@ from .radar.coleta import (MSG_INTERROMPIDA, coleta_em_andamento,
                            coletar_em_background)
 from .config import PASTA_DADOS, VERSAO, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, EditalFicha, Licitacao,
-                 Modalidade, Municipio, PerfilBusca, PerfilMatch,
-                 PushAssinatura, Sessao, Usuario, VigiaProblema,
+                 LicitacaoAlteracao, Modalidade, Municipio, PerfilBusca,
+                 PerfilMatch, PushAssinatura, Sessao, Usuario, VigiaProblema,
                  criar_tabelas)
 from .editais.analise import SemChaveIA, analisar_edital
 from .editais.arquivos import baixar_arquivos
@@ -965,11 +965,18 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
         s.commit()
         arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
         ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
+        from .radar.alteracoes import CAMPOS_VIGIADOS
+        alteracoes = (s.query(LicitacaoAlteracao)
+                      .filter_by(licitacao_id=lic_id)
+                      .order_by(LicitacaoAlteracao.detectada_em.desc())
+                      .limit(20).all())
         return templates.TemplateResponse(request, "_licitacao_detalhe.html",
                                           {"lic": lic, "matches": matches,
                                            "arquivos": arquivos,
                                            "ficha": ficha,
                                            "dados": _dados_ficha(ficha),
+                                           "alteracoes": alteracoes,
+                                           "rotulos_alteracao": CAMPOS_VIGIADOS,
                                            "sou_admin": _sou_admin(request)})
     finally:
         s.close()

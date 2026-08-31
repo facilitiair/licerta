@@ -174,6 +174,16 @@ Princípios (de `docs/arquitetura-plataforma.md`):
 - PDF escaneado (só imagem) não gasta IA: a ficha explica e aponta o link
   do documento.
 
+## 5.3 Edital que você acompanha mudou? Você fica sabendo
+
+A coleta compara cada edital recém-baixado com o que já estava no banco.
+Mudou **situação** (suspenso! revogado!), **prazo de proposta**
+(prorrogado), **valor estimado** ou **objeto**, e o edital está com você
+em *Em análise*, *Vou participar* ou favoritado → chega aviso na hora
+pelos seus canais, e o histórico da mudança aparece no detalhe da
+licitação. Edital ainda não triado não gera aviso — mudança de algo que
+você nem olhou seria só ruído.
+
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).

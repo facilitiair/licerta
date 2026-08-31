@@ -147,6 +147,26 @@ class PerfilMatch(Base):
                                        name="uq_perfil_licitacao"),)
 
 
+class LicitacaoAlteracao(Base):
+    """Mudança relevante numa licitação já conhecida — republicação,
+    suspensão, prorrogação de prazo, mudança de valor ou de objeto.
+
+    Detectada no upsert da coleta comparando campo a campo (nunca o payload
+    bruto, que muda a cada resposta). Alimenta o aviso a quem acompanha o
+    edital; `avisada` marca que o ciclo de aviso já a processou.
+    """
+    __tablename__ = "licitacao_alteracoes"
+    id = Column(Integer, primary_key=True)
+    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"), nullable=False,
+                          index=True)
+    campo = Column(String, nullable=False)
+    valor_antigo = Column(Text, default="")
+    valor_novo = Column(Text, default="")
+    detectada_em = Column(DateTime, default=agora, nullable=False)
+    avisada = Column(Boolean, default=False, nullable=False, index=True)
+    licitacao = relationship("Licitacao")
+
+
 class ColetaLog(Base):
     __tablename__ = "coletas_log"
     id = Column(Integer, primary_key=True)
