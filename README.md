@@ -42,12 +42,14 @@ copy .env.example .env        (no Mac/Linux: cp .env.example .env)
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Abra **http://localhost:8000** no navegador. Na primeira vez o app baixa a
-lista de municípios do IBGE e cria um perfil de exemplo (ar-condicionado no
-Piauí). Clique em **"Coletar agora"** para a primeira carga.
+Abra **http://localhost:8000** no navegador. O primeiro acesso cria a conta
+do administrador; na sequência o app baixa a lista de municípios do IBGE.
+Crie seu primeiro perfil em **Perfis e alertas** e clique em **"Coletar
+agora"** para a primeira carga.
 
-A coleta automática roda todo dia às **06:00** e o alerta às **07:00**
-(horário de Fortaleza; mude no `.env`). Basta o programa ficar aberto.
+A coleta automática roda a cada 3 horas a partir das **06:00** e cada alerta
+sai na frequência escolhida no perfil (horário de Fortaleza; mude no `.env`
+e na tela de cada perfil). Basta o programa ficar aberto.
 
 ## 3. Como criar o bot do Telegram (5 minutos)
 
@@ -108,7 +110,8 @@ alerta fora da agenda, útil para conferir se está tudo certo.
 | Chave | Para quê |
 |---|---|
 | `APP_SENHA` | Senha do painel. Vazia só é aceita em rede local — publicado, o app se recusa a abrir sem senha. |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alertas no Telegram. |
+| `TELEGRAM_BOT_TOKEN` | Bot do Telegram da instalação (um para todos). |
+| `TELEGRAM_CHAT_ID` / `EMAIL_DESTINO` | Reserva de instalação antiga — cada pessoa conecta o seu em Minha conta. |
 | `EMAIL_ATIVO` + `SMTP_*` | Alerta também por e-mail (opcional, Fase 2). |
 | `HORA_COLETA` | Hora da **primeira** coleta do dia (HH:MM). |
 | `HORAS_ENTRE_COLETAS` | Repete a coleta de N em N horas (padrão 3; use 24 para uma só). |
