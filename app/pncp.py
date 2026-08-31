@@ -17,8 +17,8 @@ log = logging.getLogger("radar.pncp")
 
 BASE = "https://pncp.gov.br/api/consulta"
 TIMEOUT = 30
-PAUSA = 0.3                 # ~300 ms entre chamadas (SPEC §3.2.4)
-TENTATIVAS = 3
+PAUSA = 0.4                 # pausa entre chamadas (SPEC §3.2.4)
+TENTATIVAS = 5              # o rate-limit do PNCP às vezes exige paciência
 TAMANHO_PAGINA = 500        # máximo aceito pela API; cai para 50 se recusado
 
 # Tabela de domínio do Manual de APIs de Consulta (SPEC §3.3)
@@ -33,7 +33,7 @@ MODALIDADES = {
 
 def _get(sessao, url, params):
     """GET com retry exponencial. Devolve a resposta ou levanta a última falha."""
-    espera = 2.0
+    espera = 6.0
     for tentativa in range(1, TENTATIVAS + 1):
         try:
             time.sleep(PAUSA)
