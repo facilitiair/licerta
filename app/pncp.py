@@ -87,7 +87,9 @@ def mapear_registro(r):
         "data_encerramento_proposta": r.get("dataEncerramentoProposta"),
         "link_sistema_origem": r.get("linkSistemaOrigem"),
         "link_pncp": montar_link_pncp(r.get("numeroControlePNCP")),
-        "situacao": r.get("situacaoCompraNome"),
+        # unificado com o Mural TCE-PI: "Divulgada no PNCP" -> "Divulgada"
+        "situacao": (r.get("situacaoCompraNome") or "").replace(
+            " no PNCP", "") or None,
         "objeto_norm": normalizar(r.get("objetoCompra") or ""),
         "payload_json": json.dumps(r, ensure_ascii=False),
     }

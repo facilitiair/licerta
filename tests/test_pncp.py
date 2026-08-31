@@ -25,6 +25,13 @@ REGISTRO = {
 }
 
 
+def test_situacao_unificada_entre_fontes():
+    # "Divulgada no PNCP" e "Divulgada" (TCE) precisam virar o mesmo valor,
+    # senão o filtro de situação separa as fontes por acidente
+    m = mapear_registro(dict(REGISTRO, situacaoCompraNome="Divulgada no PNCP"))
+    assert m["situacao"] == "Divulgada"
+
+
 def test_mapear_registro_usa_nomes_reais_da_api():
     m = mapear_registro(REGISTRO)
     assert m["numero_controle_pncp"] == "06553481000300-1-000018/2026"

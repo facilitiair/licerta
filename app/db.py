@@ -179,4 +179,9 @@ def _migrar():
                 if nome not in colunas:
                     con.exec_driver_sql(
                         f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+        # Unifica a situação entre as fontes (PNCP dizia "Divulgada no PNCP",
+        # o Mural TCE-PI diz "Divulgada") — idempotente, roda a cada partida
+        con.exec_driver_sql(
+            "UPDATE licitacoes SET situacao = REPLACE(situacao, ' no PNCP', '') "
+            "WHERE situacao LIKE '% no PNCP'")
         con.commit()
