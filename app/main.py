@@ -474,7 +474,7 @@ async def painel(request: Request):
 
 
 # ---------------------------------------------------------- funil (kanban)
-COLUNAS_FUNIL = [("novo", "Novas"), ("analisando", "Em análise"),
+COLUNAS_FUNIL = [("novo", "A triar"), ("analisando", "Em análise"),
                  ("vou_participar", "Vou participar"),
                  ("descartado", "Descartadas")]
 

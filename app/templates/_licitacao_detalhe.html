@@ -76,7 +76,7 @@
       <select name="status" class="select" style="min-height: 36px">
         {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
         <option value="{{ st }}" {{ 'selected' if m.status == st }}>
-          {{ st.replace('_', ' ') }}</option>
+          {{ 'a triar' if st == 'novo' else st.replace('_', ' ') }}</option>
         {% endfor %}
       </select>
     </label>

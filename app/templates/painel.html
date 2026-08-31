@@ -159,7 +159,7 @@
           {% if m.lic.valor_total_estimado %}
           <span class="text-slate-400">· {{ m.lic.valor_total_estimado|dinheiro }}</span>
           {% endif %}
-          {{ c.badge(m.status.replace('_', ' '),
+          {{ c.badge('a triar' if m.status == 'novo' else m.status.replace('_', ' '),
                      {'novo': 'atencao', 'analisando': 'primario',
                       'vou_participar': 'sucesso'}.get(m.status, 'neutro')) }}
         </p>
