@@ -230,6 +230,42 @@ class ArquivoEdital(Base):
     licitacao = relationship("Licitacao")
 
 
+class EmpresaDados(Base):
+    """Identidade da empresa desta instalação — linha única (id=1).
+
+    Vive no BANCO, não no código (produto genérico): entra nas peças
+    jurídicas como dado. Nada aqui é obrigatório; o que faltar sai na
+    minuta como [PREENCHER].
+    """
+    __tablename__ = "empresa_dados"
+    id = Column(Integer, primary_key=True)      # sempre 1
+    razao_social = Column(String, default="")
+    cnpj = Column(String, default="")
+    endereco = Column(String, default="")
+    representante_nome = Column(String, default="")
+    representante_cargo = Column(String, default="")
+    atualizado_em = Column(DateTime, default=agora)
+
+
+class Minuta(Base):
+    """Peça jurídica gerada sob demanda (camada 3) — SEMPRE rascunho.
+
+    Fica guardada com o custo: geração é por clique do usuário, o custo é
+    atribuível e dá para limitar por plano no futuro (arquitetura §7).
+    """
+    __tablename__ = "minutas"
+    id = Column(Integer, primary_key=True)
+    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"),
+                          nullable=False, index=True)
+    tipo = Column(String, default="impugnacao", nullable=False)
+    texto = Column(Text, default="")
+    modelo = Column(String, default="")
+    custo_usd = Column(Float, default=0.0)
+    criado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    criada_em = Column(DateTime, default=agora, nullable=False)
+    licitacao = relationship("Licitacao")
+
+
 class DocumentoEmpresa(Base):
     """Documento do dossiê da EMPRESA (certidão, atestado, balanço...).
 

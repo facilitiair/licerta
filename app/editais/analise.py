@@ -31,8 +31,9 @@ VERSAO_PROMPT = "ficha-edital/1"
 LIMITE_CARACTERES = 300_000
 
 
-class SemChaveIA(RuntimeError):
-    """ANTHROPIC_API_KEY não configurada — o módulo de IA está desligado."""
+# Erro compartilhado da camada de IA — definido lá; reexportado aqui porque
+# main.py e os testes o conhecem por este caminho.
+from ia.cliente import SemChaveIA  # noqa: E402,F401
 
 
 def extrair_texto_pdfs(arquivos):

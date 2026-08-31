@@ -98,6 +98,22 @@
         <li><b>{{ r.clausula or '—' }}</b>: {{ r.motivo or r }}</li>
         {% endfor %}
       </ul>
+      {% if not (prazos and (prazos.impugnacao_passou or prazos.sessao_passou)) %}
+      <div class="mt-2 flex items-center gap-2 flex-wrap">
+        <button hx-post="/licitacoes/{{ lic.id }}/minuta"
+                hx-target="#minutamsg{{ lic.id }}" hx-swap="innerHTML"
+                hx-disabled-elt="this"
+                hx-confirm="Gerar a minuta de impugnação destes riscos? A geração é paga (centavos por peça) e o resultado é RASCUNHO para revisão."
+                class="border border-amber-700 text-amber-900 px-3 py-1.5
+                       rounded-lg text-xs font-semibold hover:bg-amber-100">
+          📜 Gerar minuta de impugnação (IA)
+          <span class="htmx-indicator">⏳ redigindo (até 1 min)...</span>
+        </button>
+        <span class="text-[10px] text-amber-800">Sai como minuta — revisão
+          por pessoa habilitada é obrigatória.</span>
+      </div>
+      <div id="minutamsg{{ lic.id }}" class="mt-2"></div>
+      {% endif %}
     </div>
     {% endif %}
 

@@ -51,6 +51,8 @@ ROTAS_GET = [
     "/licitacoes/exportar?formato=xlsx",
     "/documentos",
     "/documentos/999999/arquivo",           # 404 sem 500
+    "/minutas/999999",                      # 404 sem 500
+    "/minutas/999999/baixar",
     "/atas",
     "/atas?q=ar condicionado&adesao=1&pagina=999",
     "/atas?pagina=0",
@@ -73,6 +75,7 @@ ROTAS_POST = [
     ("/licitacoes/999999/analisar", {"forcar": 0}),   # id inexistente -> 404
     ("/documentos/999999/salvar", {"nome": "x", "validade": "lixo"}),
     ("/documentos/999999/arquivar", {}),
+    ("/licitacoes/999999/minuta", {}),                # 404 sem 500
     ("/funil/mover/999999/novo", {}),                 # id inexistente
     ("/funil/mover/1/status_invalido", {}),           # status inválido
     ("/pesquisar/salvar", {}),                        # sem identificador -> 400

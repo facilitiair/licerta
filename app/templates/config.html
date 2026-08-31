@@ -8,6 +8,11 @@
   (horários reajustados sem reiniciar).</p>
 {% endif %}
 
+<!-- Formulário-âncora dos dados da empresa: os campos vivem DENTRO do
+     cartão (no meio do form principal) e apontam para cá via form= —
+     HTML não aceita form aninhado. -->
+<form id="formEmpresa" method="post" action="/config/empresa"></form>
+
 <form method="post" action="/config" class="space-y-5">
   <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
     <h3 class="font-semibold">Acesso</h3>
@@ -78,6 +83,39 @@
                  rounded-lg text-sm cursor-pointer hover:bg-blue-50">
       ✉ Enviar e-mail de teste</span>
     <span id="resEmail"></span>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <h3 class="font-semibold">Empresa (entra nas minutas jurídicas)</h3>
+    <p class="text-xs text-slate-500">Identidade usada no cabeçalho das
+      peças geradas por IA. O que ficar em branco sai na minuta como
+      [PREENCHER]. Salva no banco, junto com seus dados — nada disso vai
+      para o código.</p>
+    <div class="grid sm:grid-cols-2 gap-3 text-sm">
+      <label>Razão social
+        <input form="formEmpresa" name="razao_social"
+               value="{{ empresa.razao_social }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>CNPJ
+        <input form="formEmpresa" name="cnpj" value="{{ empresa.cnpj }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="sm:col-span-2">Endereço completo
+        <input form="formEmpresa" name="endereco" value="{{ empresa.endereco }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Representante legal
+        <input form="formEmpresa" name="representante_nome"
+               value="{{ empresa.representante_nome }}"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label>Cargo do representante
+        <input form="formEmpresa" name="representante_cargo"
+               value="{{ empresa.representante_cargo }}"
+               placeholder="sócio-administrador"
+               class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    </div>
+    <button form="formEmpresa"
+            class="border border-blue-700 text-blue-700 px-4 py-1.5
+                   rounded-lg text-sm font-semibold hover:bg-blue-50">
+      💾 Salvar dados da empresa</button>
   </div>
 
   <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">

@@ -204,6 +204,21 @@ sessão** (renove já!), 🟥 vencido, ❌ falta, ❓ conferir manualmente. A
 validade é aferida na **data da sessão**, não na de hoje — e o cruzamento
 é aproximação por tipo: quem bate o martelo é você.
 
+## 5.5 Minutas jurídicas — sempre rascunho
+
+Quando a ficha de IA aponta cláusulas de risco e o prazo do art. 164
+ainda está aberto (conta feita por código), o botão **"Gerar minuta de
+impugnação"** redige a peça a partir dos riscos, do texto do edital e
+dos dados da empresa (preenchidos em /config). Regras duras:
+
+- **Toda peça sai como MINUTA**, com aviso de revisão obrigatória por
+  pessoa habilitada — no texto e na tela. Sem exceção.
+- **Prazo vencido = recusa**: em vez de gerar peça intempestiva, o app
+  aponta os caminhos que restam (esclarecimento, representação, via
+  judicial) e manda procurar orientação humana.
+- O que o app não sabe sai como `[PREENCHER: ...]` — nunca inventado.
+- Geração é por clique, custo gravado na minuta (dá para cobrar à parte).
+
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).

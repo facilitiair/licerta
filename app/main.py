@@ -31,9 +31,10 @@ from .radar.coleta import (MSG_INTERROMPIDA, coleta_em_andamento,
                            coletar_em_background)
 from .config import PASTA_DADOS, VERSAO, agora, config, hoje
 from .db import (ArquivoEdital, Ata, ColetaLog, DocumentoEmpresa, EditalFicha,
-                 Licitacao, LicitacaoAlteracao, Modalidade, Municipio,
-                 PerfilBusca, PerfilMatch, PushAssinatura, Sessao, Usuario,
-                 VigiaProblema, criar_tabelas)
+                 EmpresaDados, Licitacao, LicitacaoAlteracao, Minuta,
+                 Modalidade, Municipio, PerfilBusca, PerfilMatch,
+                 PushAssinatura, Sessao, Usuario, VigiaProblema,
+                 criar_tabelas)
 from .documentos import validades as validades_mod
 from .editais.analise import SemChaveIA, analisar_edital
 from .editais.arquivos import baixar_arquivos
@@ -993,12 +994,15 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
                       .order_by(LicitacaoAlteracao.detectada_em.desc())
                       .limit(20).all())
         dados = _dados_ficha(ficha)
+        minutas = (s.query(Minuta).filter_by(licitacao_id=lic_id)
+                   .order_by(Minuta.criada_em.desc()).all())
         return templates.TemplateResponse(request, "_licitacao_detalhe.html",
                                           {"lic": lic, "matches": matches,
                                            "arquivos": arquivos,
                                            "ficha": ficha, "dados": dados,
                                            "alteracoes": alteracoes,
                                            "rotulos_alteracao": CAMPOS_VIGIADOS,
+                                           "minutas": minutas,
                                            "sou_admin": _sou_admin(request),
                                            **_contexto_checklist(s, dados, lic)})
     finally:
@@ -1335,6 +1339,89 @@ async def pesquisar_salvar(request: Request):
 
 
 # ----------------------------------------------------------------------- logs
+# ------------------------------------------------------------ peças (minutas)
+@app.post("/licitacoes/{lic_id}/minuta", response_class=HTMLResponse)
+def licitacao_minuta(request: Request, lic_id: int):
+    """Gera a minuta de impugnação (camada 3, sob demanda) e abre a página."""
+    from .pecas import minutas as minutas_mod
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
+        try:
+            minuta = minutas_mod.gerar_impugnacao(
+                s, lic, _dados_ficha(ficha), usuario=eu(request))
+        except (minutas_mod.MinutaIndevida, SemChaveIA) as e:
+            corpo = escape(str(e))
+            extra = (' <a href="/config" class="underline">Configurações</a>'
+                     if isinstance(e, SemChaveIA) and _sou_admin(request)
+                     else "")
+            return HTMLResponse(
+                f'<div class="text-xs bg-amber-50 border border-amber-300 '
+                f'text-amber-900 rounded-lg px-3 py-2">📜 {corpo}{extra}</div>')
+        # htmx segue para a página da minuta pronta
+        resposta = HTMLResponse("")
+        resposta.headers["HX-Redirect"] = f"/minutas/{minuta.id}"
+        return resposta
+    finally:
+        s.close()
+
+
+@app.get("/minutas/{minuta_id}", response_class=HTMLResponse)
+def minuta_ver(request: Request, minuta_id: int):
+    s = Sessao()
+    try:
+        minuta = s.get(Minuta, minuta_id)
+        if not minuta:
+            return HTMLResponse("Minuta não encontrada.", status_code=404)
+        return templates.TemplateResponse(request, "minuta.html", {
+            "minuta": minuta, "lic": minuta.licitacao,
+            "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
+@app.get("/minutas/{minuta_id}/baixar")
+def minuta_baixar(request: Request, minuta_id: int):
+    s = Sessao()
+    try:
+        minuta = s.get(Minuta, minuta_id)
+        if not minuta:
+            return HTMLResponse("Minuta não encontrada.", status_code=404)
+        nome = f"minuta-{minuta.tipo}-{minuta.licitacao_id}.md"
+        return Response(minuta.texto, media_type="text/markdown",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{nome}"'})
+    finally:
+        s.close()
+
+
+@app.post("/config/empresa")
+async def config_empresa(request: Request):
+    """Identidade da empresa (linha única no banco) — entra nas minutas."""
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
+    from .pecas.minutas import dados_empresa
+    form = await request.form()
+    s = Sessao()
+    try:
+        dados = dados_empresa(s)
+        dados.razao_social = (form.get("razao_social") or "").strip()[:200]
+        dados.cnpj = (form.get("cnpj") or "").strip()[:20]
+        dados.endereco = (form.get("endereco") or "").strip()[:300]
+        dados.representante_nome = (form.get("representante_nome")
+                                    or "").strip()[:120]
+        dados.representante_cargo = (form.get("representante_cargo")
+                                     or "").strip()[:80]
+        dados.atualizado_em = agora()
+        s.commit()
+        return RedirectResponse("/config?salvo=1", status_code=303)
+    finally:
+        s.close()
+
+
 # ------------------------------------------------------ documentos da empresa
 PASTA_DOCUMENTOS = os.path.join(PASTA_DADOS, "documentos")
 
@@ -1488,10 +1575,16 @@ async def logs_coletas(request: Request):
 async def config_form(request: Request, salvo: int = 0):
     if not _sou_admin(request):
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse(request, "config.html", {
-        "valores": envcfg.valores_para_tela(), "salvo": salvo,
-        "resultado_teste": None,
-    })
+    from .pecas.minutas import dados_empresa
+    s = Sessao()
+    try:
+        empresa = dados_empresa(s)
+        return templates.TemplateResponse(request, "config.html", {
+            "valores": envcfg.valores_para_tela(), "salvo": salvo,
+            "resultado_teste": None, "empresa": empresa,
+        })
+    finally:
+        s.close()
 
 
 @app.post("/config")

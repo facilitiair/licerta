@@ -29,6 +29,17 @@ API_URL = "https://api.anthropic.com/v1/messages"
 TENTATIVAS = 2
 
 
+class SemChaveIA(RuntimeError):
+    """ANTHROPIC_API_KEY não configurada — os módulos de IA estão desligados."""
+
+
+def exigir_chave():
+    if not os.environ.get("ANTHROPIC_API_KEY", ""):
+        raise SemChaveIA(
+            "A geração por IA está desligada: falta a chave da API "
+            "(ANTHROPIC_API_KEY). O administrador configura em /config.")
+
+
 def carregar_prompt(nome):
     """Lê um prompt versionado de ia/prompts/ (ex.: 'analise-edital' ou
     'peritos/perito-contabil')."""

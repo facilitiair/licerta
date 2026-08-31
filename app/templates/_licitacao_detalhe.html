@@ -46,6 +46,16 @@
 
   {% include "_ficha_edital.html" %}
 
+  {% if minutas %}
+  <div class="text-xs bg-white border border-slate-200 rounded-lg px-3 py-2">
+    <b>📜 Minutas geradas:</b>
+    {% for m in minutas %}
+    <a href="/minutas/{{ m.id }}" class="text-blue-700 underline ml-2">
+      {{ m.tipo }} de {{ m.criada_em.strftime('%d/%m %H:%M') }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% for m in matches %}
   <form hx-post="/matches/{{ m.id }}" hx-target="#salvo{{ m.id }}"
         class="border border-slate-200 rounded-lg p-3 bg-white
