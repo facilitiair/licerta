@@ -398,41 +398,146 @@ def _dias_ate(data_iso):
 
 @app.get("/", response_class=HTMLResponse)
 async def painel(request: Request):
+    """Painel do dia = FILA DE AÇÕES (arquitetura §9, Regras de UI §10).
+
+    Não é um espelho do banco: são até 5 cartões do que precisa do usuário
+    HOJE, ordenados pela consequência de ignorar. Estoque (milhares de
+    editais coletados, centenas encerrando) nunca vira número na cara de
+    ninguém — foi exatamente a reclamação do primeiro usuário real.
+    """
     s = Sessao()
     try:
         meus = (PerfilBusca.usuario_id == eu(request).id)
+        agora_ = agora()
+        hoje = agora_.strftime("%Y-%m-%d")
+        acoes = []
 
-        def conta(status):
-            return (s.query(PerfilMatch).join(PerfilBusca)
-                    .filter(PerfilMatch.status == status, meus).count())
+        # 1º — disputas MINHAS com prazo em risco (as únicas vermelhas, §5)
+        disputas = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
+                    .filter(meus, PerfilMatch.status == "vou_participar",
+                            Licitacao.data_encerramento_proposta >= hoje)
+                    .order_by(Licitacao.data_encerramento_proposta))
+        for m in disputas.limit(5):
+            dias = _dias_ate(m.licitacao.data_encerramento_proposta) or 99
+            if dias > 3 or len(acoes) >= 3:
+                break
+            lic = m.licitacao
+            acoes.append({
+                "tom": "critico", "icone": "alarm-clock",
+                "titulo": ("Sua disputa fecha "
+                           + _filtro_quando(lic.data_encerramento_proposta)),
+                "detalhe": f"{lic.modalidade_nome or 'Licitação'} — "
+                           f"{lic.municipio_nome or ''}/{lic.uf or ''}: "
+                           f"{_filtro_sentenca(lic.objeto or '')[:120]}",
+                "rota": "/agenda", "rotulo": "ver na agenda"})
 
-        hoje = agora().strftime("%Y-%m-%d")
-        ativos = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
-                  .filter(meus, PerfilMatch.status != "descartado",
-                          Licitacao.data_encerramento_proposta >= hoje)
-                  .order_by(Licitacao.data_encerramento_proposta))
-        urgentes = [m for m in ativos
-                    if (_dias_ate(m.licitacao.data_encerramento_proposta) or 99) <= 7]
-        proximos = [{"lic": m.licitacao, "status": m.status,
-                     "dias": _dias_ate(m.licitacao.data_encerramento_proposta)}
-                    for m in ativos.limit(8)]
-        kpis = {"novas": conta("novo"), "analisando": conta("analisando"),
-                "participar": conta("vou_participar"), "urgentes": len(urgentes)}
-        fecham_hoje = sum(1 for m in urgentes
-                          if (m.licitacao.data_encerramento_proposta
-                              or "")[:10] == hoje)
-        # Vermelho é reservado (UI §5): a faixa só é crítica se algo que o
-        # usuário MARCOU "vou participar" fecha hoje; novidade não triada
-        # fechando hoje é atenção (âmbar), não alarme.
-        fecha_hoje_disputa = any(
-            m.status == "vou_participar" for m in urgentes
-            if (m.licitacao.data_encerramento_proposta or "")[:10] == hoje)
-        # A última coleta CONCLUÍDA, com ou sem tropeços: uma varredura que
-        # trouxe 900 editais e falhou numa combinação continua sendo coleta.
+        # 2º — certidões da empresa vencendo (vermelho só ≤ 7 dias, §5)
+        docs_alerta = []
+        consulta_docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False)
+                         .filter(DocumentoEmpresa.validade.isnot(None)))
+        for d in consulta_docs:
+            situ, dias = validades_mod.situacao_documento(d)
+            if situ == "vencido" or (situ == "vencendo" and dias <= 15):
+                docs_alerta.append((d, situ, dias))
+        if docs_alerta:
+            docs_alerta.sort(key=lambda x: x[2])
+            d, situ, dias = docs_alerta[0]
+            frase = (f"{d.nome} venceu" if situ == "vencido"
+                     else f"{d.nome} vence "
+                          + ("hoje" if dias == 0 else f"em {dias} dia"
+                             + ("s" if dias != 1 else "")))
+            extra = (f" — e mais {len(docs_alerta) - 1} documento"
+                     f"{'s' if len(docs_alerta) > 2 else ''} precisando de "
+                     "atenção" if len(docs_alerta) > 1 else "")
+            acoes.append({
+                "tom": "critico" if situ == "vencido" or dias <= 7
+                       else "atencao",
+                "icone": "file-warning",
+                "titulo": "Documento da empresa: " + frase,
+                "detalhe": "Renove antes que trave uma habilitação" + extra
+                           + ".",
+                "rota": "/documentos", "rotulo": "abrir dossiê"})
+
+        # 3º — edital que acompanho mudou nas últimas 48h
+        corte_48h = agora_ - timedelta(hours=48)
+        mudados = (s.query(Licitacao)
+                   .join(LicitacaoAlteracao,
+                         LicitacaoAlteracao.licitacao_id == Licitacao.id)
+                   .join(PerfilMatch,
+                         PerfilMatch.licitacao_id == Licitacao.id)
+                   .join(PerfilBusca)
+                   .filter(meus,
+                           LicitacaoAlteracao.detectada_em >= corte_48h,
+                           (PerfilMatch.status.in_(("analisando",
+                                                    "vou_participar")))
+                           | (PerfilMatch.favorito.is_(True)))
+                   .distinct().limit(3).all())
+        if mudados:
+            nomes = "; ".join(
+                f"{l.municipio_nome or ''}/{l.uf or ''} — "
+                f"{_filtro_sentenca(l.objeto or '')[:60]}" for l in mudados)
+            acoes.append({
+                "tom": "atencao", "icone": "file-diff",
+                "titulo": f"{len(mudados)} edital"
+                          f"{'is' if len(mudados) != 1 else ''} que você "
+                          "acompanha mudou",
+                "detalhe": nomes,
+                "rota": "/funil", "rotulo": "conferir"})
+
+        # 4º — triagem do dia: só o que chegou nas últimas 24h E casa com
+        # um perfil ativo (nunca o estoque acumulado)
+        corte_24h = agora_ - timedelta(hours=24)
+        novas_24h = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
+                     .filter(meus, PerfilMatch.status == "novo",
+                             PerfilMatch.data_match >= corte_24h,
+                             Licitacao.data_encerramento_proposta >= hoje)
+                     .count())
+        if novas_24h and len(acoes) < 5:
+            acoes.append({
+                "tom": "info", "icone": "inbox",
+                "titulo": f"{novas_24h} oportunidade"
+                          f"{'s' if novas_24h != 1 else ''} nova"
+                          f"{'s' if novas_24h != 1 else ''} desde ontem",
+                "detalhe": "Casaram com os seus perfis. Vale uma triagem "
+                           "rápida: o que não interessar, descarte.",
+                "rota": "/funil", "rotulo": "triar agora"})
+        acoes = acoes[:5]
+
+        # "Tudo em dia" precisa dizer o que vem a seguir (arquitetura §9)
+        proxima_disputa = (s.query(Licitacao).join(PerfilMatch)
+                           .join(PerfilBusca)
+                           .filter(meus, PerfilMatch.status.in_(
+                               ("analisando", "vou_participar")),
+                               Licitacao.data_encerramento_proposta >= hoje)
+                           .order_by(Licitacao.data_encerramento_proposta)
+                           .first())
+
+        # Em andamento: SÓ o que o usuário já puxou para si (§10) — o
+        # não-triado tem o cartão de triagem, não uma lista.
+        andamento = [{"lic": m.licitacao, "status": m.status,
+                      "dias": _dias_ate(
+                          m.licitacao.data_encerramento_proposta)}
+                     for m in (s.query(PerfilMatch).join(Licitacao)
+                               .join(PerfilBusca)
+                               .filter(meus, PerfilMatch.status.in_(
+                                   ("analisando", "vou_participar")),
+                                   Licitacao.data_encerramento_proposta
+                                   >= hoje)
+                               .order_by(
+                                   Licitacao.data_encerramento_proposta)
+                               .limit(5))]
+        resumo_funil = {
+            "analisando": (s.query(PerfilMatch).join(PerfilBusca)
+                           .filter(meus, PerfilMatch.status == "analisando")
+                           .count()),
+            "participar": (s.query(PerfilMatch).join(PerfilBusca)
+                           .filter(meus,
+                                   PerfilMatch.status == "vou_participar")
+                           .count()),
+        }
+
         ultima = (s.query(ColetaLog).filter(ColetaLog.fim.isnot(None))
                   .order_by(ColetaLog.fim.desc()).first())
-        ultimas = (s.query(Licitacao)
-                   .order_by(Licitacao.coletado_em.desc()).limit(8).all())
         # Primeiros passos: a tela inicial de quem acabou de chegar precisa
         # dizer O QUE FAZER, não mostrar zeros. Some sozinha quando os três
         # passos estão completos.
@@ -445,28 +550,18 @@ async def painel(request: Request):
                 (usuario.receber_telegram and usuario.telegram_chat_id)
                 or (usuario.receber_email and usuario.email_alertas)
                 or (usuario.receber_push and usuario.assinaturas_push)),
-            "coleta": bool(ultimas),       # o radar já tem dados?
+            "coleta": s.query(Licitacao.id).first() is not None,
         }
-        # Certidão vencendo interessa a TODOS (o dossiê é da empresa).
-        docs_alerta = []
-        consulta_docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False)
-                         .filter(DocumentoEmpresa.validade.isnot(None)))
-        for d in consulta_docs:
-            situ, dias = validades_mod.situacao_documento(d)
-            if situ in ("vencido", "vencendo"):
-                docs_alerta.append({"doc": d, "situacao": situ, "dias": dias})
-        docs_alerta.sort(key=lambda x: x["dias"])
         # Problemas do vigia: assunto de quem opera a instalação. Para os
         # demais usuários o painel segue limpo — eles não têm o que fazer.
         problemas = (s.query(VigiaProblema).order_by(VigiaProblema.desde).all()
                      if eu(request).papel == "admin" else [])
         return templates.TemplateResponse(request, "painel.html", {
-            "kpis": kpis, "proximos": proximos, "ultima_coleta": ultima,
-            "ultimas": ultimas, "coletando": coleta_em_andamento(),
-            "hora_coleta": config.HORA_COLETA,
-            "fecham_hoje": fecham_hoje,
-            "fecha_hoje_disputa": fecha_hoje_disputa, "problemas": problemas,
-            "docs_alerta": docs_alerta,
+            "acoes": acoes, "andamento": andamento,
+            "resumo_funil": resumo_funil,
+            "proxima_disputa": proxima_disputa,
+            "ultima_coleta": ultima, "coletando": coleta_em_andamento(),
+            "problemas": problemas,
             "passos": passos, "tudo_pronto": all(passos.values()),
         })
     finally:
