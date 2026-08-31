@@ -992,14 +992,15 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
                       .filter_by(licitacao_id=lic_id)
                       .order_by(LicitacaoAlteracao.detectada_em.desc())
                       .limit(20).all())
+        dados = _dados_ficha(ficha)
         return templates.TemplateResponse(request, "_licitacao_detalhe.html",
                                           {"lic": lic, "matches": matches,
                                            "arquivos": arquivos,
-                                           "ficha": ficha,
-                                           "dados": _dados_ficha(ficha),
+                                           "ficha": ficha, "dados": dados,
                                            "alteracoes": alteracoes,
                                            "rotulos_alteracao": CAMPOS_VIGIADOS,
-                                           "sou_admin": _sou_admin(request)})
+                                           "sou_admin": _sou_admin(request),
+                                           **_contexto_checklist(s, dados, lic)})
     finally:
         s.close()
 
@@ -1012,6 +1013,19 @@ def _dados_ficha(ficha):
         return json.loads(ficha.ficha_json)
     except ValueError:
         return None
+
+
+def _contexto_checklist(s, dados, lic):
+    """Checklist exigência × dossiê — só quando há ficha E há documentos
+    (dossiê vazio viraria uma coluna de 'falta' sem informação nenhuma)."""
+    if not dados:
+        return {"checklist": [], "checklist_sessao": None, "tem_dossie": False}
+    docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False).all())
+    if not docs:
+        return {"checklist": [], "checklist_sessao": None, "tem_dossie": False}
+    from .documentos import checklist as checklist_mod
+    itens, sessao = checklist_mod.avaliar(dados, lic, docs)
+    return {"checklist": itens, "checklist_sessao": sessao, "tem_dossie": True}
 
 
 @app.post("/licitacoes/{lic_id}/analisar", response_class=HTMLResponse)
@@ -1037,9 +1051,11 @@ def licitacao_analisar(request: Request, lic_id: int, forcar: int = Form(0)):
                 f'<div id="ficha{lic_id}" class="border border-indigo-200 '
                 f'rounded-xl bg-indigo-50/40 p-4 text-xs text-slate-600">'
                 f'🧠 {aviso}{extra}</div>')
+        dados = _dados_ficha(ficha)
         return templates.TemplateResponse(request, "_ficha_edital.html", {
-            "lic": lic, "ficha": ficha, "dados": _dados_ficha(ficha),
-            "sou_admin": _sou_admin(request)})
+            "lic": lic, "ficha": ficha, "dados": dados,
+            "sou_admin": _sou_admin(request),
+            **_contexto_checklist(s, dados, lic)})
     finally:
         s.close()
 

@@ -99,6 +99,49 @@
       {{ lista('❌ Anexos citados que NÃO vieram',
                dados.anexos_citados_ausentes) }}
     </div>
+    {% if checklist %}
+    {% set ok = checklist | selectattr('veredito', 'equalto', 'ok') | list | length %}
+    <details class="bg-white border border-slate-200 rounded-lg" open>
+      <summary class="cursor-pointer px-3 py-2 text-xs font-semibold">
+        ✅ Checklist contra o dossiê — {{ ok }}/{{ checklist|length }}
+        exigências com documento vigente</summary>
+      <ul class="text-xs px-3 pb-2 space-y-1.5">
+        {% for item in checklist %}
+        <li class="flex gap-2">
+          <span>{{ {'ok': '✅', 'vence_antes': '🟧', 'vencido': '🟥',
+                    'falta': '❌', 'conferir': '❓'}[item.veredito] }}</span>
+          <span class="min-w-0">
+            {{ item.exigencia }}
+            {% if item.veredito == 'ok' %}
+              <b class="text-green-700">— {{ item.doc.nome }}</b>
+            {% elif item.veredito == 'vence_antes' %}
+              <b class="text-orange-700">— {{ item.doc.nome }} vale hoje,
+              mas VENCE ANTES da sessão ({{ item.doc.validade }}) — renove
+              já</b>
+            {% elif item.veredito == 'vencido' %}
+              <b class="text-red-700">— {{ item.doc.nome }} está VENCIDO
+              ({{ item.doc.validade }})</b>
+            {% elif item.veredito == 'falta' %}
+              <b class="text-red-700">— nenhum {{ item.tipo }} no dossiê</b>
+            {% else %}
+              <span class="text-slate-500">— sem correspondência automática:
+              conferir manualmente</span>
+            {% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="text-[11px] text-slate-400 px-3 pb-2">
+        Validade aferida na data da sessão{{ ' (%s)' %
+        checklist_sessao.strftime('%d/%m/%Y') if checklist_sessao }} —
+        aproximação automática por tipo de documento; o mapa não substitui a
+        leitura. <a href="/documentos" class="underline">Dossiê →</a></p>
+    </details>
+    {% elif dados and not tem_dossie %}
+    <p class="text-[11px] text-slate-500">💡 Cadastre as certidões da empresa
+      em <a href="/documentos" class="underline font-semibold">Documentos</a>
+      e este bloco passa a cruzar cada exigência com o seu dossiê.</p>
+    {% endif %}
     <p class="text-[11px] text-slate-500">A ficha é extração automática do
       texto publicado — confira sempre no edital antes de decidir. Prazos
       valem como escritos no documento.</p>

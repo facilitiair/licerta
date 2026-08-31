@@ -197,6 +197,13 @@ do próprio documento ("válida até ...") e mostra que foi sugestão, para
 você conferir. Documento que não precisa mais de vigília (versão antiga,
 contrato encerrado) se arquiva sem apagar.
 
+**Checklist automático**: quando uma licitação tem ficha de IA e o dossiê
+tem documentos, a ficha cruza cada exigência de habilitação com o
+documento correspondente — ✅ vigente, 🟧 **vale hoje mas vence antes da
+sessão** (renove já!), 🟥 vencido, ❌ falta, ❓ conferir manualmente. A
+validade é aferida na **data da sessão**, não na de hoje — e o cruzamento
+é aproximação por tipo: quem bate o martelo é você.
+
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).
