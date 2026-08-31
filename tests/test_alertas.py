@@ -376,3 +376,48 @@ def test_fuso_invalido_nao_derruba_o_app():
         assert agora() is not None         # cai no relógio do sistema, mas responde
     finally:
         config.TZ = original
+
+
+# ------------------------------------------------- divisão da mensagem longa
+def test_mensagem_longa_quebra_entre_linhas_e_nao_no_meio_do_link():
+    """O link do edital não pode ficar partido entre duas mensagens."""
+    from app.alerta import _unidades_telegram, dividir_mensagem
+    link = "https://pncp.gov.br/pncp-api/v1/orgaos/12345678000199/compras/2026/7/arquivos/1"
+    texto = "\n".join(f"{i}. Objeto {'x' * 200}\n   Baixar: {link}"
+                      for i in range(40))
+    pedacos = dividir_mensagem(texto)
+    assert len(pedacos) > 1
+    for p in pedacos:
+        assert _unidades_telegram(p) <= 4096
+    # o link aparece inteiro tantas vezes quanto no original
+    assert sum(p.count(link) for p in pedacos) == texto.count(link)
+
+
+def test_divisao_nao_perde_nem_duplica_conteudo():
+    from app.alerta import dividir_mensagem
+    texto = "\n".join(f"linha {i} " + "y" * 300 for i in range(60))
+    assert "\n".join(dividir_mensagem(texto)) == texto
+
+
+def test_conta_emoji_como_o_telegram_conta():
+    """Emoji vale 2 unidades: medir com len() do Python estoura o limite."""
+    from app.alerta import _unidades_telegram, dividir_mensagem
+    linha = "📡 " + "z" * 60
+    texto = "\n".join(linha for _ in range(200))
+    assert _unidades_telegram(texto) > len(texto)
+    for p in dividir_mensagem(texto):
+        assert _unidades_telegram(p) <= 4096
+
+
+def test_linha_gigante_sozinha_e_cortada_na_forca():
+    from app.alerta import _unidades_telegram, dividir_mensagem
+    pedacos = dividir_mensagem("w" * 12000)
+    assert len(pedacos) >= 3
+    for p in pedacos:
+        assert _unidades_telegram(p) <= 4096
+    assert "".join(pedacos) == "w" * 12000
+
+
+def test_mensagem_curta_sai_num_pedaco_so():
+    from app.alerta import dividir_mensagem
+    assert dividir_mensagem("oi") == ["oi"]

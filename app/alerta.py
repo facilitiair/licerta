@@ -218,8 +218,7 @@ def enviar_telegram(texto):
         log.warning("Telegram não configurado (.env) — alerta não enviado")
         return False
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
-    while texto:
-        pedaco, texto = texto[:LIMITE_TELEGRAM], texto[LIMITE_TELEGRAM:]
+    for pedaco in dividir_mensagem(texto):
         r = requests.post(url, json={
             "chat_id": config.TELEGRAM_CHAT_ID,
             "text": pedaco,
@@ -229,6 +228,45 @@ def enviar_telegram(texto):
             log.error("Telegram recusou o envio: %s", r.text[:300])
             return False
     return True
+
+
+def _unidades_telegram(texto):
+    """Tamanho como o Telegram conta: unidades UTF-16, onde emoji vale 2.
+
+    Medir com len() do Python subestima — um pedaço de 4096 caracteres com os
+    emojis do alerta dá 4107 para o Telegram e volta recusado.
+    """
+    return len(texto.encode("utf-16-le")) // 2
+
+
+def dividir_mensagem(texto, limite=LIMITE_TELEGRAM):
+    """Quebra a mensagem em pedaços aceitos pelo Telegram, sem cortar linha.
+
+    Cortar no caractere exato deixava o link de download do edital partido
+    entre duas mensagens, inutilizável — justamente o que o alerta existe
+    para entregar. Aqui a quebra só acontece entre linhas; uma linha longa
+    demais para caber sozinha (raro) é dividida na força, como último recurso.
+    """
+    pedacos, atual = [], ""
+    for linha in texto.split("\n"):
+        while _unidades_telegram(linha) > limite:
+            corte = limite
+            while corte > 1 and _unidades_telegram(linha[:corte]) > limite:
+                corte -= 32
+            if atual:
+                pedacos.append(atual)
+                atual = ""
+            pedacos.append(linha[:corte])
+            linha = linha[corte:]
+        candidato = f"{atual}\n{linha}" if atual else linha
+        if _unidades_telegram(candidato) > limite:
+            pedacos.append(atual)
+            atual = linha
+        else:
+            atual = candidato
+    if atual:
+        pedacos.append(atual)
+    return pedacos or [""]
 
 
 def _texto_para_html(texto):
