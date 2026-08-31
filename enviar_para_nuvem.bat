@@ -8,7 +8,7 @@ REM atualiza a referencia que a trava confere, entao a trava sempre passava e
 REM o push apagava os commits que o robo da nuvem tinha feito na madrugada.
 REM Agora o HEAD e reposicionado sobre o remoto mantendo o SEU banco, e o
 REM push vira um avanco normal: nada some do historico.
-cd /d C:\busca_editais
+cd /d "%~dp0"
 
 REM Primeiro puxa do site os perfis mais novos (o site e o lugar de editar).
 REM Se o site estiver fora do ar, segue com o que tem — so avisa.
