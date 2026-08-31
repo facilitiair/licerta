@@ -42,13 +42,10 @@ jobs:
           EMAIL_DESTINO: ${{ secrets.EMAIL_DESTINO }}
         run: python -m app.rotina
 
-      - name: Atualizar site do celular
-        run: python gerar_site.py
-
-      - name: Publicar banco e site
+      - name: Publicar banco (estado dos alertas)
         run: |
           git config user.name "radar-bot"
           git config user.email "actions@github.com"
-          git add data/radar.db docs/dados.json
+          git add data/radar.db
           git diff --cached --quiet || git commit -m "Radar $(date +'%d/%m/%Y %H:%M')"
           git push

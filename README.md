@@ -119,9 +119,10 @@ data/radar.db     SEU BANCO (faça backup!)          tests/          testes auto
 SPEC.md           especificação completa            Dockerfile      deploy na nuvem
 ```
 
-### Legado (versão anterior)
+### Produção
 
-`radar.py`, `app.py` (Flask), `busca_editais/` e `docs/` são a primeira versão
-(site estático em https://facilitiair.github.io/radar-editais/ + coleta via
-GitHub Actions). Continuam funcionando de forma independente até você decidir
-desativá-los.
+- **App completo 24h**: https://radar-editais-production-67c1.up.railway.app
+  (Railway; envia o alerta diário no **Telegram** ~07:00).
+- **Robô do GitHub** (`.github/workflows/radar.yml`): roda às 06:00 só para o
+  alerta diário por **e-mail** (o Railway bloqueia SMTP na plataforma).
+- No celular: abra o endereço do app no Chrome → ⋮ → "Adicionar à tela inicial".
