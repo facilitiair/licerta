@@ -53,7 +53,7 @@ def tipo_sugerido(exigencia):
     return None
 
 
-def _data_sessao(ficha_dados, lic):
+def data_da_sessao(ficha_dados, lic):
     """A data que vale para aferir validade: sessão da ficha, senão o
     encerramento de propostas do portal, senão hoje (pior aproximação)."""
     bruto = ((ficha_dados.get("datas") or {}).get("sessao_abertura")
@@ -75,7 +75,7 @@ def avaliar(ficha_dados, lic, documentos, hoje=None):
     """
     from ..config import hoje as hoje_local
     hoje = hoje or hoje_local()
-    sessao = _data_sessao(ficha_dados, lic)
+    sessao = data_da_sessao(ficha_dados, lic)
     referencia = sessao or hoje
     por_tipo = {}
     for d in documentos:

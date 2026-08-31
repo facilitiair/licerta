@@ -63,6 +63,32 @@
       {% endfor %}
     </div>
 
+    {% if prazos %}
+    <div class="text-xs rounded-lg px-3 py-2 border
+        {{ 'bg-slate-100 border-slate-200 text-slate-600' if prazos.sessao_passou
+           else 'bg-red-50 border-red-200 text-red-900'
+             if prazos.impugnacao_passou or prazos.dias_uteis_restantes <= 3
+           else 'bg-blue-50 border-blue-200 text-blue-900' }}">
+      {% if prazos.sessao_passou %}
+        ⛔ <b>A sessão já passou</b> — esta ficha agora é material de estudo,
+        não de decisão.
+      {% else %}
+        ⏱️ <b>{{ prazos.dias_uteis_restantes }} dia{{ 's' if
+          prazos.dias_uteis_restantes != 1 }} ÚTE{{ 'IS' if
+          prazos.dias_uteis_restantes != 1 else 'IL' }}</b> até a sessão ·
+        impugnação/esclarecimento até
+        <b>{{ prazos.limite_impugnacao.strftime('%d/%m/%Y') }}</b>
+        (3 dias úteis antes — art. 164)
+        {% if prazos.impugnacao_passou %}<b>— prazo de impugnação JÁ PASSOU</b>
+        {% elif prazos.dias_uteis_para_impugnar == 0 %}<b>— HOJE é o último
+          dia para impugnar!</b>{% endif %}
+      {% endif %}
+      <span class="block text-[10px] opacity-70 mt-0.5">Conta com feriados
+        nacionais; feriado estadual/municipal do órgão pode recuar as datas —
+        confirme o expediente local.</span>
+    </div>
+    {% endif %}
+
     {% if dados.riscos %}
     <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
       <p class="font-semibold text-amber-900 text-xs mb-1">⚠️ Pontos de risco

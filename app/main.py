@@ -1016,16 +1016,25 @@ def _dados_ficha(ficha):
 
 
 def _contexto_checklist(s, dados, lic):
-    """Checklist exigência × dossiê — só quando há ficha E há documentos
-    (dossiê vazio viraria uma coluna de 'falta' sem informação nenhuma)."""
+    """Extras da ficha: prazos em dias úteis (sempre que houver data de
+    sessão) e o checklist exigência × dossiê (só quando há ficha E há
+    documentos — dossiê vazio viraria uma coluna de 'falta' sem informação).
+    """
+    contexto = {"checklist": [], "checklist_sessao": None,
+                "tem_dossie": False, "prazos": None}
     if not dados:
-        return {"checklist": [], "checklist_sessao": None, "tem_dossie": False}
+        return contexto
+    from .acompanhamento.prazos import prazos_da_sessao
+    from .documentos import checklist as checklist_mod
+    sessao_data = checklist_mod.data_da_sessao(dados, lic)
+    contexto["checklist_sessao"] = sessao_data
+    contexto["prazos"] = prazos_da_sessao(sessao_data, hoje())
     docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False).all())
     if not docs:
-        return {"checklist": [], "checklist_sessao": None, "tem_dossie": False}
-    from .documentos import checklist as checklist_mod
-    itens, sessao = checklist_mod.avaliar(dados, lic, docs)
-    return {"checklist": itens, "checklist_sessao": sessao, "tem_dossie": True}
+        return contexto
+    itens, _ = checklist_mod.avaliar(dados, lic, docs)
+    contexto.update({"checklist": itens, "tem_dossie": True})
+    return contexto
 
 
 @app.post("/licitacoes/{lic_id}/analisar", response_class=HTMLResponse)
