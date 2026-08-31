@@ -29,10 +29,17 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      # Os ALERTAS diários saem do app no Railway (que roda 24h).
-      # Aqui só coletamos para manter o site do celular (GitHub Pages) em dia,
-      # por isso nenhum secret de Telegram/e-mail é passado.
-      - name: Coleta para o site do celular
+      # Divisão de canais: o TELEGRAM diário sai do app no Railway (24h);
+      # o E-MAIL sai daqui (o Railway bloqueia SMTP na plataforma inteira).
+      # Por isso este job recebe só os secrets de SMTP — nada de Telegram.
+      - name: Coleta + alerta por e-mail + site do celular
+        env:
+          EMAIL_ATIVO: "true"
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_DESTINO: ${{ secrets.EMAIL_DESTINO }}
         run: python -m app.rotina
 
       - name: Atualizar site do celular
