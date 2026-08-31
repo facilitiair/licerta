@@ -34,6 +34,12 @@ class Config:
     HORA_COLETA = _hora(os.environ.get("HORA_COLETA"), (6, 0))
     HORA_ALERTA = _hora(os.environ.get("HORA_ALERTA"), (7, 0))
     DIAS_JANELA_FUTURA = int(os.environ.get("DIAS_JANELA_FUTURA", "90") or 90)
+    # Endereço público do app — usado no rodapé "Ver todas" dos alertas.
+    # No Railway, RAILWAY_PUBLIC_DOMAIN já vem preenchido automaticamente.
+    APP_URL = (os.environ.get("APP_URL")
+               or (f"https://{os.environ['RAILWAY_PUBLIC_DOMAIN']}"
+                   if os.environ.get("RAILWAY_PUBLIC_DOMAIN") else None)
+               or "http://localhost:8000")
 
 
 config = Config()

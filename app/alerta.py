@@ -86,7 +86,8 @@ def _bloco_licitacao(n, lic, termos="", link_download=None):
     return "\n".join(linhas)
 
 
-def montar_mensagem(sessao_db, host="http://localhost:8000"):
+def montar_mensagem(sessao_db, host=None):
+    host = host or config.APP_URL
     """Monta o texto do alerta e devolve (texto, matches_incluidos)."""
     hoje = date.today().strftime("%d/%m/%Y")
     partes = [f"📡 Radar de Licitações — {hoje}\n"]
@@ -170,7 +171,7 @@ def enviar_email(texto):
         return False
 
 
-def enviar_alerta_diario(host="http://localhost:8000"):
+def enviar_alerta_diario(host=None):
     """Job das HORA_ALERTA: envia o resumo e marca os matches como notificados."""
     sessao_db = Sessao()
     try:
