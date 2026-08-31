@@ -7,8 +7,8 @@ dos Secrets do repositório.
 import logging
 import os
 
-from .alerta import enviar_alertas_devidos
-from .coleta import coletar
+from .notificacoes.alerta import enviar_alertas_devidos
+from .radar.coleta import coletar
 from .db import criar_tabelas
 from .seed import semear
 from .sincronizar import baixar_do_site

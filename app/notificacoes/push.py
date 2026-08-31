@@ -13,8 +13,8 @@ import os
 from py_vapid import Vapid02, b64urlencode
 from pywebpush import WebPushException, webpush
 
-from .config import PASTA_DADOS, config
-from .db import PushAssinatura
+from ..config import PASTA_DADOS, config
+from ..db import PushAssinatura
 
 log = logging.getLogger("radar.push")
 

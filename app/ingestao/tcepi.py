@@ -11,8 +11,8 @@ from datetime import timedelta
 
 import requests
 
-from .config import hoje as _hoje
-from .matcher import normalizar
+from ..config import hoje as _hoje
+from ..radar.matcher import normalizar
 
 URL = "https://sistemas.tce.pi.gov.br/muralic/index.xhtml"
 TIMEOUT = 40

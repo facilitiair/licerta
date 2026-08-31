@@ -1,6 +1,6 @@
 """Testes do matcher (SPEC §10): acentos, expressão exata, exclusão, valor."""
 from app.db import PerfilBusca
-from app.matcher import licitacao_casa_perfil, normalizar, texto_casa
+from app.radar.matcher import licitacao_casa_perfil, normalizar, texto_casa
 
 
 class LicFake:
@@ -179,7 +179,7 @@ def test_data_sem_hora_vale_ate_o_fim_do_dia():
     dava 'vencida' já à meia-noite do próprio dia da sessão."""
     from datetime import datetime
 
-    from app.matcher import esta_vigente
+    from app.radar.matcher import esta_vigente
 
     class Lic:
         data_encerramento_proposta = "2026-08-31"

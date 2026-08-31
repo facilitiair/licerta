@@ -10,9 +10,9 @@ import re
 
 import requests
 
-from .config import PASTA_DADOS
-from .db import ArquivoEdital
-from .pncp import listar_arquivos_compra
+from ..config import PASTA_DADOS
+from ..db import ArquivoEdital
+from ..ingestao.pncp import listar_arquivos_compra
 
 log = logging.getLogger("radar.documentos")
 

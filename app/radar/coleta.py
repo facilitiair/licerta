@@ -5,12 +5,12 @@ from datetime import datetime
 
 import requests
 
-from .config import agora, config
-from .db import Ata, ColetaLog, Licitacao, PerfilBusca, PerfilMatch, Sessao
-from .documentos import baixar_arquivos
+from ..config import agora, config
+from ..db import Ata, ColetaLog, Licitacao, PerfilBusca, PerfilMatch, Sessao
+from ..editais.arquivos import baixar_arquivos
 from .matcher import licitacao_casa_perfil, normalizar, texto_casa
-from .pncp import MODALIDADES, atas_atualizadas, propostas_abertas
-from .tcepi import coletar_mural, municipio_do_orgao
+from ..ingestao.pncp import MODALIDADES, atas_atualizadas, propostas_abertas
+from ..ingestao.tcepi import coletar_mural, municipio_do_orgao
 
 log = logging.getLogger("radar.coleta")
 

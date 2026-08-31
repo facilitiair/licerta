@@ -150,7 +150,7 @@ def test_segredos_nao_aparecem_no_html_da_tela_de_configuracoes(cliente):
 def test_autocomplete_do_pncp_escapa_html(monkeypatch, cliente):
     """O nome do órgão vem cru da API do PNCP; '<' ali virava markup
     executado no navegador já autenticado."""
-    from app import pncp_busca
+    from app.ingestao import pncp_busca
     monkeypatch.setattr(
         pncp_busca, "buscar_opcoes",
         lambda tipo, q: [{"id": "1", "nome": "<img src=x onerror=alert(1)>",

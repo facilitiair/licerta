@@ -11,8 +11,8 @@ from datetime import date, timedelta
 
 import requests
 
-from .config import hoje
-from .matcher import normalizar
+from ..config import hoje
+from ..radar.matcher import normalizar
 
 log = logging.getLogger("radar.pncp")
 

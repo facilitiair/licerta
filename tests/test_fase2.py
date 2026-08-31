@@ -1,7 +1,7 @@
 """Testes da Fase 2: exportação CSV/XLSX e HTML do alerta por e-mail."""
 import io
 
-from app.alerta import _texto_para_html
+from app.notificacoes.alerta import _texto_para_html
 from app.exportar import COLUNAS, gerar_csv, gerar_xlsx
 
 

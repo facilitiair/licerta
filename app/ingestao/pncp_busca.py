@@ -6,7 +6,7 @@ Exige cabeçalhos de navegador (o WAF derruba clientes sem User-Agent real).
 """
 import requests
 
-from .matcher import normalizar
+from ..radar.matcher import normalizar
 from .pncp import montar_link_pncp
 
 URL = "https://pncp.gov.br/api/search/"

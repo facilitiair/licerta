@@ -1,7 +1,7 @@
 """Teste do cliente da API com resposta mockada (SPEC §10)."""
 import json
 
-from app.pncp import mapear_registro, montar_link_pncp, propostas_abertas
+from app.ingestao.pncp import mapear_registro, montar_link_pncp, propostas_abertas
 
 # Resposta real da API (capturada em chamada ao vivo), resumida
 REGISTRO = {
@@ -83,7 +83,7 @@ class SessaoFake:
 
 
 def test_propostas_abertas_pagina_ate_o_fim(monkeypatch):
-    monkeypatch.setattr("app.pncp.PAUSA", 0)  # sem espera nos testes
+    monkeypatch.setattr("app.ingestao.pncp.PAUSA", 0)  # sem espera nos testes
     sessao = SessaoFake()
     itens = list(propostas_abertas(6, uf="PI", sessao=sessao))
     assert len(itens) == 2

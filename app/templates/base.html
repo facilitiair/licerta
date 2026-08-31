@@ -72,18 +72,19 @@
     {%- endmacro %}
 
     <nav class="flex flex-col py-2 gap-0.5">
-      <p class="px-5 pt-2 pb-1 text-[10px] font-bold uppercase
-                tracking-[0.15em] text-slate-500">Acompanhar</p>
-      {{ item('/', '📊', 'Painel') }}
-      {{ item('/funil', '📋', 'Funil de oportunidades') }}
-      {{ item('/agenda', '📅', 'Agenda de disputas') }}
+      {{ item('/', '📊', 'Painel do dia') }}
 
       <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
-                tracking-[0.15em] text-slate-500">Encontrar</p>
-      {{ item('/pesquisar', '🌐', 'Pesquisar no PNCP') }}
+                tracking-[0.15em] text-slate-500">Radar</p>
+      {{ item('/perfis', '🎯', 'Perfis e alertas') }}
       {{ item('/licitacoes', '🔎', 'Meu radar') }}
+      {{ item('/pesquisar', '🌐', 'Pesquisar no PNCP') }}
       {{ item('/atas', '📜', 'Atas / carona') }}
-      {{ item('/perfis', '🎯', 'Perfis de busca') }}
+
+      <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
+                tracking-[0.15em] text-slate-500">Acompanhamento</p>
+      {{ item('/funil', '📋', 'Funil de oportunidades') }}
+      {{ item('/agenda', '📅', 'Agenda de disputas') }}
 
       <p class="px-5 pt-4 pb-1 text-[10px] font-bold uppercase
                 tracking-[0.15em] text-slate-500">Sistema</p>

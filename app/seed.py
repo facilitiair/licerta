@@ -2,7 +2,7 @@
 import logging
 
 from .db import Modalidade, Municipio, Sessao
-from .pncp import MODALIDADES, baixar_municipios_ibge
+from .ingestao.pncp import MODALIDADES, baixar_municipios_ibge
 
 log = logging.getLogger("radar.seed")
 

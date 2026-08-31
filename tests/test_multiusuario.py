@@ -163,7 +163,7 @@ def test_chave_publica_do_push_existe(como_colega):
 
 def test_despacho_usa_os_canais_do_dono(monkeypatch):
     """O alerta de um perfil sai pelos canais de QUEM criou o perfil."""
-    from app import alerta
+    from app.notificacoes import alerta
 
     class Dono:
         id = 1
@@ -191,7 +191,7 @@ def test_despacho_usa_os_canais_do_dono(monkeypatch):
 
 
 def test_despacho_respeita_canal_desligado(monkeypatch):
-    from app import alerta
+    from app.notificacoes import alerta
 
     class Dono:
         id = 1

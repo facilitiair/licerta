@@ -19,20 +19,20 @@ from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerta as alerta_mod
-from . import push as push_mod
+from .notificacoes import alerta as alerta_mod
+from .notificacoes import push as push_mod
 from . import usuarios as usuarios_mod
 from . import envcfg
-from . import pncp_busca
+from .ingestao import pncp_busca
 from . import sincronizar
-from .coleta import coleta_em_andamento, coletar_em_background
+from .radar.coleta import coleta_em_andamento, coletar_em_background
 from .config import PASTA_DADOS, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
                  Municipio, PerfilBusca, PerfilMatch, PushAssinatura,
                  Sessao, Usuario, criar_tabelas)
-from .documentos import baixar_arquivos
+from .editais.arquivos import baixar_arquivos
 from .exportar import gerar_csv, gerar_xlsx
-from .matcher import (SITUACOES_CONHECIDAS, SITUACOES_DISPUTAVEIS,
+from .radar.matcher import (SITUACOES_CONHECIDAS, SITUACOES_DISPUTAVEIS,
                       licitacao_casa_perfil, normalizar)
 from .seed import semear
 
@@ -84,7 +84,7 @@ agendador = BackgroundScheduler(timezone=config.TZ)
 def _job_coleta():
     """Job diário de coleta. Roda em thread própria; nunca derruba o agendador."""
     try:
-        from .coleta import coletar
+        from .radar.coleta import coletar
         coletar()
     except Exception:  # noqa: BLE001
         log.exception("Erro no job de coleta")
@@ -1178,7 +1178,7 @@ async def pesquisar_salvar(request: Request):
     item["ano_compra"] = int(ano) if ano.isdigit() else None
     s = Sessao()
     try:
-        from .coleta import _upsert
+        from .radar.coleta import _upsert
         lic = _upsert(s, item)
         s.commit()
         perfil = _perfil_pesquisa_manual(s, eu(request))

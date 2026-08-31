@@ -6,7 +6,7 @@ expressão exata ("ar condicionado"); asterisco é curinga (pavimenta*).
 import re
 import unicodedata
 
-from .config import agora as _agora
+from ..config import agora as _agora
 
 # Situações que o PNCP e o Mural do TCE-PI usam. As duas primeiras são as
 # disputáveis — é o que um alerta novo já vem marcando por padrão.

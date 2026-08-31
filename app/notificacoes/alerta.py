@@ -13,10 +13,10 @@ from email.mime.text import MIMEText
 
 import requests
 
-from .config import agora as agora_local
-from .config import config
-from .db import PerfilBusca, PerfilMatch, Sessao
-from .matcher import esta_vigente, ordenar_licitacoes
+from ..config import agora as agora_local
+from ..config import config
+from ..db import PerfilBusca, PerfilMatch, Sessao
+from ..radar.matcher import esta_vigente, ordenar_licitacoes
 
 log = logging.getLogger("radar.alerta")
 
@@ -55,8 +55,8 @@ def _link_download_edital(sessao_db, lic):
     senão consulta a API de documentos na hora (melhor esforço)."""
     import re
 
-    from .db import ArquivoEdital
-    from .pncp import listar_arquivos_compra
+    from ..db import ArquivoEdital
+    from ..ingestao.pncp import listar_arquivos_compra
 
     arq = (sessao_db.query(ArquivoEdital)
            .filter_by(licitacao_id=lic.id, tipo="Edital").first())

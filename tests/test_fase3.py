@@ -1,6 +1,6 @@
 """Testes da Fase 3: mapeamento de atas, parser do Mural TCE-PI."""
-from app.pncp import mapear_ata
-from app.tcepi import _mapear, _modalidade
+from app.ingestao.pncp import mapear_ata
+from app.ingestao.tcepi import _mapear, _modalidade
 
 ATA = {
     "numeroControlePNCPAta": "18457226000181-1-000015/2023-000001",
@@ -49,7 +49,7 @@ LINHA_MURAL = (
 
 
 def test_dedup_por_municipio_e_valor():
-    from app.coleta import e_duplicata_tcepi
+    from app.radar.coleta import e_duplicata_tcepi
     chaves = {("obj", "pavimentacao em paralelepipedo na zona urbana"),
               ("mv", "pavussu", "499633.63")}
     # texto diferente, mas mesmo município e valor -> duplicata
@@ -83,7 +83,7 @@ def test_parser_do_mural():
 def test_municipio_sai_do_nome_abreviado_do_orgao():
     """O Mural escreve 'P. M. DE X', não 'PREFEITURA MUNICIPAL DE X'. Só com
     a forma por extenso, o município ficava nulo nas 470 linhas coletadas."""
-    from app.tcepi import municipio_do_orgao
+    from app.ingestao.tcepi import municipio_do_orgao
     assert municipio_do_orgao("P. M. DE BETANIA DO PIAUI") == "Betania Do Piaui"
     assert municipio_do_orgao("P.M. DE OEIRAS") == "Oeiras"
     assert municipio_do_orgao("PREFEITURA MUNICIPAL DE TERESINA") == "Teresina"
@@ -92,7 +92,7 @@ def test_municipio_sai_do_nome_abreviado_do_orgao():
 
 
 def test_orgao_que_nao_e_municipio_devolve_nada():
-    from app.tcepi import municipio_do_orgao
+    from app.ingestao.tcepi import municipio_do_orgao
     assert municipio_do_orgao("SETRANS - SECRETARIA DOS TRANSPORTES") is None
     assert municipio_do_orgao("") is None
     assert municipio_do_orgao(None) is None
@@ -101,7 +101,7 @@ def test_orgao_que_nao_e_municipio_devolve_nada():
 def test_duplicata_do_mural_e_reconhecida_por_municipio_e_valor():
     """Os dois sistemas escrevem o objeto diferente; município+valor é a
     assinatura que pega o mesmo edital nas duas fontes."""
-    from app.coleta import chaves_dedup_pncp, e_duplicata_tcepi
+    from app.radar.coleta import chaves_dedup_pncp, e_duplicata_tcepi
 
     class Consulta:
         def filter(self, *_):
