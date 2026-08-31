@@ -43,6 +43,41 @@ log = logging.getLogger("radar")
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates"))
 
+
+def _filtro_quando(iso):
+    """Data ISO no jeito que uma pessoa lê: 'hoje 08:00', 'amanhã', '05/09'."""
+    if not iso:
+        return "—"
+    try:
+        dia, hora = iso[:10], iso[11:16]
+        alvo = datetime.strptime(dia, "%Y-%m-%d").date()
+        hoje = agora().date()
+        dif = (alvo - hoje).days
+        if dif == 0:
+            rotulo = "hoje"
+        elif dif == 1:
+            rotulo = "amanhã"
+        else:
+            rotulo = alvo.strftime("%d/%m") + ("" if alvo.year == hoje.year
+                                               else alvo.strftime("/%Y"))
+        return f"{rotulo} {hora}".strip() if hora else rotulo
+    except (ValueError, TypeError):
+        return iso
+
+
+def _filtro_dinheiro(valor):
+    if not valor:
+        return "—"          # zero e nulo são igualmente "não informado"
+    if valor >= 1_000_000:
+        return f"R$ {valor / 1_000_000:.1f} mi".replace(".", ",")
+    if valor >= 1_000:
+        return f"R$ {valor / 1_000:.0f} mil"
+    return f"R$ {valor:.0f}"
+
+
+templates.env.filters["quando"] = _filtro_quando
+templates.env.filters["dinheiro"] = _filtro_dinheiro
+
 agendador = BackgroundScheduler(timezone=config.TZ)
 
 

@@ -1,38 +1,53 @@
 <div class="grid md:grid-cols-4 gap-3">
+  {% set cores_coluna = {'novo': 'border-t-amber-400',
+                         'analisando': 'border-t-blue-400',
+                         'vou_participar': 'border-t-green-400',
+                         'descartado': 'border-t-slate-300'} %}
   {% for col in colunas %}
-  <div class="bg-slate-200/60 rounded-2xl p-2 min-h-40">
+  <div class="bg-slate-200/50 rounded-2xl p-2 min-h-40 border-t-4
+              {{ cores_coluna.get(col.status, '') }}">
     <p class="text-xs font-bold px-2 py-1.5">{{ col.rotulo }}
       <span class="text-slate-500 font-normal">({{ col.cartoes|length }})</span></p>
     <div class="space-y-2">
       {% for c in col.cartoes %}
       {% set m = c.m %}{% set lic = m.licitacao %}
-      <div class="bg-white rounded-xl border border-slate-200 p-3 text-xs shadow-sm">
-        <p class="text-[10px] text-slate-500">
-          {{ lic.municipio_nome }}/{{ lic.uf }} · {{ m.perfil.nome }}
-          {% if m.favorito %}⭐{% endif %}</p>
-        {% if m.termos %}<p class="text-[10px] text-purple-700">
-          casou por: {{ m.termos }}</p>{% endif %}
-        {% if lic.situacao and lic.situacao != 'Divulgada no PNCP' %}
-        <p class="text-[10px] text-red-700 font-semibold">{{ lic.situacao }}</p>{% endif %}
-        <p class="my-1 leading-snug">{{ lic.objeto or '' }}</p>
-        <p class="text-[11px]">
-          💰 {{ 'R$ {:,.0f}'.format(lic.valor_total_estimado).replace(',', '.')
-                if lic.valor_total_estimado else 'n/i' }}
-          · <span class="{{ 'text-red-600 font-bold' if c.dias is not none and c.dias <= 3 }}">
-              ⏱ {{ c.dias if c.dias is not none else '?' }} d</span>
+      <div class="bg-white rounded-xl border border-slate-200 p-3 text-xs
+                  shadow-sm hover:shadow transition-shadow">
+        <p class="text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
+          <span class="font-semibold text-slate-600">{{ lic.municipio_nome or '?' }}/{{ lic.uf }}</span>
+          · {{ m.perfil.nome }} {% if m.favorito %}⭐{% endif %}
+          {% if lic.situacao and lic.situacao not in ('Divulgada', 'Aberta') %}
+          <span class="px-1.5 rounded-full font-semibold bg-red-100
+                text-red-700">{{ lic.situacao }}</span>{% endif %}
+        </p>
+        <p class="my-1.5 leading-snug line-clamp-3 text-slate-700"
+           title="{{ lic.objeto or '' }}">{{ lic.objeto or '' }}</p>
+        <p class="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+          <span class="font-semibold text-slate-700">{{ lic.valor_total_estimado|dinheiro }}</span>
+          <span class="px-1.5 py-0.5 rounded-md
+            {{ 'bg-red-100 text-red-700 font-bold' if c.dias is not none and c.dias <= 1
+               else 'bg-orange-100 text-orange-700' if c.dias is not none and c.dias <= 3
+               else 'bg-slate-100' }}">
+            ⏳ {{ lic.data_encerramento_proposta|quando }}</span>
           {% if lic.link_pncp or lic.link_sistema_origem %}
-          · <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
-               class="text-blue-700 underline">edital</a>{% endif %}
+          <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
+             class="text-blue-700 underline">edital ↗</a>{% endif %}
         </p>
         <div class="flex gap-1 mt-2 flex-wrap">
-          {% for destino, seta in [('novo', '🟡'), ('analisando', '🔵'),
-                                   ('vou_participar', '🟢'), ('descartado', '⚪')] %}
+          {% set rotulos = {'novo': '↩ nova', 'analisando': '🔍 analisar',
+                            'vou_participar': '✓ participar',
+                            'descartado': '✕ descartar'} %}
+          {% set estilos = {'novo': 'hover:bg-amber-50 hover:border-amber-300',
+                            'analisando': 'hover:bg-blue-50 hover:border-blue-300 text-blue-700',
+                            'vou_participar': 'hover:bg-green-50 hover:border-green-300 text-green-700',
+                            'descartado': 'hover:bg-slate-100 text-slate-500'} %}
+          {% for destino in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
             {% if destino != col.status %}
             <button hx-post="/funil/mover/{{ m.id }}/{{ destino }}"
                     hx-target="#board" hx-swap="innerHTML"
-                    title="mover para {{ destino.replace('_', ' ') }}"
-                    class="border border-slate-200 rounded-md px-1.5 py-0.5
-                           hover:bg-slate-50">{{ seta }}</button>
+                    class="border border-slate-200 rounded-lg px-2 py-1
+                           font-medium transition-colors
+                           {{ estilos.get(destino, '') }}">{{ rotulos[destino] }}</button>
             {% endif %}
           {% endfor %}
         </div>

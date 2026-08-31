@@ -193,8 +193,12 @@
     {% for l in linhas %}
     {% set m = matches.get(l.id) %}
     <tr class="hover:bg-blue-50/40 align-top">
+      {% set dias = ((l.data_encerramento_proposta or '')[:10] >= hoje) %}
       <td class="px-3 py-2 whitespace-nowrap">
-        {{ (l.data_encerramento_proposta or '—')[:16].replace('T', ' ') }}</td>
+        <span class="px-1.5 py-0.5 rounded-md text-xs font-medium
+          {{ 'bg-red-100 text-red-700' if (l.data_encerramento_proposta or '')[:10] == hoje
+             else 'bg-slate-100 text-slate-700' if dias else 'text-slate-400' }}">
+          {{ l.data_encerramento_proposta|quando }}</span></td>
       <td class="px-3 py-2">{{ l.modalidade_nome }}
         {% if l.srp %}<span class="text-xs text-blue-700">SRP</span>{% endif %}
         {% if l.situacao %}<br><span class="text-[10px] px-1.5 rounded-full
@@ -214,14 +218,16 @@
             {{ m.status.replace('_', ' ') }}</span>
           {% if m.favorito %}⭐{% endif %}
         {% endif %}
-        {{ l.objeto or '' }}</td>
-      <td class="px-3 py-2 text-right whitespace-nowrap">
-        {{ 'R$ {:,.0f}'.format(l.valor_total_estimado).replace(',', '.')
-           if l.valor_total_estimado else '—' }}</td>
+        <span class="line-clamp-2 text-slate-700"
+              title="{{ l.objeto or '' }}">{{ l.objeto or '' }}</span></td>
+      <td class="px-3 py-2 text-right whitespace-nowrap font-medium">
+        {{ l.valor_total_estimado|dinheiro }}</td>
       <td class="px-3 py-2">
         <button hx-get="/licitacoes/{{ l.id }}/detalhe?perfil_id={{ filtros.perfil_id or 0 }}"
                 hx-target="#det{{ l.id }}" hx-swap="innerHTML"
-                class="text-blue-700 underline text-xs">detalhe</button></td>
+                class="text-xs border border-blue-200 text-blue-700 px-2 py-1
+                       rounded-lg hover:bg-blue-50 font-medium
+                       whitespace-nowrap">abrir ▾</button></td>
     </tr>
     <tr><td colspan="7" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
     {% else %}

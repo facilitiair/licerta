@@ -9,7 +9,22 @@
   <link rel="icon" href="/static/icone-192.png">
   <link rel="apple-touch-icon" href="/static/icone-192.png">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      fontFamily: { sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'] },
+    }}};
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
   <script src="/static/htmx.min.js"></script>
+  <style>
+    /* Enquanto o htmx trabalha, o alvo fica esmaecido — resposta visual
+       imediata a qualquer clique, sem biblioteca extra */
+    .htmx-request { opacity: .45; transition: opacity .15s; }
+    ::-webkit-scrollbar { height: 8px; width: 8px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+  </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen md:flex">
 
