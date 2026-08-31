@@ -52,8 +52,12 @@
         <button class="px-3 py-1 border border-slate-300 rounded-lg
               hover:bg-slate-50">📋 Duplicar</button>
       </form>
+      {# O nome vai em data-*, não interpolado no onsubmit: um perfil criado
+         pela pesquisa com apóstrofo no nome ("Busca: poço d'água") gerava
+         handler inválido, o confirm() sumia e o clique apagava direto. #}
       <form method="post" action="/perfis/{{ p.id }}/excluir"
-            onsubmit="return confirm('Excluir o perfil {{ p.nome }}? Os matches dele também serão removidos.')">
+            data-nome="{{ p.nome }}"
+            onsubmit="return confirm('Excluir o perfil ' + this.dataset.nome + '? Os matches dele também serão removidos.')">
         <button class="px-3 py-1 border border-red-300 text-red-700
               rounded-lg hover:bg-red-50">🗑 Excluir</button>
       </form>

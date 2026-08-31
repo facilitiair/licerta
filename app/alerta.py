@@ -8,6 +8,7 @@ pelo agendador — é ele que decide de quem chegou a vez.
 import html
 import logging
 import smtplib
+from datetime import timedelta
 from email.mime.text import MIMEText
 
 import requests
@@ -30,9 +31,6 @@ DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
                "sexta-feira", "sábado", "domingo"]
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
          "agosto", "setembro", "outubro", "novembro", "dezembro"]
-# Depois de quantos dias sem enviar o alerta sai assim que puder, mesmo fora
-# do dia marcado — evita perder o ciclo se o app estiver fora do ar no dia.
-JANELA_ATRASO = {"diario": 1, "semanal": 7, "mensal": 31, "anual": 366}
 
 
 def _fmt_valor(v):
@@ -141,33 +139,83 @@ def _hora_do_perfil(perfil):
         return config.HORA_ALERTA
 
 
+def horario_previsto(perfil, agora, hora=None):
+    """O instante marcado para este alerta que já passou, o mais recente.
+
+    É a peça central do agendamento, e o motivo de não olharmos mais só para
+    a hora do relógio. O agendador confere de 10 em 10 minutos numa grade cuja
+    fase depende da hora em que o app subiu: com `hora_envio` às 23:55, podia
+    não existir NENHUM tique entre 23:55 e a meia-noite, e a comparação
+    "agora < hora marcada" barrava o alerta todos os dias, para sempre.
+
+    Comparando `ultimo_envio` com este instante, o alerta atrasado sai assim
+    que puder — inclusive depois da meia-noite — e nunca sai duas vezes pelo
+    mesmo horário. Dispensa a antiga janela de atraso: o atraso é natural aqui.
+    """
+    h, m = hora or _hora_do_perfil(perfil)
+    freq = getattr(perfil, "frequencia", None) or "diario"
+    alvo = agora.replace(hour=h, minute=m, second=0, microsecond=0)
+    if freq == "semanal":
+        alvo -= timedelta(days=(agora.weekday() - (perfil.dia_semana or 0)) % 7)
+        return alvo if alvo <= agora else alvo - timedelta(days=7)
+    if freq == "mensal":
+        alvo = alvo.replace(day=_dia_do_mes(perfil))
+        if alvo > agora:                    # ainda não chegou: vale o mês passado
+            mes_passado = agora.replace(day=1) - timedelta(days=1)
+            alvo = alvo.replace(year=mes_passado.year, month=mes_passado.month)
+        return alvo
+    if freq == "anual":
+        alvo = alvo.replace(month=(perfil.mes_ano or 1), day=_dia_do_mes(perfil))
+        return alvo if alvo <= agora else alvo.replace(year=alvo.year - 1)
+    return alvo if alvo <= agora else alvo - timedelta(days=1)   # diário
+
+
+def _dia_do_mes(perfil):
+    """1..28 — acima disso o alerta sumiria em fevereiro."""
+    try:
+        return max(1, min(28, int(perfil.dia_mes or 1)))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _ultimo_envio_confiavel(perfil, agora):
+    """`ultimo_envio` no futuro é relógio bagunçado, não envio de verdade.
+
+    Acontece de verdade: banco restaurado de outra máquina, correção de NTP
+    para trás, ou um deploy em que o fuso não resolveu e a hora foi gravada
+    3h à frente. Aceitá-lo calava o alerta diário por dias a fio.
+    """
+    ultimo = getattr(perfil, "ultimo_envio", None)
+    if ultimo and ultimo > agora:
+        log.warning("Alerta '%s' com último envio no futuro (%s); ignorando",
+                    perfil.nome, ultimo)
+        ultimo = None
+    # Alerta que nunca saiu conta a partir da criação do perfil. Sem esse
+    # piso, um perfil criado às 8h com envio marcado para as 10h disparava
+    # na hora, ignorando o horário que o usuário acabou de escolher.
+    return ultimo or getattr(perfil, "criado_em", None)
+
+
 def alerta_devido(perfil, agora=None, respeitar_hora=True):
     """Chegou a vez deste alerta? Respeita frequência, hora e último envio."""
     agora = agora or agora_local()
     if not (perfil.ativo and perfil.notificar):
         return False
-    if respeitar_hora and (agora.hour, agora.minute) < _hora_do_perfil(perfil):
-        return False
-    ultimo = getattr(perfil, "ultimo_envio", None)
-    freq = getattr(perfil, "frequencia", None) or "diario"
-    if freq == "horas":
-        # a única frequência que repete no mesmo dia: conta pelo relógio,
-        # não pela data. A hora do perfil já barrou a madrugada acima.
+    ultimo = _ultimo_envio_confiavel(perfil, agora)
+    if getattr(perfil, "frequencia", None) == "horas":
+        # A única frequência que repete no mesmo dia: conta pelo relógio.
+        # A hora do perfil é o primeiro envio do dia — sem isso, tocaria de
+        # madrugada.
+        if respeitar_hora and (agora.hour, agora.minute) < _hora_do_perfil(perfil):
+            return False
         return (not ultimo or (agora - ultimo).total_seconds()
                 >= _intervalo_horas(perfil) * 3600)
-    if ultimo and ultimo.date() == agora.date():
-        return False                       # este alerta já saiu hoje
-    if not ultimo or (agora.date() - ultimo.date()).days >= \
-            JANELA_ATRASO.get(freq, 1):
-        return True                        # nunca saiu, ou o ciclo já venceu
-    if freq == "semanal":
-        return agora.weekday() == (perfil.dia_semana or 0)
-    if freq == "mensal":
-        return agora.day == (perfil.dia_mes or 1)
-    if freq == "anual":
-        return (agora.month == (perfil.mes_ano or 1)
-                and agora.day == (perfil.dia_mes or 1))
-    return False
+    if not respeitar_hora:
+        # Quem roda uma vez por dia em horário fixo (GitHub Actions) não tem
+        # como respeitar a hora do perfil; conta a frequência a partir da
+        # meia-noite do dia marcado.
+        return not ultimo or ultimo < horario_previsto(perfil, agora, hora=(0, 0))
+    return not ultimo or ultimo < horario_previsto(perfil, agora)
 
 
 def separar_pendentes(perfil, pendentes, agora=None):
@@ -191,25 +239,34 @@ def separar_pendentes(perfil, pendentes, agora=None):
     return enviaveis, vencidos, fora_situacao
 
 
-def montar_mensagem_perfil(sessao_db, perfil, matches, host=None):
-    """Texto do alerta de UM perfil, já com os matches selecionados."""
+def montar_mensagem_perfil(sessao_db, perfil, matches, host=None, urgente=False):
+    """Texto do alerta de UM perfil. Devolve (texto, matches_incluídos).
+
+    Devolver quem entrou de fato é essencial: só esses podem ser marcados
+    como avisados. Antes a mensagem mostrava 10 e o código marcava TODOS —
+    num perfil novo com 60 achados, 50 oportunidades com semanas de prazo
+    eram queimadas de vez, sem nunca aparecer em alerta nenhum.
+    """
     host = host or config.APP_URL
     hoje = agora_local().strftime("%d/%m/%Y")
     por_lic = {m.licitacao_id: m for m in matches}
     lics = ordenar_licitacoes([m.licitacao for m in matches], perfil.ordenacao)
-    partes = [f"📡 {perfil.nome} — {hoje}",
-              f"{len(matches)} oportunidade"
-              f"{'s' if len(matches) != 1 else ''} com proposta em aberto\n"]
-    for i, lic in enumerate(lics[:LIMITE_POR_PERFIL], 1):
+    incluidas = lics[:LIMITE_POR_PERFIL]
+    cabecalho = ("⏰ FECHA HOJE — " if urgente else "📡 ") + f"{perfil.nome} — {hoje}"
+    partes = [cabecalho,
+              f"{len(incluidas)} oportunidade"
+              f"{'s' if len(incluidas) != 1 else ''} com proposta em aberto\n"]
+    for i, lic in enumerate(incluidas, 1):
         m = por_lic.get(lic.id)
         partes.append(_bloco_licitacao(
             i, lic, termos=m.termos if m else "",
             link_download=_link_download_edital(sessao_db, lic)) + "\n")
     if len(lics) > LIMITE_POR_PERFIL:
-        partes.append(f"   ... e mais {len(lics) - LIMITE_POR_PERFIL} — "
-                      "veja no painel.\n")
+        partes.append(f"   ... e mais {len(lics) - LIMITE_POR_PERFIL} no radar — "
+                      "chegam no próximo alerta.\n")
     partes.append(f"Ver todas: {host}/")
-    return "\n".join(partes)
+    enviados = [por_lic[l.id] for l in incluidas if l.id in por_lic]
+    return "\n".join(partes), enviados
 
 
 def enviar_telegram(texto):
@@ -299,7 +356,41 @@ def enviar_email(texto):
         return False
 
 
-def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None):
+def proximo_horario_previsto(perfil, agora):
+    """Quando este alerta sai da próxima vez, se nada o antecipar."""
+    freq = getattr(perfil, "frequencia", None) or "diario"
+    if freq == "horas":
+        return agora + timedelta(hours=_intervalo_horas(perfil))
+    anterior = horario_previsto(perfil, agora)
+    if freq == "semanal":
+        return anterior + timedelta(days=7)
+    if freq == "mensal":
+        proximo = (anterior.replace(day=28) + timedelta(days=7))
+        return proximo.replace(day=_dia_do_mes(perfil))
+    if freq == "anual":
+        return anterior.replace(year=anterior.year + 1)
+    return anterior + timedelta(days=1)
+
+
+def tem_urgencia(perfil, enviaveis, agora):
+    """Alguma destas oportunidades fecha antes do próximo alerta programado?
+
+    Sem esta saída, um edital de prazo curto morria em silêncio: a coleta das
+    9h achava uma dispensa que encerrava às 17h do mesmo dia, o alerta diário
+    já tinha saído às 7h, e no dia seguinte ela era descartada como vencida e
+    marcada como avisada — sem nunca ter sido enviada. A coleta de 3 em 3
+    horas não adianta nada se o aviso só sai amanhã.
+    """
+    limite = proximo_horario_previsto(perfil, agora).strftime("%Y-%m-%dT%H:%M")
+    for m in enviaveis:
+        fim = (m.licitacao.data_encerramento_proposta or "").replace(" ", "T")
+        if fim and (fim[:16] if len(fim) > 10 else fim + "T23:59") < limite:
+            return True
+    return False
+
+
+def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None,
+                         urgente=False):
     """Envia o alerta de um perfil. Devolve (enviou?, quantidade enviada).
 
     Um ciclo sem nada novo não vira mensagem — silêncio é melhor que ruído.
@@ -318,20 +409,24 @@ def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None):
         log.info("Alerta '%s': nada a enviar (%s vencidas, %s fora da situação)",
                  perfil.nome, len(vencidos), len(fora))
         return False, 0
-    texto = montar_mensagem_perfil(sessao_db, perfil, enviaveis, host)
+    texto, incluidos = montar_mensagem_perfil(sessao_db, perfil, enviaveis,
+                                              host, urgente=urgente)
     ok_telegram = enviar_telegram(texto)
     ok_email = enviar_email(texto)
     if not (ok_telegram or ok_email):
         sessao_db.commit()                 # ao menos grava os vencidos
         return False, 0
-    for m in enviaveis:
+    # Só quem entrou na mensagem é marcado. O excedente continua pendente e
+    # entra no alerta seguinte, em vez de ser queimado sem ter sido mostrado.
+    for m in incluidos:
         m.notificado = True
-    perfil.ultimo_envio = agora
+    if not urgente:
+        perfil.ultimo_envio = agora
     sessao_db.commit()
-    log.info("Alerta '%s' enviado (telegram=%s, email=%s): %s novas, "
-             "%s vencidas descartadas", perfil.nome, ok_telegram, ok_email,
-             len(enviaveis), len(vencidos))
-    return True, len(enviaveis)
+    log.info("Alerta '%s'%s enviado (telegram=%s, email=%s): %s de %s novas, "
+             "%s vencidas descartadas", perfil.nome, " URGENTE" if urgente else "",
+             ok_telegram, ok_email, len(incluidos), len(enviaveis), len(vencidos))
+    return True, len(incluidos)
 
 
 def enviar_alertas_devidos(host=None, agora=None, respeitar_hora=True,
@@ -352,10 +447,20 @@ def enviar_alertas_devidos(host=None, agora=None, respeitar_hora=True,
             perfis = (sessao_db.query(PerfilBusca)
                       .filter_by(ativo=True, notificar=True).all())
         for perfil in perfis:
+            urgente = False
             if not perfil_id and not alerta_devido(perfil, agora, respeitar_hora):
-                continue
+                # Fora da agenda, mas pode haver prazo fechando antes do
+                # próximo alerta — nesse caso o aviso sai agora.
+                pendentes = (sessao_db.query(PerfilMatch)
+                             .filter_by(perfil_id=perfil.id, notificado=False)
+                             .all())
+                enviaveis, _, _ = separar_pendentes(perfil, pendentes, agora)
+                if not (enviaveis and tem_urgencia(perfil, enviaveis, agora)):
+                    continue
+                urgente = True
             try:
-                enviou, _ = enviar_alerta_perfil(sessao_db, perfil, host, agora)
+                enviou, _ = enviar_alerta_perfil(sessao_db, perfil, host, agora,
+                                                 urgente=urgente)
                 enviados += 1 if enviou else 0
             except Exception:  # noqa: BLE001 — um alerta ruim não trava os outros
                 sessao_db.rollback()

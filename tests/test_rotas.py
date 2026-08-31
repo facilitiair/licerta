@@ -111,3 +111,128 @@ def test_gatilho_da_coleta_respeita_o_intervalo():
         assert _gatilho_coleta()["hour"] == str(config.HORA_COLETA[0])
     finally:
         config.HORAS_ENTRE_COLETAS = original
+
+
+# --------------------------------------- regressões apontadas pela auditoria
+def test_senha_com_acento_nao_derruba_o_login():
+    """hmac.compare_digest LEVANTA com str não-ASCII. Uma senha como
+    'licitações2024' trancava o dono para fora com erro 500, mesmo digitando
+    a senha certa, e sem caminho de recuperação pela interface."""
+    from app.main import _iguais
+    assert _iguais("licitações2024", "licitações2024")
+    assert not _iguais("licitações2024", "outra")
+    assert not _iguais("café", "cafe")
+
+
+def test_cookie_com_byte_acentuado_nao_derruba_as_rotas():
+    """Sem login nenhum, um byte acentuado no cookie fazia TODAS as rotas
+    protegidas responderem 500."""
+    from app.main import _iguais, _token_sessao
+    assert not _iguais("caf\xe9", _token_sessao())
+
+
+def test_segredos_nao_aparecem_no_html_da_tela_de_configuracoes(cliente):
+    """type='password' esconde na tela, mas 'ver código-fonte' entregava a
+    senha do painel, o token do Telegram e a senha do e-mail em texto puro."""
+    from app.config import config
+    html = cliente.get("/config").text
+    for segredo in (config.APP_SENHA, config.TELEGRAM_BOT_TOKEN,
+                    config.SMTP_PASSWORD):
+        if segredo:
+            assert segredo not in html, "segredo vazando no HTML"
+
+
+def test_autocomplete_do_pncp_escapa_html(monkeypatch, cliente):
+    """O nome do órgão vem cru da API do PNCP; '<' ali virava markup
+    executado no navegador já autenticado."""
+    from app import pncp_busca
+    monkeypatch.setattr(
+        pncp_busca, "buscar_opcoes",
+        lambda tipo, q: [{"id": "1", "nome": "<img src=x onerror=alert(1)>",
+                          "cnpj": "d'Água"}])
+    html = cliente.get("/api/pncp/opcoes?tipo=orgaos&q=teste").text
+    assert "<img" not in html
+    assert "onerror" not in html.replace("&#", "")
+    assert "onclick" not in html
+
+
+def test_pagina_gigante_nao_estoura_o_sqlite(cliente):
+    for rota in ("/licitacoes?pagina=99999999999999999999",
+                 "/atas?pagina=99999999999999999999"):
+        assert cliente.get(rota, follow_redirects=False).status_code < 500
+
+
+def test_modalidade_nao_numerica_nao_da_500(cliente):
+    r = cliente.post("/perfis/preview",
+                     data={"nome": "x", "modalidades": "abc"},
+                     follow_redirects=False)
+    assert r.status_code < 500
+
+
+def test_agenda_sobrevive_a_data_impossivel(cliente):
+    """O Mural do TCE-PI já gravou '2026-13-45'; uma linha torta derrubava
+    a agenda inteira, em toda visita, até alguém apagar o registro."""
+    from app.db import Licitacao, PerfilBusca, PerfilMatch, Sessao
+    s = Sessao()
+    try:
+        perfil = s.query(PerfilBusca).first()
+        lic = Licitacao(numero_controle_pncp="TESTE-DATA-TORTA/9999",
+                        objeto="teste", data_encerramento_proposta="9026-13-45",
+                        uf="PI", fonte="tcepi", situacao="Divulgada")
+        s.add(lic)
+        s.commit()
+        match = PerfilMatch(perfil_id=perfil.id, licitacao_id=lic.id)
+        s.add(match)
+        s.commit()
+        assert cliente.get("/agenda").status_code == 200
+    finally:
+        s.query(PerfilMatch).filter_by(licitacao_id=lic.id).delete()
+        s.query(Licitacao).filter_by(
+            numero_controle_pncp="TESTE-DATA-TORTA/9999").delete()
+        s.commit()
+        s.close()
+
+
+def test_horario_invalido_no_env_nao_impede_o_app_de_subir():
+    """'06:99' salvo em /config virava minute=99 no agendador, que recusa o
+    gatilho — e o app deixava de iniciar, com o valor ruim já no .env."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    from app.config import _hora, config
+    from app.main import _gatilho_coleta
+    assert _hora("06:99", (6, 0)) == (6, 0)
+    assert _hora("25:00", (7, 0)) == (7, 0)
+    original = config.HORA_COLETA
+    try:
+        config.HORA_COLETA = _hora("06:99", (6, 0))
+        CronTrigger(**_gatilho_coleta())      # não pode levantar
+    finally:
+        config.HORA_COLETA = original
+
+
+def test_env_preserva_chaves_que_a_tela_nao_conhece(tmp_path, monkeypatch):
+    """Salvar um horário apagava o APP_URL posto à mão, e todo alerta passava
+    a mandar um link que não abre no celular."""
+    from app import envcfg
+    caminho = tmp_path / ".env"
+    caminho.write_text("APP_URL=https://radar.exemplo.com\nAPP_SENHA=x\n",
+                       encoding="utf-8")
+    monkeypatch.setattr(envcfg, "CAMINHO_ENV", str(caminho))
+    envcfg.salvar({"HORA_COLETA": "05:00"})
+    conteudo = caminho.read_text(encoding="utf-8")
+    assert "APP_URL=https://radar.exemplo.com" in conteudo
+    assert "HORA_COLETA=05:00" in conteudo
+
+
+def test_campo_de_segredo_em_branco_mantem_o_valor(tmp_path, monkeypatch):
+    """A tela não devolve mais o segredo no HTML, então em branco tem de
+    significar 'não mexi' — e não 'apague a senha'."""
+    from app import envcfg
+    from app.config import config
+    caminho = tmp_path / ".env"
+    caminho.write_text("", encoding="utf-8")
+    monkeypatch.setattr(envcfg, "CAMINHO_ENV", str(caminho))
+    monkeypatch.setattr(config, "APP_SENHA", "senha-secreta")
+    envcfg.salvar({"APP_SENHA": "", "HORA_ALERTA": "08:00"})
+    assert config.APP_SENHA == "senha-secreta"
+    assert "APP_SENHA=senha-secreta" in caminho.read_text(encoding="utf-8")

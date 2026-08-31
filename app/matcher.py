@@ -22,6 +22,11 @@ def esta_vigente(lic, agora=None):
     fim = (lic.data_encerramento_proposta or "").strip().replace(" ", "T")
     if not fim:
         return True
+    if len(fim) == 10:
+        # Data sem hora (o Mural do TCE-PI às vezes manda só "2026-08-31").
+        # Comparar o prefixo curto direto daria "vencida" já à meia-noite do
+        # próprio dia da sessão: vale até o fim do dia.
+        fim += "T23:59"
     return fim[:16] >= (agora or _agora()).strftime("%Y-%m-%dT%H:%M")
 
 
@@ -55,6 +60,8 @@ def _termo_para_regex(termo):
 
     termo = normalizar(termo).strip().strip('"').strip()
     partes = [literal(p) for p in termo.split("*")]
+    if not any(partes):
+        return None       # termo sem nenhuma letra: ver _linha_casa
     return re.compile(r"\w*".join(partes)) if len(partes) > 1 else re.compile(partes[0])
 
 
@@ -64,9 +71,17 @@ def _linha_casa(texto, linha):
     Suporta o combinador '+': em 'manutenção + ar condicionado', TODAS as
     partes precisam aparecer no objeto (em qualquer posição) — é a forma de
     pedir algo específico sem exigir a frase exata.
+
+    Linha sem nenhuma letra ('-' usado como separador visual, um '+' solto,
+    um '*' sozinho) NÃO casa com nada. Antes ela virava um regex vazio, que
+    casa em qualquer posição: uma linha dessas em "palavras a excluir"
+    derrubava o banco inteiro e o perfil parava de achar qualquer coisa, sem
+    nenhuma explicação na tela.
     """
-    partes = [p.strip() for p in linha.split("+") if p.strip()]
-    return all(_termo_para_regex(p).search(texto) for p in partes)
+    regexes = [_termo_para_regex(p) for p in linha.split("+") if p.strip()]
+    if not regexes or any(r is None for r in regexes):
+        return False
+    return all(r.search(texto) for r in regexes)
 
 
 def texto_casa(objeto, incluir, excluir, modo="ou"):

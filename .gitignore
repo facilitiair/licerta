@@ -8,3 +8,4 @@ data/editais/
 *.db-journal
 *.db-shm
 *.db-wal
+data/.segredo_sessao

@@ -2,6 +2,7 @@
 import logging
 
 from .db import Modalidade, Municipio, PerfilBusca, Sessao
+from .matcher import SITUACOES_DISPUTAVEIS
 from .pncp import MODALIDADES, baixar_municipios_ibge
 
 log = logging.getLogger("radar.seed")
@@ -35,6 +36,12 @@ def semear():
                 modalidades=[6, 8],
                 palavras_incluir=["ar condicionado", "climatização",
                                   "refrigeração", "split"],
+                # Explícito: em banco NOVO a coluna já nasce criada, então a
+                # migração que preenche isto em bancos antigos não roda. Sem
+                # esta linha, a instalação nova nascia aceitando qualquer
+                # situação e alertava sobre licitação cancelada e revogada.
+                situacoes=list(SITUACOES_DISPUTAVEIS),
+                somente_vigentes=True,
             ))
             sessao.commit()
     finally:

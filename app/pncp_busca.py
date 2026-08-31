@@ -122,6 +122,11 @@ def _mapear(i):
         "data_encerramento_proposta": i.get("data_fim_vigencia"),
         "link_sistema_origem": None,
         "link_pncp": montar_link_pncp(i.get("numero_controle_pncp")),
-        "situacao": i.get("situacao_nome"),
+        # Mesma normalização do motor de coleta (pncp.py): a busca ao vivo
+        # devolve "Divulgada no PNCP", que não bate com o filtro de situação
+        # dos perfis. Salvar um resultado à mão gravava esse valor e o edital
+        # salvo nunca virava alerta — ou pior, sobrescrevia o valor bom de uma
+        # licitação que a coleta já tinha trazido, sumindo do filtro.
+        "situacao": (i.get("situacao_nome") or "").replace(" no PNCP", "") or None,
         "payload_json": None,
     }

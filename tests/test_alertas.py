@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.alerta import (JANELA_ATRASO, alerta_devido, resumo_frequencia,
-                        separar_pendentes)
+from app.alerta import (alerta_devido, horario_previsto,
+                        proximo_horario_previsto, resumo_frequencia,
+                        separar_pendentes, tem_urgencia)
 from app.matcher import esta_vigente, licitacao_casa_perfil
 
 AGORA = datetime(2026, 8, 31, 9, 0)      # segunda-feira, 09:00
@@ -46,6 +47,7 @@ class PerfilFake:
         self.mes_ano = 1
         self.hora_envio = "07:00"
         self.ultimo_envio = None
+        self.criado_em = datetime(2026, 8, 1, 0, 0)
         self.__dict__.update(campos)
 
 
@@ -148,8 +150,18 @@ def test_separar_pendentes_isola_vencidas_e_fora_de_situacao():
 
 # ------------------------------------------------------------- agendamento
 def test_antes_da_hora_o_alerta_nao_sai():
-    perfil = PerfilFake(hora_envio="10:00")
+    perfil = PerfilFake(hora_envio="10:00",
+                        ultimo_envio=datetime(2026, 8, 30, 10, 0))
     assert not alerta_devido(perfil, AGORA)
+    assert alerta_devido(perfil, datetime(2026, 8, 31, 10, 0))
+
+
+def test_perfil_recem_criado_espera_a_hora_escolhida():
+    """Criado às 8h com envio às 10h: não dispara na hora da criação."""
+    perfil = PerfilFake(hora_envio="10:00", ultimo_envio=None,
+                        criado_em=datetime(2026, 8, 31, 8, 0))
+    assert not alerta_devido(perfil, datetime(2026, 8, 31, 9, 0))
+    assert alerta_devido(perfil, datetime(2026, 8, 31, 10, 0))
 
 
 def test_depois_da_hora_o_diario_sai():
@@ -212,34 +224,41 @@ def test_semanal_so_sai_no_dia_marcado():
     assert not alerta_devido(na_quarta, AGORA)
 
 
-def test_mensal_so_sai_no_dia_do_mes():
-    ontem = datetime(2026, 8, 30, 7, 0)
-    dia_31 = PerfilFake(frequencia="mensal", dia_mes=31, ultimo_envio=ontem)
-    dia_5 = PerfilFake(frequencia="mensal", dia_mes=5, ultimo_envio=ontem)
-    assert alerta_devido(dia_31, AGORA)
-    assert not alerta_devido(dia_5, AGORA)
+def test_mensal_so_sai_uma_vez_por_mes():
+    # Enviado dia 30/08; o dia marcado (5) deste mês já passou e já foi
+    # atendido, então nada sai até 05/09.
+    perfil = PerfilFake(frequencia="mensal", dia_mes=5,
+                        ultimo_envio=datetime(2026, 8, 30, 7, 0))
+    assert not alerta_devido(perfil, AGORA)
+    assert alerta_devido(perfil, datetime(2026, 9, 5, 7, 0))
 
 
-def test_anual_exige_mes_e_dia():
-    ontem = datetime(2026, 8, 30, 7, 0)
-    certo = PerfilFake(frequencia="anual", mes_ano=8, dia_mes=31,
-                       ultimo_envio=ontem)
-    outro_mes = PerfilFake(frequencia="anual", mes_ano=3, dia_mes=31,
-                           ultimo_envio=ontem)
-    assert alerta_devido(certo, AGORA)
-    assert not alerta_devido(outro_mes, AGORA)
+def test_mensal_atrasado_sai_assim_que_puder():
+    """Perdeu o dia 28 porque o app estava fora do ar: sai no 31."""
+    perfil = PerfilFake(frequencia="mensal", dia_mes=28,
+                        ultimo_envio=datetime(2026, 7, 28, 7, 0))
+    assert alerta_devido(perfil, AGORA)
+
+
+def test_anual_sai_uma_vez_por_ano():
+    perfil = PerfilFake(frequencia="anual", mes_ano=8, dia_mes=20,
+                        ultimo_envio=datetime(2025, 8, 20, 7, 0))
+    assert alerta_devido(perfil, AGORA)              # 20/08/2026 já passou
+    perfil.ultimo_envio = datetime(2026, 8, 20, 7, 0)
+    assert not alerta_devido(perfil, AGORA)          # já saiu este ano
+    assert alerta_devido(perfil, datetime(2027, 8, 20, 7, 0))
 
 
 def test_ciclo_vencido_sai_mesmo_fora_do_dia_marcado():
     """App fora do ar no dia certo não pode fazer o alerta sumir."""
-    atrasado = AGORA - timedelta(days=JANELA_ATRASO["semanal"] + 1)
     perfil = PerfilFake(frequencia="semanal", dia_semana=2,
-                        ultimo_envio=atrasado)
+                        ultimo_envio=AGORA - timedelta(days=9))
     assert alerta_devido(perfil, AGORA)
 
 
 def test_respeitar_hora_desligado_ignora_o_relogio():
-    perfil = PerfilFake(hora_envio="23:00")
+    perfil = PerfilFake(hora_envio="23:00",
+                        ultimo_envio=datetime(2026, 8, 30, 23, 0))
     assert not alerta_devido(perfil, AGORA)
     assert alerta_devido(perfil, AGORA, respeitar_hora=False)
 
@@ -274,8 +293,9 @@ def test_mensagem_lista_so_as_vigentes(monkeypatch):
     perfil = PerfilFake(nome="Ar-condicionado", situacoes=["Divulgada"])
     boa = MatchFake(_lic_completa("2026-09-30T09:00:00"))
     sessao = SessaoFake()
-    texto = alerta.montar_mensagem_perfil(sessao, perfil, [boa],
-                                          host="http://exemplo")
+    texto, incluidos = alerta.montar_mensagem_perfil(sessao, perfil, [boa],
+                                                     host="http://exemplo")
+    assert incluidos == [boa]
     assert texto.startswith("📡 Ar-condicionado")
     assert "1 oportunidade com proposta em aberto" in texto
     assert "PREFEITURA DE TESTE" in texto
@@ -421,3 +441,57 @@ def test_linha_gigante_sozinha_e_cortada_na_forca():
 def test_mensagem_curta_sai_num_pedaco_so():
     from app.alerta import dividir_mensagem
     assert dividir_mensagem("oi") == ["oi"]
+
+
+# ------------------------------------- regressões apontadas pela auditoria
+def test_hora_perto_da_meia_noite_nao_faz_o_alerta_sumir():
+    """O agendador confere de 10 em 10 min numa grade que depende da hora do
+    boot: com envio às 23:55 podia não haver NENHUM tique na janela, e o
+    alerta não saía nunca — nem naquele dia, nem em nenhum outro."""
+    perfil = PerfilFake(hora_envio="23:55",
+                        ultimo_envio=datetime(2026, 8, 30, 23, 55))
+    assert not alerta_devido(perfil, datetime(2026, 8, 31, 23, 50))
+    # o tique seguinte já é depois da meia-noite: mesmo assim tem de sair
+    assert alerta_devido(perfil, datetime(2026, 9, 1, 0, 0))
+
+
+def test_ultimo_envio_no_futuro_nao_cala_o_alerta():
+    """Banco restaurado de outra máquina ou relógio corrigido para trás."""
+    perfil = PerfilFake(ultimo_envio=AGORA + timedelta(days=3))
+    assert alerta_devido(perfil, AGORA)
+
+
+def test_urgencia_dispara_fora_da_agenda_quando_o_prazo_fecha_antes():
+    """Dispensa achada às 9h que encerra às 17h do mesmo dia não pode esperar
+    o alerta de amanhã — amanhã ela já estaria vencida e seria descartada."""
+    perfil = PerfilFake(ultimo_envio=datetime(2026, 8, 31, 7, 0))
+    assert not alerta_devido(perfil, AGORA)          # fora da agenda
+    fecha_hoje = MatchFake(LicFake("2026-08-31T17:00:00"))
+    fecha_depois = MatchFake(LicFake("2026-10-01T17:00:00"))
+    assert tem_urgencia(perfil, [fecha_hoje], AGORA)
+    assert not tem_urgencia(perfil, [fecha_depois], AGORA)
+
+
+def test_proximo_horario_e_sempre_depois_de_agora():
+    for freq in ("horas", "diario", "semanal", "mensal", "anual"):
+        perfil = PerfilFake(frequencia=freq)
+        assert horario_previsto(perfil, AGORA) <= AGORA
+        assert proximo_horario_previsto(perfil, AGORA) > AGORA
+
+
+def test_excedente_do_limite_nao_e_queimado(monkeypatch):
+    """Só o que entrou na mensagem vira 'avisado'. O resto fica para o
+    próximo alerta em vez de sumir para sempre."""
+    from app import alerta
+    monkeypatch.setattr(alerta, "enviar_telegram", lambda t: True)
+    monkeypatch.setattr(alerta, "enviar_email", lambda t: False)
+    muitos = [MatchFake(_lic_completa(f"2026-10-{d:02d}T09:00:00"))
+              for d in range(1, 26)]
+    perfil = PerfilFake()
+    enviou, quantidade = alerta.enviar_alerta_perfil(
+        SessaoFake(muitos), perfil, agora=AGORA)
+    assert enviou
+    assert quantidade == alerta.LIMITE_POR_PERFIL
+    marcados = [m for m in muitos if m.notificado]
+    assert len(marcados) == alerta.LIMITE_POR_PERFIL
+    assert len(muitos) - len(marcados) == 25 - alerta.LIMITE_POR_PERFIL

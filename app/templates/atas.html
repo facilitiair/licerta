@@ -47,12 +47,12 @@
 {% if paginas > 1 %}
 <div class="flex justify-center gap-3 mt-4 text-sm">
   {% if pagina > 1 %}
-    <a href="?q={{ q }}&adesao={{ adesao }}&pagina={{ pagina - 1 }}"
+    <a href="?{{ query_base }}&pagina={{ pagina - 1 }}"
        class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">← Anterior</a>
   {% endif %}
   <span class="py-1.5 text-slate-500">página {{ pagina }} de {{ paginas }}</span>
   {% if pagina < paginas %}
-    <a href="?q={{ q }}&adesao={{ adesao }}&pagina={{ pagina + 1 }}"
+    <a href="?{{ query_base }}&pagina={{ pagina + 1 }}"
        class="border border-slate-300 px-3 py-1.5 rounded-lg bg-white">Próxima →</a>
   {% endif %}
 </div>

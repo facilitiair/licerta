@@ -13,7 +13,8 @@
     <h3 class="font-semibold">Acesso</h3>
     <label class="block text-sm max-w-sm">Senha do painel
       <span class="text-slate-500">(vazia = sem login)</span>
-      <input type="password" name="APP_SENHA" value="{{ valores.APP_SENHA }}"
+      <input type="password" name="APP_SENHA" value="" autocomplete="new-password"
+             placeholder="{{ '•••••• (guardada) — em branco mantém' if valores.APP_SENHA_DEFINIDO else 'defina uma senha' }}"
              class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
     </label>
   </div>
@@ -24,7 +25,8 @@
       veja a seção 3 do README.</p>
     <div class="grid sm:grid-cols-2 gap-3 text-sm">
       <label>Token do bot
-        <input name="TELEGRAM_BOT_TOKEN" value="{{ valores.TELEGRAM_BOT_TOKEN }}"
+        <input type="password" name="TELEGRAM_BOT_TOKEN" value="" autocomplete="off"
+               placeholder="{{ '•••••• (guardado) — em branco mantém' if valores.TELEGRAM_BOT_TOKEN_DEFINIDO else 'cole o token do BotFather' }}"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2">
       </label>
       <label>Chat ID
@@ -60,7 +62,8 @@
         <input name="SMTP_USER" value="{{ valores.SMTP_USER }}"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
       <label>Senha (senha de app, no Gmail)
-        <input type="password" name="SMTP_PASSWORD" value="{{ valores.SMTP_PASSWORD }}"
+        <input type="password" name="SMTP_PASSWORD" value="" autocomplete="new-password"
+               placeholder="{{ '•••••• (guardada) — em branco mantém' if valores.SMTP_PASSWORD_DEFINIDO else 'senha de app do Gmail' }}"
                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
       <label>Destinatário
         <input name="EMAIL_DESTINO" value="{{ valores.EMAIL_DESTINO }}"

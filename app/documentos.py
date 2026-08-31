@@ -33,16 +33,18 @@ def _nome_seguro(texto, padrao):
     return (nome or padrao)[:80]
 
 
-def baixar_arquivos(sessao_db, lic):
+def baixar_arquivos(sessao_db, lic, sessao=None):
     """Baixa os documentos de uma licitação do PNCP. Retorna qtd baixada."""
-    if lic.fonte != "pncp" or not (lic.orgao_cnpj and lic.ano_compra):
+    if lic is None or lic.fonte != "pncp" or not (lic.orgao_cnpj and lic.ano_compra):
         return 0
     seq = _sequencial(lic.numero_controle_pncp)
     if not seq:
         return 0
+    http = sessao or requests
     ja_baixados = {a.url_origem for a in
                    sessao_db.query(ArquivoEdital).filter_by(licitacao_id=lic.id)}
-    docs = listar_arquivos_compra(lic.orgao_cnpj, lic.ano_compra, seq)
+    docs = listar_arquivos_compra(lic.orgao_cnpj, lic.ano_compra, seq,
+                                  sessao=sessao)
     pasta = os.path.join(PASTA_EDITAIS, str(lic.id))
     baixados = 0
     for doc in docs[:MAX_ARQUIVOS_POR_LICITACAO]:
@@ -54,9 +56,10 @@ def baixar_arquivos(sessao_db, lic):
         url = re.sub(r"^(https://pncp\.gov\.br):\d+", r"\1", url)
         if url in ja_baixados:
             continue
+        caminho = None
         try:
-            resp = requests.get(url, timeout=(10, 60), stream=True,
-                                headers={"User-Agent": "Mozilla/5.0"})
+            resp = http.get(url, timeout=(10, 60), stream=True,
+                            headers={"User-Agent": "Mozilla/5.0"})
             resp.raise_for_status()
             os.makedirs(pasta, exist_ok=True)
             tipo = doc.get("tipoDocumentoNome") or "Documento"
@@ -64,7 +67,12 @@ def baixar_arquivos(sessao_db, lic):
                                   f"doc{doc.get('sequencialDocumento', 1)}")
             extensao = ".pdf" if "pdf" in resp.headers.get(
                 "content-type", "").lower() else ""
-            caminho = os.path.join(pasta, f"{titulo}{extensao}")
+            # Prefixo com o sequencial: dois documentos de mesmo título — caso
+            # comum em edital retificado — gravavam no MESMO arquivo. O segundo
+            # truncava o primeiro e as duas linhas do banco passavam a apontar
+            # para o sobrevivente, sem erro nenhum.
+            ordem = doc.get("sequencialDocumento") or (baixados + 1)
+            caminho = os.path.join(pasta, f"{ordem}-{titulo}{extensao}")
             tamanho = 0
             with open(caminho, "wb") as f:
                 for parte in resp.iter_content(1024 * 256):

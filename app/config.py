@@ -7,11 +7,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dotenv import load_dotenv
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(RAIZ, ".env"))
-
 PASTA_DADOS = os.path.join(RAIZ, "data")
 os.makedirs(PASTA_DADOS, exist_ok=True)
 CAMINHO_DB = os.path.join(PASTA_DADOS, "radar.db")
+
+# O .env da raiz é o de sempre. O de data/ vem depois e tem prioridade porque
+# data/ é o volume do Railway: sem ele, tudo que a tela /config grava morre no
+# próximo deploy — inclusive a APP_SENHA, e sem senha o painel fica ABERTO na
+# internet, mostrando o token do Telegram e a senha do e-mail.
+CAMINHO_ENV = os.path.join(PASTA_DADOS, ".env")
+load_dotenv(os.path.join(RAIZ, ".env"))
+load_dotenv(CAMINHO_ENV, override=True)
 
 
 def _inteiro(valor, padrao, minimo, maximo):
@@ -23,12 +29,21 @@ def _inteiro(valor, padrao, minimo, maximo):
 
 
 def _hora(valor, padrao):
-    """Interpreta 'HH:MM' do .env; volta ao padrão se estiver malformado."""
+    """Interpreta 'HH:MM' do .env; volta ao padrão se estiver malformado.
+
+    A faixa é obrigatória, não zelo: os campos de horário em /config são texto
+    livre. Um '06:99' salvo ali virava `minute=99` no agendador, que recusa o
+    gatilho — e o app deixava de iniciar, com o valor ruim já gravado no .env.
+    Um '25:00' na hora do alerta calava todos os alertas para sempre.
+    """
     try:
         h, m = valor.split(":")
-        return int(h), int(m)
+        h, m = int(h), int(m)
     except (ValueError, AttributeError):
         return padrao
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return padrao
+    return h, m
 
 
 class Config:
@@ -42,6 +57,10 @@ class Config:
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
     EMAIL_DESTINO = os.environ.get("EMAIL_DESTINO", "")
     TZ = os.environ.get("TZ", "America/Fortaleza")
+    # Cookie só por HTTPS. Ligado quando o app está publicado (o Railway
+    # sempre serve por HTTPS); desligado em rede local, onde é http://.
+    COOKIE_SEGURO = bool(os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+                         or os.environ.get("APP_URL", "").startswith("https://"))
     HORA_COLETA = _hora(os.environ.get("HORA_COLETA"), (6, 0))
     HORA_ALERTA = _hora(os.environ.get("HORA_ALERTA"), (7, 0))
     # Editais saem o dia inteiro. Coletar só de manhã atrasa o aviso em até

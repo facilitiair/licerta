@@ -7,8 +7,11 @@ import hmac
 import logging
 import os
 import re
+import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from html import escape
 from urllib.parse import urlencode
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -106,16 +109,65 @@ app.mount("/static", StaticFiles(
 
 
 # ---------------------------------------------------------------- autenticação
+CAMINHO_SEGREDO = os.path.join(PASTA_DADOS, ".segredo_sessao")
+
+
+def _segredo_sessao():
+    """Chave aleatória do cookie, guardada fora do código e fora do git.
+
+    Antes a chave era a literal b"radar-licitacoes", pública no repositório:
+    o cookie virava um HMAC de chave conhecida sobre a senha, então quem o
+    obtivesse quebrava a senha por força bruta OFFLINE — e a mesma senha
+    abre a tela que mostra o token do Telegram e a senha do e-mail.
+    """
+    try:
+        with open(CAMINHO_SEGREDO, "rb") as f:
+            segredo = f.read()
+        if len(segredo) >= 32:
+            return segredo
+    except OSError:
+        pass
+    segredo = secrets.token_bytes(32)
+    with open(CAMINHO_SEGREDO, "wb") as f:
+        f.write(segredo)
+    return segredo
+
+
+def _girar_segredo_sessao():
+    """Invalida TODOS os cookies emitidos — é o que faz 'Sair' sair de verdade."""
+    with open(CAMINHO_SEGREDO, "wb") as f:
+        f.write(secrets.token_bytes(32))
+
+
 def _token_sessao():
-    return hmac.new(b"radar-licitacoes",
-                    config.APP_SENHA.encode(), hashlib.sha256).hexdigest()
+    return hmac.new(_segredo_sessao(), config.APP_SENHA.encode("utf-8"),
+                    hashlib.sha256).hexdigest()
+
+
+def _iguais(a, b):
+    """Comparação em tempo constante que aceita acentos.
+
+    `hmac.compare_digest` LEVANTA TypeError com str não-ASCII em vez de
+    devolver False. Consequências reais: uma senha como 'licitações2024'
+    trancava o dono para fora com erro 500 mesmo digitando a senha certa,
+    e um único byte acentuado no cookie derrubava todas as rotas — sem
+    precisar estar logado.
+    """
+    return hmac.compare_digest(a.encode("utf-8", "surrogatepass"),
+                               b.encode("utf-8", "surrogatepass"))
 
 
 def logado(request: Request):
-    """Sem APP_SENHA no .env o painel fica aberto (uso em rede local)."""
+    """Sem APP_SENHA o painel fica aberto — mas SÓ em rede local.
+
+    Publicado, senha vazia é acidente, não escolha: no Railway o .env vivia
+    no disco efêmero do contêiner, então um redeploy zerava a APP_SENHA e o
+    painel inteiro — inclusive a tela que guarda o token do Telegram e a
+    senha do e-mail — ficava aberto na internet, sem nenhum aviso.
+    """
     if not config.APP_SENHA:
-        return True
-    return hmac.compare_digest(request.cookies.get("sessao", ""), _token_sessao())
+        return not config.COOKIE_SEGURO
+    return _iguais(request.cookies.get("sessao", ""), _token_sessao())
 
 
 @app.middleware("http")
@@ -128,22 +180,58 @@ async def exigir_login(request: Request, call_next):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"erro": None})
+    erro = None
+    if not config.APP_SENHA and config.COOKIE_SEGURO:
+        erro = ("Este app está publicado na internet e está SEM SENHA. "
+                "Defina APP_SENHA nas variáveis do Railway e reinicie — "
+                "sem isso ninguém entra, nem você.")
+    return templates.TemplateResponse(request, "login.html", {"erro": erro})
+
+
+# Freio de força bruta. O app está numa URL pública e a senha é a defesa
+# inteira: sem isso, uma wordlist roda à vontade contra /login.
+TENTATIVAS_ANTES_DE_ESPERAR = 5
+ESPERA_MAXIMA = 15 * 60
+_falhas_login = {}
+
+
+def _tempo_de_castigo(ip):
+    """Segundos que ainda faltam para este IP poder tentar de novo."""
+    falhas, ultima = _falhas_login.get(ip, (0, 0))
+    if falhas < TENTATIVAS_ANTES_DE_ESPERAR:
+        return 0
+    espera = min(ESPERA_MAXIMA, 2 ** (falhas - TENTATIVAS_ANTES_DE_ESPERAR) * 5)
+    return max(0, int(ultima + espera - time.monotonic()))
 
 
 @app.post("/login")
 async def login(request: Request, senha: str = Form("")):
-    if hmac.compare_digest(senha, config.APP_SENHA):
+    ip = request.client.host if request.client else "?"
+    faltam = _tempo_de_castigo(ip)
+    if faltam:
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"erro": f"Muitas tentativas. Tente de novo em {faltam}s."},
+            status_code=429)
+    if config.APP_SENHA and _iguais(senha, config.APP_SENHA):
+        _falhas_login.pop(ip, None)
         resposta = RedirectResponse("/", status_code=303)
         resposta.set_cookie("sessao", _token_sessao(), httponly=True,
+                            samesite="lax", secure=config.COOKIE_SEGURO,
                             max_age=60 * 60 * 24 * 30)
         return resposta
+    falhas, _ = _falhas_login.get(ip, (0, 0))
+    _falhas_login[ip] = (falhas + 1, time.monotonic())
+    log.warning("Senha incorreta em /login (origem %s, %sª falha)", ip, falhas + 1)
     return templates.TemplateResponse(request, "login.html",
                                       {"erro": "Senha incorreta."})
 
 
 @app.get("/logout")
 async def logout():
+    # Gira o segredo: o cookie antigo deixa de valer no servidor, e não só
+    # no navegador de quem clicou. Antes, "Sair" era puramente cosmético.
+    _girar_segredo_sessao()
     resposta = RedirectResponse("/login", status_code=303)
     resposta.delete_cookie("sessao")
     return resposta
@@ -256,10 +344,17 @@ async def agenda(request: Request):
                   "sábado", "domingo"]
         agenda_dias = []
         for d, ms in dias.items():
-            dt = datetime.strptime(d, "%Y-%m-%d")
+            try:
+                dt = datetime.strptime(d, "%Y-%m-%d")
+                rotulo = f"{dt.strftime('%d/%m/%Y')} ({semana[dt.weekday()]})"
+            except (ValueError, TypeError):
+                # O Mural do TCE-PI já gravou datas impossíveis ("2026-13-45"),
+                # que passam no filtro por serem comparadas como texto. Uma
+                # linha torta não pode derrubar a agenda inteira.
+                rotulo = d or "data inválida"
             agenda_dias.append({
                 "data": d,
-                "rotulo": f"{dt.strftime('%d/%m/%Y')} ({semana[dt.weekday()]})",
+                "rotulo": rotulo,
                 "dias_ate": _dias_ate(d), "matches": ms})
         return templates.TemplateResponse(request, "agenda.html",
                                           {"agenda_dias": agenda_dias})
@@ -309,7 +404,8 @@ def _form_para_perfil(form):
         "ativo": form.get("ativo") == "on",
         "ufs": form.getlist("ufs"),
         "municipios_ibge": [m for m in form.getlist("municipios_ibge") if m],
-        "modalidades": [int(m) for m in form.getlist("modalidades")],
+        "modalidades": [int(m) for m in form.getlist("modalidades")
+                        if str(m).strip().isdigit()],
         "palavras_incluir": linhas("palavras_incluir"),
         "palavras_excluir": linhas("palavras_excluir"),
         "valor_min": numero("valor_min"),
@@ -488,7 +584,7 @@ async def perfil_duplicar(perfil_id: int):
 
 
 @app.post("/perfis/{perfil_id}/enviar")
-async def perfil_enviar_agora(perfil_id: int):
+def perfil_enviar_agora(perfil_id: int):
     """Botão 'Enviar agora': dispara este alerta fora da agenda."""
     enviados = alerta_mod.enviar_alertas_devidos(perfil_id=perfil_id)
     return RedirectResponse(f"/perfis?enviado={'sim' if enviados else 'vazio'}",
@@ -606,8 +702,10 @@ def _filtros_da_request(request):
 
 
 @app.get("/licitacoes", response_class=HTMLResponse)
-async def licitacoes_lista(request: Request, pagina: int = 1):
-    pagina = max(1, pagina)
+def licitacoes_lista(request: Request, pagina: int = 1):
+    # Teto além do máximo: o offset vai para o SQLite, que só aceita
+    # 64 bits — sem teto, ?pagina=99999999999999999999 vira erro 500.
+    pagina = max(1, min(pagina, 1_000_000))
     s = Sessao()
     try:
         filtros = _filtros_da_request(request)
@@ -677,7 +775,7 @@ async def licitacoes_lista(request: Request, pagina: int = 1):
 
 
 @app.get("/licitacoes/{lic_id}/detalhe", response_class=HTMLResponse)
-async def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
+def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
     s = Sessao()
     try:
         lic = s.get(Licitacao, lic_id)
@@ -699,7 +797,7 @@ async def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
 
 
 @app.post("/licitacoes/{lic_id}/baixar", response_class=HTMLResponse)
-async def licitacao_baixar_docs(request: Request, lic_id: int):
+def licitacao_baixar_docs(request: Request, lic_id: int):
     """Busca e baixa agora os documentos publicados desta licitação."""
     s = Sessao()
     try:
@@ -734,7 +832,9 @@ async def arquivo_download(arquivo_id: int):
 @app.get("/atas", response_class=HTMLResponse)
 async def atas_lista(request: Request, q: str = "", adesao: str = "",
                      pagina: int = 1):
-    pagina = max(1, pagina)
+    # Teto além do máximo: o offset vai para o SQLite, que só aceita
+    # 64 bits — sem teto, ?pagina=99999999999999999999 vira erro 500.
+    pagina = max(1, min(pagina, 1_000_000))
     s = Sessao()
     try:
         hoje = agora().strftime("%Y-%m-%d")
@@ -751,6 +851,7 @@ async def atas_lista(request: Request, q: str = "", adesao: str = "",
             "linhas": linhas, "total": total, "pagina": pagina,
             "paginas": max(1, -(-total // POR_PAGINA)),
             "q": q, "adesao": adesao,
+            "query_base": urlencode([("q", q), ("adesao", adesao)]),
         })
     finally:
         s.close()
@@ -777,7 +878,7 @@ async def match_atualizar(match_id: int, status: str = Form(None),
 
 
 @app.get("/licitacoes/exportar")
-async def licitacoes_exportar(request: Request, formato: str = "csv"):
+def licitacoes_exportar(request: Request, formato: str = "csv"):
     s = Sessao()
     try:
         linhas = _consulta_licitacoes(s, _filtros_da_request(request)).all()
@@ -814,7 +915,7 @@ def _perfil_pesquisa_manual(s):
 
 
 @app.get("/pesquisar", response_class=HTMLResponse)
-async def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
+def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
                          ordenacao: str = "recentes", pagina: int = 1,
                          frase_exata: str = "", cidade: str = "",
                          valor_min: str = "", valor_max: str = ""):
@@ -872,20 +973,26 @@ async def pesquisar_pncp(request: Request, q: str = "", status: str = "abertas",
         "paginas": max(1, -(-resultado["total"] // 20)),
         "erro": erro, "ufs": UFS_TODAS, "modalidades": modalidades,
         "consultou": consultou, "filtrados_pagina": filtrados_pagina,
-        "query_base": "&".join(
-            [f"q={q}", f"status={status}", f"ordenacao={ordenacao}",
-             f"frase_exata={frase_exata}", f"cidade={cidade}",
-             f"valor_min={valor_min}", f"valor_max={valor_max}"] +
-            [f"ufs={u}" for u in f_ufs] +
-            [f"modalidades={m}" for m in f_mods] +
-            [f"esferas={e}" for e in f_esferas] +
-            [f"municipios={m}" for m in f_muns] +
-            [f"orgaos={o}" for o in f_orgs]),
+        # urlencode, não f-string: uma busca por "reforma & ampliação" fazia
+        # o '&' virar separador de parâmetro e a página 2 vinha com a consulta
+        # truncada, mostrando resultados diferentes dos da página 1.
+        "query_base": urlencode(
+            [("q", q), ("status", status), ("ordenacao", ordenacao),
+             ("frase_exata", frase_exata), ("cidade", cidade),
+             ("valor_min", valor_min), ("valor_max", valor_max)] +
+            [("ufs", u) for u in f_ufs] +
+            [("modalidades", m) for m in f_mods] +
+            [("esferas", e) for e in f_esferas] +
+            [("municipios", m) for m in f_muns] +
+            [("orgaos", o) for o in f_orgs]),
+        "query_perfil": urlencode(
+            [("q", q)] + [("ufs", u) for u in f_ufs]
+            + [("modalidades", m) for m in f_mods]),
     })
 
 
 @app.get("/api/pncp/opcoes", response_class=HTMLResponse)
-async def pncp_opcoes(tipo: str = "municipios", q: str = ""):
+def pncp_opcoes(tipo: str = "municipios", q: str = ""):
     """Autocomplete de municípios e órgãos com os IDs do próprio portal."""
     if tipo not in ("municipios", "orgaos") or len(q) < 2:
         return HTMLResponse("")
@@ -893,13 +1000,19 @@ async def pncp_opcoes(tipo: str = "municipios", q: str = ""):
     if not opcoes:
         return HTMLResponse('<p class="px-3 py-1.5 text-xs text-slate-400">'
                             "Nada encontrado.</p>")
+    # Este HTML é montado à mão (não passa pelo Jinja), então o escape tem de
+    # ser explícito: o nome do órgão vem cru da API do PNCP e um '<' ali
+    # viraria markup executado no seu navegador já autenticado. Os dados vão
+    # em data-*, nunca dentro de um onclick — nome com apóstrofo quebrava o
+    # handler e o clique não fazia nada.
     linhas = []
     for o in opcoes:
         rotulo = o["nome"] + (f" ({o['cnpj']})" if o.get("cnpj") else "")
         linhas.append(
             f'<button type="button" class="block w-full text-left px-3 py-1.5 '
-            f'text-xs hover:bg-blue-50" onclick="addFiltro(\'{tipo}\', '
-            f'\'{o["id"]}\', this.textContent.trim())">{rotulo}</button>')
+            f'text-xs hover:bg-blue-50" data-tipo="{escape(tipo)}" '
+            f'data-id="{escape(str(o["id"]))}" '
+            f'data-rotulo="{escape(rotulo)}">{escape(rotulo)}</button>')
     return HTMLResponse("".join(linhas))
 
 
@@ -960,7 +1073,8 @@ async def logs_coletas(request: Request):
 @app.get("/config", response_class=HTMLResponse)
 async def config_form(request: Request, salvo: int = 0):
     return templates.TemplateResponse(request, "config.html", {
-        "valores": envcfg.valores_atuais(), "salvo": salvo, "resultado_teste": None,
+        "valores": envcfg.valores_para_tela(), "salvo": salvo,
+        "resultado_teste": None,
     })
 
 
@@ -975,7 +1089,7 @@ async def config_salvar(request: Request):
 
 
 @app.post("/config/testar", response_class=HTMLResponse)
-async def config_testar(request: Request, canal: str = Form("telegram")):
+def config_testar(request: Request, canal: str = Form("telegram")):
     """Botão 'Enviar mensagem de teste' (SPEC §7)."""
     texto = ("📡 Radar de Licitações — mensagem de teste.\n"
              "Se você recebeu isto, o canal está configurado corretamente. ✅")

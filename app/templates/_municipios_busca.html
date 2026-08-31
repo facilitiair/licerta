@@ -1,7 +1,12 @@
+{# Os dados vão em atributos data-*, não dentro de um onclick. Com o nome no
+   onclick, um município com apóstrofo — "Olho d'Água das Cunhãs/MA", e são 47
+   no país — gerava JavaScript inválido e o clique simplesmente não fazia nada,
+   sem erro visível. Em data-* o Jinja escapa e o navegador devolve o texto
+   literal. #}
 {% for m in municipios %}
-  <button type="button"
-          class="block w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50"
-          onclick="adicionarMunicipio('{{ m.codigo_ibge }}', '{{ m.nome }}/{{ m.uf }}')">
+  <button type="button" data-municipio="{{ m.codigo_ibge }}"
+          data-rotulo="{{ m.nome }}/{{ m.uf }}"
+          class="block w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50">
     {{ m.nome }} / {{ m.uf }}
   </button>
 {% else %}

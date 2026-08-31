@@ -1,9 +1,7 @@
 """Tela /config: grava o .env e aplica as mudanças sem reiniciar o app."""
 import os
 
-from .config import RAIZ, _hora, _inteiro, config
-
-CAMINHO_ENV = os.path.join(RAIZ, ".env")
+from .config import CAMINHO_ENV, _hora, _inteiro, config
 
 # Chaves editáveis pela interface, na ordem em que aparecem no arquivo
 CHAVES = ["APP_SENHA", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
@@ -32,15 +30,64 @@ def valores_atuais():
     }
 
 
+SEGREDOS = {"APP_SENHA", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD"}
+
+
+def _outras_chaves():
+    """Chaves que já estão no arquivo e a tela não conhece.
+
+    Sem isto, salvar qualquer horário apagava, por exemplo, o APP_URL que o
+    usuário tivesse posto à mão — e todos os alertas passavam a mandar um
+    link que não abre no celular, sem nenhum aviso.
+    """
+    guardadas = {}
+    try:
+        with open(CAMINHO_ENV, encoding="utf-8") as f:
+            for linha in f:
+                linha = linha.strip()
+                if linha and not linha.startswith("#") and "=" in linha:
+                    chave, valor = linha.split("=", 1)
+                    if chave.strip() not in CHAVES:
+                        guardadas[chave.strip()] = valor
+    except OSError:
+        pass
+    return guardadas
+
+
+def valores_para_tela():
+    """Os mesmos valores, mas com os segredos fora do HTML.
+
+    A tela imprimia a senha do painel, o token do Telegram e a senha do e-mail
+    dentro do atributo `value`. O `type="password"` só esconde na tela: quem
+    abrisse "ver código-fonte" — ou qualquer script rodando na página — lia os
+    três em texto puro. Agora só informamos SE existe algo guardado.
+    """
+    valores = dict(valores_atuais())
+    for chave in SEGREDOS:
+        valores[f"{chave}_DEFINIDO"] = bool(valores[chave])
+        valores[chave] = ""
+    return valores
+
+
 def salvar(novos):
     """Reescreve o .env e atualiza o objeto config em memória."""
     valores = valores_atuais()
-    valores.update({c: str(novos.get(c, valores[c])).strip() for c in CHAVES
-                    if c in novos})
+    for c in CHAVES:
+        if c not in novos:
+            continue
+        novo = str(novos[c]).strip()
+        # Campo de segredo em branco = "mantenha o que já está lá". A tela não
+        # devolve mais o valor no HTML, então em branco significa 'não mexi'.
+        if not novo and c in SEGREDOS:
+            continue
+        valores[c] = novo
+    guardadas = _outras_chaves()
     with open(CAMINHO_ENV, "w", encoding="utf-8") as f:
         f.write("# Gerado pela tela /config do Radar de Licitações\n")
         for chave in CHAVES:
             f.write(f"{chave}={valores[chave]}\n")
+        for chave, valor in guardadas.items():
+            f.write(f"{chave}={valor}\n")
 
     # Aplica em memória (sem reiniciar)
     config.APP_SENHA = valores["APP_SENHA"]

@@ -233,20 +233,34 @@
 </form>
 
 <script>
-  // Chips de municípios: adiciona um hidden input por município escolhido
+  // Chips de municípios: adiciona um hidden input por município escolhido.
+  // O rótulo entra como texto (nunca innerHTML): nome de município vem do
+  // IBGE, mas montar HTML com ele quebraria em apóstrofos e sinais de menor.
   function adicionarMunicipio(codigo, rotulo){
     if (document.querySelector(`.chip[data-codigo="${codigo}"]`)) return;
     const chip = document.createElement('span');
     chip.className = 'chip bg-blue-100 text-blue-800 text-xs px-2 py-1 ' +
                      'rounded-full flex items-center gap-1';
     chip.dataset.codigo = codigo;
-    chip.innerHTML = `${rotulo}
-      <input type="hidden" name="municipios_ibge" value="${codigo}">
-      <button type="button" onclick="this.closest('.chip').remove()">✕</button>`;
+    chip.appendChild(document.createTextNode(rotulo + ' '));
+    const oculto = document.createElement('input');
+    oculto.type = 'hidden'; oculto.name = 'municipios_ibge'; oculto.value = codigo;
+    chip.appendChild(oculto);
+    const fechar = document.createElement('button');
+    fechar.type = 'button'; fechar.textContent = '✕';
+    fechar.addEventListener('click', () => chip.remove());
+    chip.appendChild(fechar);
     document.getElementById('chipsMunicipios').appendChild(chip);
     document.getElementById('resultadosMunicipios').innerHTML = '';
     document.getElementById('buscaMunicipio').value = '';
   }
+
+  // Delegação: os resultados chegam por htmx, então o listener fica no
+  // contêiner, que já existe quando a página carrega.
+  document.getElementById('resultadosMunicipios').addEventListener('click', (e) => {
+    const botao = e.target.closest('button[data-municipio]');
+    if (botao) adicionarMunicipio(botao.dataset.municipio, botao.dataset.rotulo);
+  });
   // Só mostra os campos que a frequência escolhida realmente usa
   function mostrarCamposFreq(){
     const freq = document.getElementById('frequencia').value;

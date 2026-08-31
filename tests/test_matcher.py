@@ -149,3 +149,41 @@ def test_exclusao_tambem_enxerga_o_hifen():
     casou, _ = texto_casa("manutenção de ar-condicionado veicular",
                           ['"manutenção"'], ['"ar condicionado"'])
     assert not casou
+
+
+# --- termos degenerados: não podem virar "casa tudo" nem "descarta tudo" ---
+def test_linha_sem_letras_nao_derruba_o_perfil_inteiro():
+    """Um '-' usado como separador visual na lista de exclusão virava um
+    regex vazio, que casa em qualquer posição: o perfil parava de achar
+    QUALQUER licitação, sem nenhuma explicação na tela."""
+    for lixo in ["-", "+", "*", "/", '""', "  ", "—"]:
+        casou, _ = texto_casa("manutenção de ar condicionado",
+                              ['"ar condicionado"'], [lixo])
+        assert casou, f"exclusão {lixo!r} derrubou tudo"
+
+
+def test_linha_sem_letras_na_inclusao_nao_casa_tudo():
+    for lixo in ["-", "+", "*", "/", '""']:
+        casou, _ = texto_casa("aquisição de merenda escolar", [lixo], [])
+        assert not casou, f"inclusão {lixo!r} virou casa-tudo"
+
+
+def test_exclusao_valida_continua_excluindo():
+    casou, _ = texto_casa("manutenção de ar condicionado veicular",
+                          ['"ar condicionado"'], ["veicular"])
+    assert not casou
+
+
+def test_data_sem_hora_vale_ate_o_fim_do_dia():
+    """O Mural do TCE-PI às vezes manda só a data. Comparar o prefixo curto
+    dava 'vencida' já à meia-noite do próprio dia da sessão."""
+    from datetime import datetime
+
+    from app.matcher import esta_vigente
+
+    class Lic:
+        data_encerramento_proposta = "2026-08-31"
+
+    assert esta_vigente(Lic(), datetime(2026, 8, 31, 0, 1))
+    assert esta_vigente(Lic(), datetime(2026, 8, 31, 17, 0))
+    assert not esta_vigente(Lic(), datetime(2026, 9, 1, 0, 1))

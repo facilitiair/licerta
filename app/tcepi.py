@@ -78,11 +78,7 @@ def _mapear(linha_html):
         return None
     m_id = RE_DETALHE.search(linha_html)
     codigo, modalidade_nome = _modalidade(c[5], c[6])
-    municipio = None
-    m_pref = re.search(r'(?:PREFEITURA|C[ÂA]MARA)\s+MUNICIPAL\s+DE\s+(.+)',
-                       c[0], re.I)
-    if m_pref:
-        municipio = m_pref.group(1).title()
+    municipio = municipio_do_orgao(c[0])
     abertura = _data_iso(c[10])
     return {
         "numero_controle_pncp": f"TCEPI-{c[2]}",   # chave única própria
@@ -124,6 +120,25 @@ def _post_ajax(sessao, viewstate, dados_extra):
     resp.raise_for_status()
     resp.encoding = "utf-8"
     return resp.text
+
+
+# Como o Mural escreve o órgão. O padrão dominante é o abreviado ("P. M. DE
+# BETANIA DO PIAUI"); só com a forma por extenso, o município saía nulo em
+# TODAS as 470 linhas coletadas — o que desligava a deduplicação por
+# município+valor contra o PNCP e fazia perfis com filtro de município
+# descartarem o mural inteiro, em silêncio.
+RE_MUNICIPIO = re.compile(
+    r'^\s*(?:P\s*\.?\s*M\s*\.?|PREFEITURA(?:\s+MUNICIPAL)?|'
+    r'C\s*\.?\s*M\s*\.?|C[ÂA]MARA(?:\s+MUNICIPAL)?)\s+DE\s+(.+)$', re.I)
+
+
+def municipio_do_orgao(orgao):
+    """Extrai o município do nome do órgão do Mural; None se não der."""
+    m = RE_MUNICIPIO.search((orgao or "").strip())
+    if not m:
+        return None
+    nome = re.sub(r'\s+', " ", m.group(1)).strip(" -–—").title()
+    return nome or None
 
 
 def coletar_mural(dias_retro=7, dias_futuro=90):

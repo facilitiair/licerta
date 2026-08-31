@@ -82,13 +82,19 @@ alerta fora da agenda, útil para conferir se está tudo certo.
 
 | Chave | Para quê |
 |---|---|
-| `APP_SENHA` | Senha do painel. Vazia = sem login (só use em casa). |
+| `APP_SENHA` | Senha do painel. Vazia só é aceita em rede local — publicado, o app se recusa a abrir sem senha. |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alertas no Telegram. |
 | `EMAIL_ATIVO` + `SMTP_*` | Alerta também por e-mail (opcional, Fase 2). |
 | `HORA_COLETA` | Hora da **primeira** coleta do dia (HH:MM). |
 | `HORAS_ENTRE_COLETAS` | Repete a coleta de N em N horas (padrão 3; use 24 para uma só). |
 | `HORA_ALERTA` | Hora padrão dos alertas que não escolheram uma própria. |
 | `DIAS_JANELA_FUTURA` | Busca propostas que encerram em até N dias (padrão 90). |
+
+> **Sobre os campos de segredo na tela de Configurações:** a senha do painel,
+> o token do Telegram e a senha do e-mail **não** aparecem mais preenchidos —
+> deixá-los em branco mantém o que já está guardado. Só digite algo quando
+> quiser de fato trocar. No Railway, essas configurações passam a ser gravadas
+> dentro do volume (`data/.env`), então sobrevivem a um redeploy.
 
 **Nunca envie o `.env` para ninguém nem para o GitHub** (o `.gitignore` já
 o protege).

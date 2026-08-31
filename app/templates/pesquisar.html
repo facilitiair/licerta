@@ -141,18 +141,35 @@
 </form>
 
 <script>
+  // O rótulo entra como TEXTO, nunca como innerHTML: ele vem do nome do órgão
+  // na API do PNCP, e montar HTML com esse texto reinterpretaria markup no seu
+  // navegador já autenticado — além de quebrar em nomes com apóstrofo.
   function addFiltro(tipo, id, rotulo){
     const alvo = document.getElementById('chips_' + tipo);
-    if (alvo.querySelector(`input[value="${id}"]`)) return;
+    if (alvo.querySelector(`input[value="${CSS.escape(id)}"]`)) return;
     const cor = tipo === 'municipios' ? 'blue' : 'purple';
     const chip = document.createElement('span');
     chip.className = `chip bg-${cor}-100 text-${cor}-800 px-2 py-1 ` +
                      'rounded-full flex items-center gap-1';
-    chip.innerHTML = `${rotulo}
-      <input type="hidden" name="${tipo}" value="${id}">
-      <button type="button" onclick="this.closest('.chip').remove()">✕</button>`;
+    chip.appendChild(document.createTextNode(rotulo + ' '));
+    const oculto = document.createElement('input');
+    oculto.type = 'hidden'; oculto.name = tipo; oculto.value = id;
+    chip.appendChild(oculto);
+    const fechar = document.createElement('button');
+    fechar.type = 'button'; fechar.textContent = '✕';
+    fechar.addEventListener('click', () => chip.remove());
+    chip.appendChild(fechar);
     alvo.appendChild(chip);
     document.getElementById('lista_' + tipo).innerHTML = '';
+  }
+
+  // Delegação: as opções chegam por htmx depois do carregamento da página.
+  for (const tipo of ['municipios', 'orgaos']) {
+    const lista = document.getElementById('lista_' + tipo);
+    if (lista) lista.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-id]');
+      if (b) addFiltro(b.dataset.tipo, b.dataset.id, b.dataset.rotulo);
+    });
   }
 </script>
 
@@ -166,7 +183,7 @@
     página {{ pagina }} de {{ paginas }}
     {% if filtrados_pagina %} · {{ filtrados_pagina }} oculto(s) nesta página
       pelos refinamentos{% endif %}</p>
-  <a href="/perfis/novo?q={{ q }}{% for u in f_ufs %}&ufs={{ u }}{% endfor %}{% for m in f_mods %}&modalidades={{ m }}{% endfor %}"
+  <a href="/perfis/novo?{{ query_perfil }}"
      class="ml-auto text-xs border border-purple-600 text-purple-700 px-3 py-1.5
             rounded-lg hover:bg-purple-50 font-semibold">
     🎯 Monitorar esta busca (criar perfil)</a>

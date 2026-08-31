@@ -1,12 +1,11 @@
 """Modelo de dados (SQLAlchemy) — espelha a seção 4 do SPEC.md."""
-from datetime import datetime
 
 from sqlalchemy import (JSON, Boolean, Column, DateTime, Float, ForeignKey,
                         Integer, String, Text, UniqueConstraint, create_engine,
                         event)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from .config import CAMINHO_DB
+from .config import CAMINHO_DB, agora
 
 engine = create_engine(f"sqlite:///{CAMINHO_DB}",
                        connect_args={"check_same_thread": False,
@@ -53,7 +52,7 @@ class PerfilBusca(Base):
     mes_ano = Column(Integer, default=1, nullable=False)      # 1..12 (anual)
     hora_envio = Column(String, default="", nullable=False)   # "" = HORA_ALERTA
     ultimo_envio = Column(DateTime, nullable=True)
-    criado_em = Column(DateTime, default=datetime.now, nullable=False)
+    criado_em = Column(DateTime, default=agora, nullable=False)
     matches = relationship("PerfilMatch", back_populates="perfil",
                            cascade="all, delete-orphan")
 
@@ -85,7 +84,7 @@ class Licitacao(Base):
     objeto_norm = Column(Text)                 # objeto sem acentos p/ busca livre
     payload_json = Column(Text)                # resposta bruta completa
     fonte = Column(String, default="pncp")     # 'pncp' | 'tcepi'
-    coletado_em = Column(DateTime, default=datetime.now)
+    coletado_em = Column(DateTime, default=agora)
     matches = relationship("PerfilMatch", back_populates="licitacao",
                            cascade="all, delete-orphan")
 
@@ -95,7 +94,7 @@ class PerfilMatch(Base):
     id = Column(Integer, primary_key=True)
     perfil_id = Column(Integer, ForeignKey("perfis_busca.id"), nullable=False)
     licitacao_id = Column(Integer, ForeignKey("licitacoes.id"), nullable=False)
-    data_match = Column(DateTime, default=datetime.now, nullable=False)
+    data_match = Column(DateTime, default=agora, nullable=False)
     notificado = Column(Boolean, default=False, nullable=False)
     lido = Column(Boolean, default=False, nullable=False)
     favorito = Column(Boolean, default=False, nullable=False)
@@ -139,7 +138,7 @@ class Ata(Base):
     perfis_casados = Column(JSON, default=list)   # nomes dos perfis que casaram
     link_pncp = Column(String)
     payload_json = Column(Text)
-    coletado_em = Column(DateTime, default=datetime.now)
+    coletado_em = Column(DateTime, default=agora)
 
 
 class ArquivoEdital(Base):
@@ -152,7 +151,7 @@ class ArquivoEdital(Base):
     tipo = Column(String)
     url_origem = Column(String)
     caminho_local = Column(String)      # relativo à pasta data/
-    baixado_em = Column(DateTime, default=datetime.now)
+    baixado_em = Column(DateTime, default=agora)
     licitacao = relationship("Licitacao")
 
 

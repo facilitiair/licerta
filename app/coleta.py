@@ -10,7 +10,7 @@ from .db import Ata, ColetaLog, Licitacao, PerfilBusca, PerfilMatch, Sessao
 from .documentos import baixar_arquivos
 from .matcher import licitacao_casa_perfil, normalizar, texto_casa
 from .pncp import MODALIDADES, atas_atualizadas, propostas_abertas
-from .tcepi import coletar_mural
+from .tcepi import coletar_mural, municipio_do_orgao
 
 log = logging.getLogger("radar.coleta")
 
@@ -19,10 +19,10 @@ _coletando = threading.Lock()
 
 
 def coleta_em_andamento():
-    if _coletando.acquire(blocking=False):
-        _coletando.release()
-        return False
-    return True
+    """Só LÊ o estado. Não pode adquirir a trava: o painel consulta isto por
+    polling do htmx, e se o job das 3h caísse exatamente nessa janela o ciclo
+    inteiro era descartado com um log.info que ninguém vê."""
+    return _coletando.locked()
 
 
 def _combinacoes(perfis):
@@ -45,11 +45,18 @@ def _combinacoes(perfis):
 
 
 def _upsert(sessao_db, item):
-    """Insere ou atualiza por numero_controle_pncp. Retorna a licitação."""
+    """Insere ou atualiza por numero_controle_pncp. Retorna a licitação.
+
+    Campo vazio na origem NÃO apaga o que já temos: a busca ao vivo do portal
+    devolve `valor_global` e `numero` nulos, e salvar um resultado à mão zerava
+    o valor estimado que a coleta tinha preenchido.
+    """
     lic = sessao_db.query(Licitacao).filter_by(
         numero_controle_pncp=item["numero_controle_pncp"]).first()
     if lic:
         for campo, valor in item.items():
+            if valor is None and getattr(lic, campo, None) is not None:
+                continue
             setattr(lic, campo, valor)
         lic.coletado_em = agora()
     else:
@@ -65,7 +72,17 @@ def _rodar_matcher(sessao_db, perfis):
     existentes = {(m.perfil_id, m.licitacao_id)
                   for m in sessao_db.query(PerfilMatch.perfil_id,
                                            PerfilMatch.licitacao_id)}
-    licitacoes = sessao_db.query(Licitacao).all()
+    # Só o que ainda pode virar alerta, e sem arrastar o payload_json (1,4 KB
+    # por linha) para a memória. Antes carregava a tabela INTEIRA a cada ciclo
+    # — 8 vezes por dia, sobre uma tabela que só cresce — para reavaliar
+    # editais cujo prazo venceu há meses e que nenhum perfil aceitaria.
+    corte = agora().strftime("%Y-%m-%dT%H:%M")
+    consulta = sessao_db.query(Licitacao)
+    if all(getattr(p, "somente_vigentes", True) for p in perfis):
+        consulta = consulta.filter(
+            (Licitacao.data_encerramento_proposta.is_(None))
+            | (Licitacao.data_encerramento_proposta >= corte))
+    licitacoes = consulta.all()
     for perfil in perfis:
         for lic in licitacoes:
             if (perfil.id, lic.id) in existentes:
@@ -143,7 +160,48 @@ def _coletar_tcepi(sessao_db, perfis, erros):
         log.warning("Mural TCE-PI falhou: %s", e)
 
 
-def _coletar_atas(sessao_db, perfis, erros):
+def reconciliar_tcepi(sessao_db):
+    """Remove linhas do Mural cujo edital já apareceu no PNCP.
+
+    A deduplicação só acontecia na inserção, e o Mural publica ANTES do PNCP:
+    quando o PNCP alcançava, ficavam duas linhas do mesmo edital para sempre —
+    duas na lista, dois matches e duas entradas no alerta. Com a coleta de 3
+    em 3 horas essa janela é capturada 8 vezes por dia, então o problema
+    aumentou junto.
+
+    Só apaga o que o usuário ainda não tocou: linha com anotação, favorito ou
+    status movido no funil fica onde está, mesmo duplicada.
+    """
+    chaves = chaves_dedup_pncp(sessao_db)
+    if not chaves:
+        return 0
+    removidas = preenchidos = 0
+    for lic in sessao_db.query(Licitacao).filter(Licitacao.fonte == "tcepi").all():
+        if not lic.municipio_nome:
+            # As linhas gravadas antes do conserto do padrão do órgão estão
+            # todas sem município, e sem ele a assinatura município+valor —
+            # a única que pega o mesmo edital escrito de formas diferentes
+            # nas duas fontes — nunca era testada.
+            lic.municipio_nome = municipio_do_orgao(lic.orgao_nome)
+            preenchidos += 1 if lic.municipio_nome else 0
+        item = {"objeto": lic.objeto, "municipio_nome": lic.municipio_nome,
+                "valor_total_estimado": lic.valor_total_estimado}
+        if not e_duplicata_tcepi(item, chaves):
+            continue
+        tocada = any(m.anotacao or m.favorito or m.status != "novo"
+                     for m in lic.matches)
+        if tocada:
+            continue
+        sessao_db.delete(lic)
+        removidas += 1
+    if removidas or preenchidos:
+        sessao_db.commit()
+        log.info("Mural TCE-PI: %s duplicatas do PNCP removidas, "
+                 "%s municípios preenchidos", removidas, preenchidos)
+    return removidas
+
+
+def _coletar_atas(sessao_db, perfis, erros, sessao=None):
     """Atas de registro de preços: varredura incremental + filtro por palavras.
 
     Guardamos apenas atas que casam com um perfil COM palavras-chave —
@@ -154,10 +212,10 @@ def _coletar_atas(sessao_db, perfis, erros):
         return
     primeira_vez = sessao_db.query(Ata).count() == 0
     dias = 30 if primeira_vez else 2
-    qtd = 0
+    qtd = processadas = 0
     try:
         hoje_iso = agora().strftime("%Y-%m-%d")
-        for ata in atas_atualizadas(dias_retro=dias):
+        for ata in atas_atualizadas(dias_retro=dias, sessao=sessao):
             if ata["cancelado"] or not ata["numero_controle_ata"]:
                 continue
             # o endpoint devolve qualquer ata ALTERADA no período, inclusive
@@ -179,7 +237,11 @@ def _coletar_atas(sessao_db, perfis, erros):
             else:
                 sessao_db.add(Ata(**ata, perfis_casados=casados))
                 qtd += 1
-            if qtd and qtd % 200 == 0:
+            # Contador PRÓPRIO: usando `qtd`, que só cresce em ata nova, o
+            # contador travava e passava a disparar um commit com fsync a
+            # CADA ata já conhecida — e o endpoint devolve milhares delas.
+            processadas += 1
+            if processadas % 200 == 0:
                 sessao_db.commit()       # lotes pequenos, mesmo motivo
         sessao_db.commit()
         log.info("Atas: %s novas compatíveis (janela de %s dias)", qtd, dias)
@@ -189,13 +251,32 @@ def _coletar_atas(sessao_db, perfis, erros):
         log.warning("Coleta de atas falhou: %s", e)
 
 
-def _baixar_editais_novos(sessao_db, novos_ids, erros):
-    """Download automático dos documentos das licitações recém-casadas."""
+MAX_EDITAIS_POR_CICLO = 60
+
+
+def _baixar_editais_novos(sessao_db, novos_ids, erros, sessao=None):
+    """Download automático dos documentos das licitações recém-casadas.
+
+    Com teto: um perfil sem palavras-chave casa com TUDO, e o primeiro ciclo
+    tentaria baixar milhares de PDFs de até 60 MB segurando a trava da coleta
+    — horas de app inerte, e no GitHub Actions o job morria no timeout de 90
+    min sem publicar o banco. As licitações que encerram primeiro vêm antes;
+    o resto pega na próxima rodada, daqui a poucas horas.
+    """
+    ids = list(dict.fromkeys(novos_ids))
+    if len(ids) > MAX_EDITAIS_POR_CICLO:
+        ordem = {i: n for n, i in enumerate(ids)}
+        lics = (sessao_db.query(Licitacao.id)
+                .filter(Licitacao.id.in_(ids))
+                .order_by(Licitacao.data_encerramento_proposta).all())
+        ids = [i for (i,) in lics][:MAX_EDITAIS_POR_CICLO] or ids[:MAX_EDITAIS_POR_CICLO]
+        log.info("Editais: %s casaram, baixando os %s de prazo mais próximo",
+                 len(ordem), len(ids))
     total = 0
-    for lic_id in dict.fromkeys(novos_ids):
+    for lic_id in ids:
         lic = sessao_db.get(Licitacao, lic_id)
         try:
-            total += baixar_arquivos(sessao_db, lic)
+            total += baixar_arquivos(sessao_db, lic, sessao=sessao)
         except Exception as e:  # noqa: BLE001
             erros.append(f"download edital lic {lic_id}: {e}")
     if total:
@@ -207,15 +288,23 @@ def coletar():
     if not _coletando.acquire(blocking=False):
         log.info("Coleta já em andamento; ignorando novo disparo")
         return None
-    sessao_db = Sessao()
-    registro = ColetaLog(inicio=agora())
-    sessao_db.add(registro)
-    sessao_db.commit()
+    # Tudo daqui para baixo tem de estar dentro do try: se abrir a sessão ou
+    # gravar o ColetaLog levantasse (SQLite ocupado devolve "database is
+    # locked" depois do busy_timeout), a trava ficava adquirida PARA SEMPRE.
+    # A partir daí toda coleta era ignorada, o botão "Coletar agora" não fazia
+    # nada e o painel mostrava "coletando..." eterno — até um redeploy.
+    sessao_db = registro = http = None
     erros, novas = [], 0
     try:
+        sessao_db = Sessao()
+        registro = ColetaLog(inicio=agora())
+        sessao_db.add(registro)
+        sessao_db.commit()
         perfis = sessao_db.query(PerfilBusca).filter_by(ativo=True).all()
         if not perfis:
             erros.append("nenhum perfil ativo — nada a coletar")
+        # Uma sessão HTTP só para toda a coleta: reaproveita a conexão TLS com
+        # o pncp.gov.br em vez de refazer o handshake a cada chamada.
         http = requests.Session()
         for uf, modalidade in _combinacoes(perfis):
             try:
@@ -239,25 +328,42 @@ def coletar():
                 erros.append(msg)
                 log.error("Falha na combinação %s", msg)
         _coletar_tcepi(sessao_db, perfis, erros)
+        try:
+            reconciliar_tcepi(sessao_db)
+        except Exception as e:  # noqa: BLE001 — limpeza nunca derruba a coleta
+            sessao_db.rollback()
+            erros.append(f"reconciliação TCE-PI: {e}")
         novos_ids = _rodar_matcher(sessao_db, perfis)
         novas = len(novos_ids)
         sessao_db.commit()
-        _coletar_atas(sessao_db, perfis, erros)
-        _baixar_editais_novos(sessao_db, novos_ids, erros)
+        _coletar_atas(sessao_db, perfis, erros, sessao=http)
+        _baixar_editais_novos(sessao_db, novos_ids, erros, sessao=http)
         registro.sucesso = len(erros) == 0
     except Exception as e:  # noqa: BLE001 — última linha de defesa
-        sessao_db.rollback()
+        if sessao_db is not None:
+            sessao_db.rollback()
         erros.append(f"erro geral: {e}")
-        registro.sucesso = False
+        if registro is not None:
+            registro.sucesso = False
         log.exception("Erro geral na coleta")
     finally:
-        registro.fim = agora()
-        registro.qtd_novas = novas
-        registro.qtd_erros = len(erros)
-        registro.detalhe_erro = "\n".join(erros)[:4000]
-        sessao_db.commit()
-        sessao_db.close()
-        _coletando.release()
+        # Nada aqui pode impedir o release: se o commit final falhar, a trava
+        # ainda tem de ser devolvida, senão a coleta morre de vez no processo.
+        try:
+            if registro is not None:
+                registro.fim = agora()
+                registro.qtd_novas = novas
+                registro.qtd_erros = len(erros)
+                registro.detalhe_erro = "\n".join(erros)[:4000]
+                sessao_db.commit()
+        except Exception:  # noqa: BLE001
+            log.exception("Não consegui fechar o registro da coleta")
+        finally:
+            if http is not None:
+                http.close()
+            if sessao_db is not None:
+                sessao_db.close()
+            _coletando.release()
     return registro
 
 
