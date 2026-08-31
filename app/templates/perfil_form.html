@@ -94,8 +94,9 @@
     </div>
     <label class="block">
       <span class="text-sm font-semibold">Palavras a incluir</span>
-      <p class="text-xs text-slate-500">Uma por linha.
-        Aspas = expressão exata; * = curinga (pavimenta*).</p>
+      <p class="text-xs text-slate-500">Uma regra por linha.
+        <b>a + b</b> = as duas precisam aparecer (ex.: manutenção + ar condicionado);
+        aspas = frase exata; * = curinga (pavimenta*).</p>
       <textarea name="palavras_incluir" rows="6"
         class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
         >{{ perfil.palavras_incluir|join('\n') if perfil else '' }}</textarea>

@@ -27,20 +27,33 @@ def _termo_para_regex(termo):
     return re.compile(r"\w*".join(partes)) if len(partes) > 1 else re.compile(partes[0])
 
 
+def _linha_casa(texto, linha):
+    """Uma linha do perfil casa com o texto?
+
+    Suporta o combinador '+': em 'manutenção + ar condicionado', TODAS as
+    partes precisam aparecer no objeto (em qualquer posição) — é a forma de
+    pedir algo específico sem exigir a frase exata.
+    """
+    partes = [p.strip() for p in linha.split("+") if p.strip()]
+    return all(_termo_para_regex(p).search(texto) for p in partes)
+
+
 def texto_casa(objeto, incluir, excluir, modo="ou"):
     """Aplica as listas de palavras ao objeto. Retorna (casou, termos_que_casaram).
 
-    modo='ou': casa se QUALQUER termo aparecer (padrão).
-    modo='e' : casa só se TODOS os termos aparecerem — busca específica.
+    modo='ou': casa se QUALQUER linha casar (padrão).
+    modo='e' : casa só se TODAS as linhas casarem.
+    Dentro de uma linha, 'a + b' exige as duas; aspas pedem frase exata;
+    '*' é curinga.
     """
     texto = normalizar(objeto)
     for termo in excluir or []:
-        if termo.strip() and _termo_para_regex(termo).search(texto):
+        if termo.strip() and _linha_casa(texto, termo):
             return False, []
     validos = [t for t in (incluir or []) if t.strip()]
     if not validos:
         return True, []          # lista vazia = qualquer objeto interessa
-    casados = [t for t in validos if _termo_para_regex(t).search(texto)]
+    casados = [t for t in validos if _linha_casa(texto, t)]
     if modo == "e":
         return len(casados) == len(validos), casados
     return bool(casados), casados

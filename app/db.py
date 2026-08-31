@@ -2,13 +2,26 @@
 from datetime import datetime
 
 from sqlalchemy import (JSON, Boolean, Column, DateTime, Float, ForeignKey,
-                        Integer, String, Text, UniqueConstraint, create_engine)
+                        Integer, String, Text, UniqueConstraint, create_engine,
+                        event)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from .config import CAMINHO_DB
 
 engine = create_engine(f"sqlite:///{CAMINHO_DB}",
-                       connect_args={"check_same_thread": False})
+                       connect_args={"check_same_thread": False,
+                                     "timeout": 30})
+
+
+@event.listens_for(engine, "connect")
+def _configurar_sqlite(conexao, _registro):
+    """WAL: leituras funcionam DURANTE a coleta (sem 'database is locked'),
+    e quem esbarrar numa escrita espera até 30s em vez de dar erro 500."""
+    cursor = conexao.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
 Sessao = sessionmaker(bind=engine, expire_on_commit=False)
 Base = declarative_base()
 

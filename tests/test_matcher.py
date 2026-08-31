@@ -62,6 +62,25 @@ def test_inclusao_vazia_casa_qualquer_objeto():
     assert texto_casa("qualquer coisa", [], [])[0]
 
 
+def test_combinador_mais_exige_partes_na_mesma_linha():
+    objeto = "manutenção preventiva e corretiva de aparelhos de ar condicionado"
+    # 'a + b': as duas partes precisam aparecer, em qualquer posição
+    assert texto_casa(objeto, ["manutenção + ar condicionado"], [])[0]
+    assert not texto_casa(objeto, ["manutenção + predial"], [])[0]
+    # linhas continuam sendo alternativas (OU entre linhas)
+    casou, termos = texto_casa(objeto, ["manutenção + predial",
+                                        "manutenção + ar condicionado"], [])
+    assert casou and termos == ["manutenção + ar condicionado"]
+    # frase exata não casaria (palavras separadas no texto), o '+' sim
+    assert not texto_casa(objeto, ['"manutenção de ar condicionado"'], [])[0]
+
+
+def test_combinador_mais_na_exclusao():
+    casou, _ = texto_casa("manutenção da frota de veículos",
+                          ["manutenção"], ["manutenção + veículos"])
+    assert not casou
+
+
 def test_modo_e_exige_todas_as_palavras():
     objeto = "manutenção de ar condicionado tipo split"
     assert texto_casa(objeto, ["manutenção", "split"], [], modo="e")[0]
