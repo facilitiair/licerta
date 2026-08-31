@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg2-binary
+redis
+rq
+httpx
+pydantic
+pydantic-settings
+anthropic
+python-dateutil
+holidays
+cryptography

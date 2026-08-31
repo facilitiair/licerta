@@ -135,6 +135,22 @@ exclusão (aspas = expressão exata; `pavimenta*` = curinga), faixa de valor,
 só-SRP e ordenação. O botão **Pré-visualizar** mostra quantas licitações já
 gravadas casariam, sem salvar.
 
+## 5.1 Camada de IA (`ia/`)
+
+A plataforma segue a arquitetura de `docs/arquitetura-plataforma.md`:
+
+- **`ia/prompts/`** — a biblioteca de prompts do produto (análise de edital,
+  riscos, habilitação, peças jurídicas, peritos documentais), versionada e
+  100% neutra: a empresa cliente entra como **dado**, nunca no texto.
+- **`ia/cliente.py`** — o único caminho para chamar um LLM: custo por
+  chamada logado em `data/ia_custos.jsonl` (você sabe o custo por edital
+  desde o dia 1), saída JSON validada, retry limitado.
+- **`ia/camadas.py`** — roteamento barato/forte (triagem × extração ×
+  geração) num lugar só.
+- Requer `ANTHROPIC_API_KEY` no ambiente; sem ela, os módulos de IA ficam
+  desligados e o radar/alertas seguem normais.
+- Regras para quem desenvolve (humano ou agente): `AGENTS.md` na raiz.
+
 ## 6. Publicar na nuvem (Railway)
 
 1. Crie conta em https://railway.app (login com GitHub).
