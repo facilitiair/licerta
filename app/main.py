@@ -7,7 +7,7 @@ import hmac
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -447,16 +447,33 @@ async def municipios_busca(request: Request, uf: str = "", q: str = ""):
 
 
 # ----------------------------------------------------------------- licitações
-ORDENACOES_LISTA = {
-    "encerramento_asc": (Licitacao.data_encerramento_proposta, False),
-    "encerramento_desc": (Licitacao.data_encerramento_proposta, True),
-    "publicacao_desc": (Licitacao.data_publicacao_pncp, True),
-    "publicacao_asc": (Licitacao.data_publicacao_pncp, False),
-    "valor_desc": (Licitacao.valor_total_estimado, True),
-    "valor_asc": (Licitacao.valor_total_estimado, False),
-    "uf_asc": (Licitacao.uf, False),
-    "modalidade_asc": (Licitacao.modalidade_nome, False),
-}
+def _ordenacoes_lista():
+    """Ordenações da tabela: cada opção é uma lista de colunas (com desempate)."""
+    from sqlalchemy import nullslast
+    enc, pub = Licitacao.data_encerramento_proposta, Licitacao.data_publicacao_pncp
+    val, uf = Licitacao.valor_total_estimado, Licitacao.uf
+    mun, mod = Licitacao.municipio_nome, Licitacao.modalidade_nome
+    sit, org = Licitacao.situacao, Licitacao.orgao_nome
+    return {
+        "encerramento_asc": [nullslast(enc.asc())],
+        "encerramento_desc": [enc.desc()],
+        "publicacao_desc": [pub.desc()],
+        "publicacao_asc": [pub.asc()],
+        "valor_asc": [nullslast(val.asc())],
+        "valor_desc": [nullslast(val.desc())],
+        "uf_asc": [uf.asc(), nullslast(enc.asc())],
+        "uf_desc": [uf.desc(), nullslast(enc.asc())],
+        "municipio_asc": [mun.asc(), nullslast(enc.asc())],
+        "municipio_desc": [mun.desc(), nullslast(enc.asc())],
+        "orgao_asc": [org.asc()],
+        "modalidade_asc": [mod.asc(), nullslast(enc.asc())],
+        "modalidade_desc": [mod.desc(), nullslast(enc.asc())],
+        "situacao_asc": [sit.asc(), nullslast(enc.asc())],
+        "objeto_asc": [Licitacao.objeto_norm.asc()],
+    }
+
+
+ORDENACAO_PADRAO = "uf_asc"     # todos os estados: lista em ordem alfabética
 POR_PAGINA = 50
 
 
@@ -494,9 +511,9 @@ def _consulta_licitacoes(s, filtros):
         for palavra in normalizar(filtros["q"]).split():
             consulta = consulta.filter(
                 Licitacao.objeto_norm.like(f"%{palavra}%"))
-    coluna, desc = ORDENACOES_LISTA.get(filtros.get("ordenar") or "",
-                                        ORDENACOES_LISTA["encerramento_asc"])
-    return consulta.order_by(coluna.desc() if desc else coluna.asc())
+    ordens = _ordenacoes_lista()
+    colunas = ordens.get(filtros.get("ordenar") or "", ordens[ORDENACAO_PADRAO])
+    return consulta.order_by(*colunas)
 
 
 def _filtros_da_request(request):
@@ -551,12 +568,23 @@ async def licitacoes_lista(request: Request, pagina: int = 1):
                 vivo = resultado_vivo["itens"]
             except Exception:  # noqa: BLE001 — sem PNCP, fica só o aviso
                 pass
+        def link(**mudar):
+            """Monta a URL da tabela trocando só os parâmetros indicados —
+            usada pelos menus de coluna (ordenar/filtrar sem perder o resto)."""
+            params = {k: v for k, v in filtros.items() if v}
+            params.update(mudar)
+            return "/licitacoes?" + urlencode(
+                {k: v for k, v in params.items() if v not in (None, "")})
+
         return templates.TemplateResponse(request, "licitacoes.html", {
             "linhas": linhas, "total": total, "pagina": pagina,
             "paginas": max(1, -(-total // POR_PAGINA)), "filtros": filtros,
             "perfis": perfis, "ufs": ufs, "matches": matches,
             "modalidades": modalidades, "situacoes": situacoes,
-            "vivo": vivo, "vivo_total": vivo_total,
+            "vivo": vivo, "vivo_total": vivo_total, "link": link,
+            "hoje": datetime.now().strftime("%Y-%m-%d"),
+            "em7": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d"),
+            "em30": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
             # querystring só com os filtros (sem 'pagina'), para paginação/export
             "query": urlencode({k: v for k, v in filtros.items() if v}),
         })

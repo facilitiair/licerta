@@ -84,24 +84,108 @@
   </span>
 </form>
 
-{% macro cab(rotulo, chave) -%}
-  {%- set asc = chave ~ '_asc' -%}{%- set desc = chave ~ '_desc' -%}
-  {%- set proximo = desc if filtros.ordenar == asc else asc -%}
-  <a href="?{{ query | replace('ordenar=' ~ filtros.ordenar, '') }}&ordenar={{ proximo }}"
-     class="hover:underline">{{ rotulo }}
-    {{- ' ▲' if filtros.ordenar == asc else (' ▼' if filtros.ordenar == desc else '') }}</a>
+{% macro item_menu(url, rotulo, marcado=false) -%}
+  <a href="{{ url }}" class="block px-3 py-1.5 hover:bg-blue-50
+     {{ 'font-bold text-blue-700' if marcado }}">{{ rotulo }}</a>
+{%- endmacro %}
+
+{% macro menu_coluna(rotulo, chave) -%}
+  <details class="relative inline-block">
+    <summary class="cursor-pointer list-none select-none hover:text-blue-700">
+      {{ rotulo }}
+      {{- ' ▲' if filtros.ordenar == chave ~ '_asc'
+          else (' ▼' if filtros.ordenar == chave ~ '_desc' else ' ⏷') }}
+    </summary>
+    <div class="absolute z-20 mt-1 bg-white border border-slate-200 rounded-lg
+                shadow-lg w-56 max-h-72 overflow-auto normal-case font-normal">
+      {{ caller() }}
+    </div>
+  </details>
 {%- endmacro %}
 
 <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
 <table class="w-full text-sm">
   <thead class="bg-slate-50 text-left text-xs text-slate-600">
     <tr>
-      <th class="px-3 py-2">{{ cab('Encerra', 'encerramento') }}</th>
-      <th class="px-3 py-2">{{ cab('Modalidade', 'modalidade') }}</th>
-      <th class="px-3 py-2">{{ cab('UF', 'uf') }}</th>
-      <th class="px-3 py-2">Município / Órgão</th>
-      <th class="px-3 py-2 w-1/2">Objeto</th>
-      <th class="px-3 py-2 text-right">{{ cab('Valor', 'valor') }}</th>
+      <th class="px-3 py-2">
+        {% call menu_coluna('Encerra', 'encerramento') %}
+          {{ item_menu(link(ordenar='encerramento_asc'), '⬆ Mais próximo primeiro',
+                       filtros.ordenar == 'encerramento_asc') }}
+          {{ item_menu(link(ordenar='encerramento_desc'), '⬇ Mais distante primeiro',
+                       filtros.ordenar == 'encerramento_desc') }}
+          {{ item_menu(link(ordenar='publicacao_desc'), '🆕 Publicação mais recente',
+                       filtros.ordenar == 'publicacao_desc') }}
+          <div class="border-t border-slate-100"></div>
+          {{ item_menu(link(data_ini=hoje, data_fim=em7), 'Encerram em 7 dias') }}
+          {{ item_menu(link(data_ini=hoje, data_fim=em30), 'Encerram em 30 dias') }}
+          {{ item_menu(link(data_ini='', data_fim=''), 'Qualquer período',
+                       not filtros.data_ini and not filtros.data_fim) }}
+        {% endcall %}
+      </th>
+      <th class="px-3 py-2">
+        {% call menu_coluna('Modalidade', 'modalidade') %}
+          {{ item_menu(link(ordenar='modalidade_asc'), '⬆ A → Z',
+                       filtros.ordenar == 'modalidade_asc') }}
+          {{ item_menu(link(ordenar='modalidade_desc'), '⬇ Z → A',
+                       filtros.ordenar == 'modalidade_desc') }}
+          <div class="border-t border-slate-100"></div>
+          {{ item_menu(link(modalidade=''), '— todas as modalidades —',
+                       not filtros.modalidade) }}
+          {% for m in modalidades %}
+            {{ item_menu(link(modalidade=m.codigo), m.nome,
+                         filtros.modalidade == m.codigo|string) }}
+          {% endfor %}
+          <div class="border-t border-slate-100"></div>
+          {{ item_menu(link(situacao=''), 'Situação: todas', not filtros.situacao) }}
+          {% for sit in situacoes %}
+            {{ item_menu(link(situacao=sit), 'Situação: ' ~ sit,
+                         filtros.situacao == sit) }}
+          {% endfor %}
+        {% endcall %}
+      </th>
+      <th class="px-3 py-2">
+        {% call menu_coluna('Estado', 'uf') %}
+          {{ item_menu(link(ordenar='uf_asc'), '⬆ A → Z (padrão)',
+                       filtros.ordenar in ('uf_asc', '')) }}
+          {{ item_menu(link(ordenar='uf_desc'), '⬇ Z → A',
+                       filtros.ordenar == 'uf_desc') }}
+          <div class="border-t border-slate-100"></div>
+          {{ item_menu(link(uf=''), '— todos os estados —', not filtros.uf) }}
+          {% for u in ufs %}
+            {{ item_menu(link(uf=u), u, filtros.uf == u) }}
+          {% endfor %}
+        {% endcall %}
+      </th>
+      <th class="px-3 py-2">
+        {% call menu_coluna('Município / Órgão', 'municipio') %}
+          {{ item_menu(link(ordenar='municipio_asc'), '⬆ Município A → Z',
+                       filtros.ordenar == 'municipio_asc') }}
+          {{ item_menu(link(ordenar='municipio_desc'), '⬇ Município Z → A',
+                       filtros.ordenar == 'municipio_desc') }}
+          {{ item_menu(link(ordenar='orgao_asc'), '⬆ Órgão A → Z',
+                       filtros.ordenar == 'orgao_asc') }}
+        {% endcall %}
+      </th>
+      <th class="px-3 py-2 w-1/2">
+        {% call menu_coluna('Objeto', 'objeto') %}
+          {{ item_menu(link(ordenar='objeto_asc'), '⬆ A → Z',
+                       filtros.ordenar == 'objeto_asc') }}
+          <div class="border-t border-slate-100"></div>
+          {{ item_menu(link(status=''), 'Triagem: todas', not filtros.status) }}
+          {% for st in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
+            {{ item_menu(link(status=st), 'Triagem: ' ~ st.replace('_', ' '),
+                         filtros.status == st) }}
+          {% endfor %}
+        {% endcall %}
+      </th>
+      <th class="px-3 py-2 text-right">
+        {% call menu_coluna('Valor', 'valor') %}
+          {{ item_menu(link(ordenar='valor_asc'), '⬆ Menor → maior',
+                       filtros.ordenar == 'valor_asc') }}
+          {{ item_menu(link(ordenar='valor_desc'), '⬇ Maior → menor',
+                       filtros.ordenar == 'valor_desc') }}
+        {% endcall %}
+      </th>
       <th class="px-3 py-2"></th>
     </tr>
   </thead>
