@@ -1,10 +1,16 @@
-fastapi>=0.110
-uvicorn[standard]>=0.29
-sqlalchemy>=2.0
-jinja2>=3.1
-python-multipart>=0.0.9
-apscheduler>=3.10
-python-dotenv>=1.0
-requests>=2.31
-openpyxl>=3.1
-pytest>=8.0
+# Teto na versão MAIOR de cada pacote: sem isso, uma reconstrução qualquer no
+# Railway pode puxar uma versão nova com mudança incompatível e derrubar o app
+# sem que nada tenha sido alterado aqui. Para subir um teto, teste antes.
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+sqlalchemy>=2.0,<3.0
+jinja2>=3.1,<4.0
+python-multipart>=0.0.9,<1.0
+apscheduler>=3.10,<4.0
+python-dotenv>=1.0,<2.0
+requests>=2.31,<3.0
+openpyxl>=3.1,<4.0
+# Base de fusos horários da IANA: a imagem Debian slim do Docker não traz
+# /usr/share/zoneinfo, e sem ela o app não consegue resolver America/Fortaleza.
+tzdata>=2024.1
+pytest>=8.0,<10.0

@@ -8,11 +8,11 @@ pelo agendador — é ele que decide de quem chegou a vez.
 import html
 import logging
 import smtplib
-from datetime import date, datetime
 from email.mime.text import MIMEText
 
 import requests
 
+from .config import agora as agora_local
 from .config import config
 from .db import PerfilBusca, PerfilMatch, Sessao
 from .matcher import esta_vigente, ordenar_licitacoes
@@ -143,7 +143,7 @@ def _hora_do_perfil(perfil):
 
 def alerta_devido(perfil, agora=None, respeitar_hora=True):
     """Chegou a vez deste alerta? Respeita frequência, hora e último envio."""
-    agora = agora or datetime.now()
+    agora = agora or agora_local()
     if not (perfil.ativo and perfil.notificar):
         return False
     if respeitar_hora and (agora.hour, agora.minute) < _hora_do_perfil(perfil):
@@ -194,7 +194,7 @@ def separar_pendentes(perfil, pendentes, agora=None):
 def montar_mensagem_perfil(sessao_db, perfil, matches, host=None):
     """Texto do alerta de UM perfil, já com os matches selecionados."""
     host = host or config.APP_URL
-    hoje = date.today().strftime("%d/%m/%Y")
+    hoje = agora_local().strftime("%d/%m/%Y")
     por_lic = {m.licitacao_id: m for m in matches}
     lics = ordenar_licitacoes([m.licitacao for m in matches], perfil.ordenacao)
     partes = [f"📡 {perfil.nome} — {hoje}",
@@ -248,7 +248,7 @@ def enviar_email(texto):
         return False
     try:
         msg = MIMEText(_texto_para_html(texto), "html", "utf-8")
-        msg["Subject"] = f"Radar de Licitações — {date.today().strftime('%d/%m/%Y')}"
+        msg["Subject"] = f"Radar de Licitações — {agora_local().strftime('%d/%m/%Y')}"
         msg["From"] = config.SMTP_USER
         msg["To"] = config.EMAIL_DESTINO
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
@@ -268,7 +268,7 @@ def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None):
     Os vencidos são marcados como avisados: o prazo não volta atrás, então
     não faz sentido reavaliá-los em todo ciclo.
     """
-    agora = agora or datetime.now()
+    agora = agora or agora_local()
     pendentes = (sessao_db.query(PerfilMatch)
                  .filter_by(perfil_id=perfil.id, notificado=False).all())
     enviaveis, vencidos, fora = separar_pendentes(perfil, pendentes, agora)
@@ -304,7 +304,7 @@ def enviar_alertas_devidos(host=None, agora=None, respeitar_hora=True,
     `respeitar_hora=False` para quem roda uma vez por dia em horário fixo
     (GitHub Actions), onde a hora exata do perfil não faz sentido.
     """
-    agora = agora or datetime.now()
+    agora = agora or agora_local()
     sessao_db = Sessao()
     enviados = 0
     try:

@@ -344,3 +344,35 @@ def test_resumo_descreve_a_agenda_em_portugues():
     assert resumo_frequencia(
         PerfilFake(frequencia="anual", dia_mes=10, mes_ano=3)) == \
         "Todo dia 10 de março, às 07:00"
+
+
+# ------------------------------------------------------------------- fuso
+def test_agora_segue_o_fuso_do_env_e_nao_o_relogio_do_processo():
+    """Regressão: o Railway roda em UTC e o PC do dono estava 3h à frente.
+
+    Com datetime.now() cru, um alerta das 07:00 tocava às 04:00 e uma
+    licitação que encerrava às 10:00 era descartada como vencida às 07:00.
+    """
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+
+    from app.config import agora, config, hoje
+
+    esperado = datetime.now(ZoneInfo(config.TZ)).replace(tzinfo=None)
+    assert abs((agora() - esperado).total_seconds()) < 5
+    assert agora().tzinfo is None          # comparável com o que o banco guarda
+    assert hoje() == esperado.date()
+
+    utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    offset = abs((agora() - utc).total_seconds())
+    assert 3 * 3600 - 5 < offset < 3 * 3600 + 5   # Fortaleza é UTC-3, sem horário de verão
+
+
+def test_fuso_invalido_nao_derruba_o_app():
+    from app.config import agora, config
+    original = config.TZ
+    try:
+        config.TZ = "Marte/Olympus_Mons"
+        assert agora() is not None         # cai no relógio do sistema, mas responde
+    finally:
+        config.TZ = original

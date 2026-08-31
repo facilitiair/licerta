@@ -5,7 +5,8 @@ expressão exata ("ar condicionado"); asterisco é curinga (pavimenta*).
 """
 import re
 import unicodedata
-from datetime import datetime
+
+from .config import agora as _agora
 
 # Situações que o PNCP e o Mural do TCE-PI usam. As duas primeiras são as
 # disputáveis — é o que um alerta novo já vem marcando por padrão.
@@ -21,7 +22,7 @@ def esta_vigente(lic, agora=None):
     fim = (lic.data_encerramento_proposta or "").strip().replace(" ", "T")
     if not fim:
         return True
-    return fim[:16] >= (agora or datetime.now()).strftime("%Y-%m-%dT%H:%M")
+    return fim[:16] >= (agora or _agora()).strftime("%Y-%m-%dT%H:%M")
 
 
 def normalizar(texto):

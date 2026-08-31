@@ -5,7 +5,7 @@ from datetime import datetime
 
 import requests
 
-from .config import config
+from .config import agora, config
 from .db import Ata, ColetaLog, Licitacao, PerfilBusca, PerfilMatch, Sessao
 from .documentos import baixar_arquivos
 from .matcher import licitacao_casa_perfil, normalizar, texto_casa
@@ -51,7 +51,7 @@ def _upsert(sessao_db, item):
     if lic:
         for campo, valor in item.items():
             setattr(lic, campo, valor)
-        lic.coletado_em = datetime.now()
+        lic.coletado_em = agora()
     else:
         lic = Licitacao(**item)
         sessao_db.add(lic)
@@ -156,7 +156,7 @@ def _coletar_atas(sessao_db, perfis, erros):
     dias = 30 if primeira_vez else 2
     qtd = 0
     try:
-        hoje_iso = datetime.now().strftime("%Y-%m-%d")
+        hoje_iso = agora().strftime("%Y-%m-%d")
         for ata in atas_atualizadas(dias_retro=dias):
             if ata["cancelado"] or not ata["numero_controle_ata"]:
                 continue
@@ -208,7 +208,7 @@ def coletar():
         log.info("Coleta já em andamento; ignorando novo disparo")
         return None
     sessao_db = Sessao()
-    registro = ColetaLog(inicio=datetime.now())
+    registro = ColetaLog(inicio=agora())
     sessao_db.add(registro)
     sessao_db.commit()
     erros, novas = [], 0
@@ -251,7 +251,7 @@ def coletar():
         registro.sucesso = False
         log.exception("Erro geral na coleta")
     finally:
-        registro.fim = datetime.now()
+        registro.fim = agora()
         registro.qtd_novas = novas
         registro.qtd_erros = len(erros)
         registro.detalhe_erro = "\n".join(erros)[:4000]

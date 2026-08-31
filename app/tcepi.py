@@ -7,10 +7,11 @@ coletor falha com aviso no log e o PNCP segue normalmente.
 """
 import json
 import re
-from datetime import date, timedelta
+from datetime import timedelta
 
 import requests
 
+from .config import hoje as _hoje
 from .matcher import normalizar
 
 URL = "https://sistemas.tce.pi.gov.br/muralic/index.xhtml"
@@ -127,7 +128,7 @@ def _post_ajax(sessao, viewstate, dados_extra):
 
 def coletar_mural(dias_retro=7, dias_futuro=90):
     """Gera licitações do Mural com abertura entre hoje-N e hoje+M."""
-    hoje = date.today()
+    hoje = _hoje()
     d_ini = (hoje - timedelta(days=dias_retro)).strftime("%d/%m/%Y")
     d_fim = (hoje + timedelta(days=dias_futuro)).strftime("%d/%m/%Y")
 

@@ -46,6 +46,26 @@ jobs:
         run: |
           git config user.name "radar-bot"
           git config user.email "actions@github.com"
-          git add data/radar.db
-          git diff --cached --quiet || git commit -m "Radar $(date +'%d/%m/%Y %H:%M')"
-          git push
+          # Se o PC do Paulo empurrou durante a rodada, um push direto falha e
+          # o estado dos alertas desta rodada se perde em silêncio (workflow
+          # vermelho que ninguém vê). Rebaixa o HEAD para o remoto mantendo o
+          # banco recém-gravado e tenta de novo — banco é binário, não há
+          # merge possível, e o combinado é que a última escrita vence.
+          for tentativa in 1 2 3; do
+            git fetch origin main
+            git reset --soft origin/main
+            git add data/radar.db
+            if git diff --cached --quiet; then
+              echo "Banco sem mudanças; nada a publicar."
+              exit 0
+            fi
+            git commit -m "Radar $(date +'%d/%m/%Y %H:%M')"
+            if git push; then
+              echo "Banco publicado na tentativa $tentativa."
+              exit 0
+            fi
+            echo "Push recusado (alguém empurrou antes); tentando de novo..."
+            sleep 5
+          done
+          echo "::error::Não consegui publicar o banco após 3 tentativas."
+          exit 1

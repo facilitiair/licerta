@@ -11,6 +11,7 @@ from datetime import date, timedelta
 
 import requests
 
+from .config import hoje
 from .matcher import normalizar
 
 log = logging.getLogger("radar.pncp")
@@ -102,7 +103,7 @@ def propostas_abertas(modalidade, uf=None, dias_futuro=90, sessao=None):
     enviar dataInicial aqui.
     """
     sessao = sessao or requests.Session()
-    data_final = (date.today() + timedelta(days=dias_futuro)).strftime("%Y%m%d")
+    data_final = (hoje() + timedelta(days=dias_futuro)).strftime("%Y%m%d")
     tamanho = TAMANHO_PAGINA
     pagina, total_paginas = 1, 1
     while pagina <= total_paginas:
@@ -160,10 +161,10 @@ def atas_atualizadas(dias_retro=2, sessao=None):
     é feito localmente, pelas palavras dos perfis.
     """
     sessao = sessao or requests.Session()
-    hoje = date.today()
+    agora_data = hoje()
     params_base = {
-        "dataInicial": (hoje - timedelta(days=dias_retro)).strftime("%Y%m%d"),
-        "dataFinal": hoje.strftime("%Y%m%d"),
+        "dataInicial": (agora_data - timedelta(days=dias_retro)).strftime("%Y%m%d"),
+        "dataFinal": agora_data.strftime("%Y%m%d"),
         "tamanhoPagina": TAMANHO_PAGINA,
     }
     pagina, total_paginas = 1, 1

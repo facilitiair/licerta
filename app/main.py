@@ -22,7 +22,7 @@ from . import alerta as alerta_mod
 from . import envcfg
 from . import pncp_busca
 from .coleta import coleta_em_andamento, coletar_em_background
-from .config import PASTA_DADOS, config
+from .config import PASTA_DADOS, agora, config
 from .db import (ArquivoEdital, Ata, ColetaLog, Licitacao, Modalidade,
                  Municipio, PerfilBusca, PerfilMatch, Sessao, criar_tabelas)
 from .documentos import baixar_arquivos
@@ -81,7 +81,7 @@ async def vida(app_):
     s = Sessao()
     try:
         s.query(ColetaLog).filter(ColetaLog.fim.is_(None)).update(
-            {"fim": datetime.now(), "sucesso": False,
+            {"fim": agora(), "sucesso": False,
              "detalhe_erro": "coleta interrompida por reinício do aplicativo"})
         s.commit()
     finally:
@@ -153,7 +153,7 @@ async def logout():
 def _dias_ate(data_iso):
     try:
         alvo = datetime.strptime(data_iso[:10], "%Y-%m-%d")
-        return (alvo - datetime.now()).days + 1
+        return (alvo - agora()).days + 1
     except (ValueError, TypeError):
         return None
 
@@ -165,7 +165,7 @@ async def painel(request: Request):
         def conta(status):
             return s.query(PerfilMatch).filter_by(status=status).count()
 
-        hoje = datetime.now().strftime("%Y-%m-%d")
+        hoje = agora().strftime("%Y-%m-%d")
         ativos = (s.query(PerfilMatch).join(Licitacao)
                   .filter(PerfilMatch.status != "descartado",
                           Licitacao.data_encerramento_proposta >= hoje)
@@ -197,7 +197,7 @@ COLUNAS_FUNIL = [("novo", "🟡 Novas"), ("analisando", "🔵 Em análise"),
 
 
 def _contexto_funil(s):
-    hoje = datetime.now().strftime("%Y-%m-%d")
+    hoje = agora().strftime("%Y-%m-%d")
     colunas = []
     for status, rotulo in COLUNAS_FUNIL:
         consulta = (s.query(PerfilMatch).join(Licitacao)
@@ -243,7 +243,7 @@ async def funil_mover(request: Request, match_id: int, status: str):
 async def agenda(request: Request):
     s = Sessao()
     try:
-        hoje = datetime.now().strftime("%Y-%m-%d")
+        hoje = agora().strftime("%Y-%m-%d")
         matches = (s.query(PerfilMatch).join(Licitacao)
                    .filter(PerfilMatch.status != "descartado",
                            Licitacao.data_encerramento_proposta >= hoje)
@@ -666,9 +666,9 @@ async def licitacoes_lista(request: Request, pagina: int = 1):
             "perfis": perfis, "ufs": ufs, "matches": matches,
             "modalidades": modalidades, "situacoes": situacoes,
             "vivo": vivo, "vivo_total": vivo_total, "link": link,
-            "hoje": datetime.now().strftime("%Y-%m-%d"),
-            "em7": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d"),
-            "em30": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
+            "hoje": agora().strftime("%Y-%m-%d"),
+            "em7": (agora() + timedelta(days=7)).strftime("%Y-%m-%d"),
+            "em30": (agora() + timedelta(days=30)).strftime("%Y-%m-%d"),
             # querystring só com os filtros (sem 'pagina'), para paginação/export
             "query": urlencode({k: v for k, v in filtros.items() if v}),
         })
@@ -737,7 +737,7 @@ async def atas_lista(request: Request, q: str = "", adesao: str = "",
     pagina = max(1, pagina)
     s = Sessao()
     try:
-        hoje = datetime.now().strftime("%Y-%m-%d")
+        hoje = agora().strftime("%Y-%m-%d")
         consulta = (s.query(Ata).filter(Ata.cancelado.is_(False))
                     .filter(Ata.vigencia_fim >= hoje))
         if q:

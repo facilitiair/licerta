@@ -1,5 +1,8 @@
 """Configuração do app: lê o arquivo .env e expõe as opções num objeto único."""
+import logging
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
@@ -54,3 +57,31 @@ class Config:
 
 
 config = Config()
+
+_log = logging.getLogger("radar.config")
+
+
+def agora():
+    """Que horas são AQUI, no fuso do .env — sem tzinfo.
+
+    Nunca use `datetime.now()` direto no app. O relógio do processo não é
+    confiável: no Railway o contêiner roda em UTC e no PC do dono ele estava
+    3h à frente de Fortaleza. Com `datetime.now()`, um alerta marcado para as
+    07:00 tocava às 04:00, e uma licitação que encerrava às 10:00 era
+    descartada como vencida às 07:00 — perda silenciosa de oportunidade.
+
+    Devolve datetime ingênuo (sem tzinfo) de propósito: é o que o banco
+    guarda em `ultimo_envio`/`coletado_em`, e misturar ingênuo com consciente
+    levanta TypeError na comparação.
+    """
+    try:
+        return datetime.now(ZoneInfo(config.TZ)).replace(tzinfo=None)
+    except (ZoneInfoNotFoundError, ValueError):
+        _log.warning("Fuso '%s' desconhecido; usando o relógio do sistema",
+                     config.TZ)
+        return datetime.now()
+
+
+def hoje():
+    """A data de hoje no fuso do .env."""
+    return agora().date()
