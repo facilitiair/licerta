@@ -17,6 +17,11 @@
   --borda: #e2e8f0;               /* slate-200 */
   --menu-fundo: #0f172a;          /* slate-900 (barra lateral) */
 
+  /* Escala de display — SÓ para a vitrine pública (página de venda).
+     Telas internas seguem a escala 13/14/16/20/24 das Regras de UI §2. */
+  --display-1: 44px;
+  --display-2: 32px;
+
   /* Semânticas — verde sucesso, âmbar atenção, vermelho crítico.
      VERMELHO é reservado (§5): prazo de disputa marcada "vou participar"
      e certidão vencendo em <= 7 dias. Mais nada. */

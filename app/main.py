@@ -247,7 +247,7 @@ def _sem_usuarios():
         s.close()
 
 
-ROTAS_LIVRES = ("/login", "/registrar", "/manifest.json", "/sw.js",
+ROTAS_LIVRES = ("/", "/login", "/registrar", "/manifest.json", "/sw.js",
                 "/api/saude")
 
 
@@ -404,7 +404,14 @@ async def painel(request: Request):
     HOJE, ordenados pela consequência de ignorar. Estoque (milhares de
     editais coletados, centenas encerrando) nunca vira número na cara de
     ninguém — foi exatamente a reclamação do primeiro usuário real.
+
+    Visitante sem sessão vê a VITRINE (página de venda) — a raiz é
+    pública; o middleware não carrega o usuário aqui, então carregamos.
     """
+    usuario = usuario_da_requisicao(request)
+    if not usuario:
+        return templates.TemplateResponse(request, "vitrine.html", {})
+    request.state.usuario = usuario
     s = Sessao()
     try:
         meus = (PerfilBusca.usuario_id == eu(request).id)

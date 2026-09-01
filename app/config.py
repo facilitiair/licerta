@@ -47,7 +47,7 @@ def _hora(valor, padrao):
 
 
 # Versão do produto — bump manual a cada leva de mudanças relevante.
-VERSAO = "0.23.0"
+VERSAO = "0.24.0"
 
 
 class Config:

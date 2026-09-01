@@ -137,6 +137,20 @@ def test_sem_login_redireciona():
         assert r.status_code == 303 and r.headers["location"] == "/login"
 
 
+def test_visitante_ve_a_vitrine_na_raiz():
+    """A raiz é pública: visitante vê a página de venda, não o login."""
+    with TestClient(app) as anonimo:
+        r = anonimo.get("/", follow_redirects=False)
+        assert r.status_code == 200
+        assert "Entrar na plataforma" in r.text
+        assert "Painel do dia" not in r.text
+
+
+def test_logado_continua_no_painel(cliente):
+    r = cliente.get("/")
+    assert r.status_code == 200 and "Painel do dia" in r.text
+
+
 def test_login_senha_errada_nao_entra():
     with TestClient(app) as anonimo:
         r = anonimo.post("/login", data={"senha": "senha-errada"},
@@ -173,8 +187,12 @@ def test_cookie_esquisito_nao_derruba_as_rotas():
     with TestClient(app) as anonimo:
         for lixo in ("1:2", "a:b:c", ":::", "1:99999999999999:x", "9" * 500):
             anonimo.cookies.set("sessao", lixo)
-            r = anonimo.get("/", follow_redirects=False)
+            # rota protegida: cookie podre = visitante -> login, nunca 500
+            r = anonimo.get("/licitacoes", follow_redirects=False)
             assert r.status_code == 303, repr(lixo)
+            # a raiz é pública: cookie podre vê a vitrine, nunca 500
+            r = anonimo.get("/", follow_redirects=False)
+            assert r.status_code == 200, repr(lixo)
     # byte acentuado não passa pelo cliente de teste; confere na função
     from app.usuarios import usuario_do_token
     assert usuario_do_token("caf\xe9", b"s" * 32) is None

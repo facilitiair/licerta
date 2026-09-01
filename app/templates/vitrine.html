@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Licerta — a licitação certa encontra você</title>
+  <meta name="description" content="O Licerta vigia os portais de compras
+    públicas do país, filtra o que combina com a sua empresa e entrega a
+    análise pronta — do aviso do edital ao parecer do analista.">
+  <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    /* Layout exclusivo da vitrine — cores, raios e sombras vêm SEMPRE
+       dos tokens (Regras de UI §2). */
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+           Roboto, sans-serif; color: var(--texto);
+           background: var(--fundo); }
+    .escuro { background: var(--menu-fundo); color: #e2e8f0; }
+    .miolo { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* Barra do topo */
+    .topo { display: flex; align-items: center; gap: 16px;
+            padding: 16px 0; }
+    .marca { display: flex; align-items: center; gap: 8px;
+             font-size: 20px; font-weight: 600; color: #fff; }
+    .marca .cubo { width: 32px; height: 32px; border-radius: 8px;
+                   background: var(--cor-primaria); display: grid;
+                   place-items: center; }
+    .marca small { font-size: 13px; font-weight: 400; color: #94a3b8; }
+    .topo .btn { margin-left: auto; }
+
+    /* Herói */
+    .heroi { padding: 64px 0 0; text-align: center; position: relative;
+             overflow: hidden; }
+    .heroi::before { content: ""; position: absolute; inset: -40% -20% auto;
+             height: 130%; pointer-events: none;
+             background: radial-gradient(600px 300px at 50% 20%,
+                         rgba(29, 78, 216, .35), transparent 70%); }
+    .heroi > * { position: relative; }
+    .heroi h1 { font-size: var(--display-1); line-height: 1.15;
+                font-weight: 600; margin: 0 auto 16px; max-width: 720px;
+                color: #fff; }
+    .heroi h1 em { font-style: normal; color: #93c5fd; }
+    .heroi p { font-size: 16px; line-height: 1.6; color: #cbd5e1;
+               max-width: 620px; margin: 0 auto 24px; }
+    .heroi .acoes { display: flex; gap: 16px; justify-content: center;
+                    flex-wrap: wrap; margin-bottom: 48px; }
+    .btn-claro { background: transparent; color: #e2e8f0;
+                 border: 1px solid #334155; }
+    .btn-claro:hover { background: #1e293b; }
+
+    /* Amostra do painel (ilustração construída, não captura) */
+    .amostra { max-width: 780px; margin: 0 auto; text-align: left;
+               border-radius: 8px 8px 0 0; overflow: hidden;
+               box-shadow: 0 24px 60px rgba(2, 6, 23, .55);
+               border: 1px solid #334155; border-bottom: 0; }
+    .amostra .browser { display: flex; gap: 6px; align-items: center;
+               background: #1e293b; padding: 8px 16px; }
+    .amostra .browser i { width: 10px; height: 10px; border-radius: 50%;
+               background: #475569; display: inline-block; }
+    .amostra .tela { background: var(--fundo); padding: 16px;
+               display: grid; gap: 8px; }
+    .cartao { background: var(--superficie); border: 1px solid var(--borda);
+              border-radius: 8px; padding: 12px 16px; display: flex;
+              gap: 12px; align-items: center; font-size: 13px; }
+    .cartao .l { color: var(--texto); }
+    .cartao .sub { color: var(--texto-suave); font-size: 13px; }
+    .pil { border-radius: 6px; padding: 2px 8px; font-size: 13px;
+           font-weight: 600; white-space: nowrap; }
+    .pil-critico { background: var(--critico-suave); color: var(--critico);
+                   border: 1px solid var(--critico-borda); }
+    .pil-ok { background: var(--sucesso-suave); color: var(--sucesso);
+              border: 1px solid var(--sucesso-borda); }
+    .pil-info { background: var(--cor-primaria-suave);
+                color: var(--cor-primaria);
+                border: 1px solid var(--cor-primaria-borda); }
+
+    /* Seções claras */
+    section { padding: 64px 0; }
+    .titulo-secao { font-size: var(--display-2); font-weight: 600;
+                    text-align: center; margin: 0 0 8px; }
+    .sub-secao { text-align: center; color: var(--texto-suave);
+                 font-size: 16px; max-width: 640px; margin: 0 auto 40px; }
+    .grade { display: grid; gap: 16px;
+             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .passo, .modulo { background: var(--superficie);
+             border: 1px solid var(--borda); border-radius: 8px;
+             padding: 24px; }
+    .passo .num { width: 32px; height: 32px; border-radius: 50%;
+             background: var(--cor-primaria); color: #fff; display: grid;
+             place-items: center; font-weight: 600; margin-bottom: 16px; }
+    .icone-caixa { width: 40px; height: 40px; border-radius: 8px;
+             background: var(--cor-primaria-suave); display: grid;
+             place-items: center; color: var(--cor-primaria);
+             margin-bottom: 16px; }
+    h3 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+    .passo p, .modulo p { font-size: 14px; line-height: 1.6;
+             color: var(--texto-suave); margin: 0; }
+
+    /* Faixa do analista (escura) */
+    .analista h2, .analista h3 { color: #fff; }
+    .analista .sub-secao { color: #94a3b8; }
+    .analista .etapas { display: grid; gap: 16px;
+             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .etapa { border: 1px solid #334155; border-radius: 8px;
+             padding: 24px; background: rgba(30, 41, 59, .5); }
+    .etapa .icone-caixa { background: rgba(29, 78, 216, .25);
+             color: #93c5fd; }
+    .etapa p { color: #94a3b8; font-size: 14px; line-height: 1.6;
+               margin: 0; }
+
+    /* Compromissos + chamada final */
+    .compromissos { display: flex; gap: 24px; flex-wrap: wrap;
+             justify-content: center; color: var(--texto-suave);
+             font-size: 14px; }
+    .compromissos span { display: flex; gap: 8px; align-items: center; }
+    .chamada { text-align: center; }
+    .chamada .convite { color: var(--texto-fraco); font-size: 13px;
+             margin-top: 16px; }
+    footer { padding: 24px 0; text-align: center; font-size: 13px;
+             color: #64748b; }
+    .lucide { width: 16px; height: 16px; }
+    .lucide-20 { width: 20px; height: 20px; }
+
+    @media (max-width: 640px) {
+      .heroi h1 { font-size: var(--display-2); }
+      section { padding: 48px 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="escuro">
+  <div class="miolo">
+    <div class="topo">
+      <div class="marca">
+        <span class="cubo"><i data-lucide="radar" class="lucide-20"
+          style="color:#fff"></i></span>
+        Licerta&nbsp;<small>licitação certa</small>
+      </div>
+      <a href="/login" class="btn" style="min-height:36px">Entrar na
+        plataforma</a>
+    </div>
+
+    <div class="heroi">
+      <h1>A licitação certa <em>encontra você</em> — analisada, vigiada
+        e no prazo</h1>
+      <p>O Licerta acompanha os portais de compras públicas do país o dia
+        inteiro, filtra o que combina com o perfil da sua empresa e entrega
+        o trabalho pronto: aviso na hora, análise do edital, checagem dos
+        seus documentos e o parecer de participar ou não.</p>
+      <div class="acoes">
+        <a href="/login" class="btn">Entrar na plataforma</a>
+        <a href="#modulos" class="btn-sec btn-claro"
+           style="display:inline-flex;align-items:center;gap:8px;
+                  border-radius:6px;padding:8px 16px;font-size:14px;
+                  font-weight:600;text-decoration:none">Conhecer os
+          módulos</a>
+      </div>
+
+      <div class="amostra" aria-hidden="true">
+        <div class="browser"><i></i><i></i><i></i></div>
+        <div class="tela">
+          <div class="cartao">
+            <span class="pil pil-critico">hoje 13:59</span>
+            <span class="l">Manutenção de ar-condicionado —
+              Bacabeira/MA<br><span class="sub">R$ 3,8 mi · você vai
+              participar · proposta fecha hoje</span></span>
+          </div>
+          <div class="cartao">
+            <span class="pil pil-info">novo</span>
+            <span class="l">Climatização do hospital geral —
+              Fortaleza/CE<br><span class="sub">R$ 341 mil · combinou com o
+              seu perfil há 2 horas</span></span>
+          </div>
+          <div class="cartao">
+            <span class="pil pil-ok">parecer pronto</span>
+            <span class="l">Recomendação: participar, com uma
+              ressalva<br><span class="sub">certidão estadual vence antes da
+              sessão — renove até sexta</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="miolo">
+    <h2 class="titulo-secao">Do aviso ao parecer, sem abrir dez portais</h2>
+    <p class="sub-secao">Você define o perfil uma vez. O Licerta faz o
+      resto, o dia inteiro, todos os dias.</p>
+    <div class="grade">
+      <div class="passo">
+        <div class="num">1</div>
+        <h3>Vigiamos as fontes oficiais</h3>
+        <p>Acompanhamos o PNCP — que reúne por lei as compras de todos os
+          portais do país — e murais estaduais, com atualização várias
+          vezes ao dia.</p>
+      </div>
+      <div class="passo">
+        <div class="num">2</div>
+        <h3>Filtramos pelo seu perfil</h3>
+        <p>Palavras do seu ramo, estados onde você atua, modalidades que
+          interessam. O que combina chega por Telegram, e-mail ou
+          notificação — o resto nem aparece.</p>
+      </div>
+      <div class="passo">
+        <div class="num">3</div>
+        <h3>Analisamos e vigiamos o prazo</h3>
+        <p>Ficha do edital, riscos e pegadinhas, checagem contra os seus
+          documentos e a agenda das suas disputas — com o prazo de
+          impugnação calculado.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="escuro analista">
+  <section>
+    <div class="miolo">
+      <h2 class="titulo-secao">Um gabinete de análise dentro da
+        plataforma</h2>
+      <p class="sub-secao">A perícia completa nasceu num escritório real de
+        licitações e trabalha como ele: cada documento aberto e conferido,
+        cada conclusão com a fonte citada.</p>
+      <div class="etapas">
+        <div class="etapa">
+          <div class="icone-caixa"><i data-lucide="file-search"
+            class="lucide-20"></i></div>
+          <h3>Leitor de caderno</h3>
+          <p>Abre certidões, atestados e balanços um a um e extrai os
+            dados de dentro do documento — nunca do nome do arquivo.</p>
+        </div>
+        <div class="etapa">
+          <div class="icone-caixa"><i data-lucide="award"
+            class="lucide-20"></i></div>
+          <h3>Perito de atestados</h3>
+          <p>Confere forma, quantitativos, CATs e vínculo do responsável
+            técnico contra o que o edital exige.</p>
+        </div>
+        <div class="etapa">
+          <div class="icone-caixa"><i data-lucide="calculator"
+            class="lucide-20"></i></div>
+          <h3>Perito contábil</h3>
+          <p>Recalcula os índices do balanço, cruza capital social e aponta
+            sinais de inconsistência — com a aritmética exposta.</p>
+        </div>
+        <div class="etapa">
+          <div class="icone-caixa"><i data-lucide="scale"
+            class="lucide-20"></i></div>
+          <h3>Parecer com laudos</h3>
+          <p>Recomendação clara — participar, participar com ressalvas ou
+            não participar — fundamentada na Lei 14.133 e com os laudos
+            anexados.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section id="modulos">
+  <div class="miolo">
+    <h2 class="titulo-secao">Tudo que a rotina de licitações pede</h2>
+    <p class="sub-secao">Módulos que trabalham juntos — do radar à
+      minuta.</p>
+    <div class="grade">
+      <div class="modulo">
+        <div class="icone-caixa"><i data-lucide="radar"
+          class="lucide-20"></i></div>
+        <h3>Radar de oportunidades</h3>
+        <p>Busca contínua nas fontes oficiais, com filtros por objeto,
+          estado, modalidade e valor — e alertas na frequência que você
+          escolher.</p>
+      </div>
+      <div class="modulo">
+        <div class="icone-caixa"><i data-lucide="brain"
+          class="lucide-20"></i></div>
+        <h3>Ficha e riscos do edital</h3>
+        <p>Resumo executivo com exigências, datas e valores, e a leitura
+          atenta de cláusulas restritivas e armadilhas.</p>
+      </div>
+      <div class="modulo">
+        <div class="icone-caixa"><i data-lucide="folder-check"
+          class="lucide-20"></i></div>
+        <h3>Dossiê vigiado</h3>
+        <p>Suas certidões e atestados num lugar só, com validade lida
+          automaticamente e aviso aos 30, 15, 7, 3 e 1 dia do
+          vencimento.</p>
+      </div>
+      <div class="modulo">
+        <div class="icone-caixa"><i data-lucide="kanban"
+          class="lucide-20"></i></div>
+        <h3>Funil e agenda de disputas</h3>
+        <p>Da triagem à proposta enviada: cada oportunidade num estágio, e
+          os prazos de todas as suas disputas numa agenda só.</p>
+      </div>
+      <div class="modulo">
+        <div class="icone-caixa"><i data-lucide="list-checks"
+          class="lucide-20"></i></div>
+        <h3>Checagem de habilitação</h3>
+        <p>As exigências do edital cruzadas com o seu dossiê, documento a
+          documento, com a validade aferida na data da sessão.</p>
+      </div>
+      <div class="modulo">
+        <div class="icone-caixa"><i data-lucide="file-pen-line"
+          class="lucide-20"></i></div>
+        <h3>Minutas jurídicas</h3>
+        <p>Impugnação, recurso e contrarrazões em minuta fundamentada,
+          prontas para a revisão do seu advogado.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top: 0">
+  <div class="miolo">
+    <div class="compromissos">
+      <span><i data-lucide="shield-check" class="lucide"></i> Fontes
+        oficiais, sempre citadas</span>
+      <span><i data-lucide="clock" class="lucide"></i> Atualização várias
+        vezes ao dia</span>
+      <span><i data-lucide="lock" class="lucide"></i> Seus documentos são
+        seus — acesso só com login</span>
+      <span><i data-lucide="user-check" class="lucide"></i> A decisão é
+        sempre sua — a análise apoia, não substitui</span>
+    </div>
+  </div>
+</section>
+
+<div class="escuro">
+  <section class="chamada">
+    <div class="miolo">
+      <h2 class="titulo-secao" style="color:#fff">Comece pela licitação
+        de amanhã</h2>
+      <p class="sub-secao" style="color:#94a3b8">Enquanto você lê esta
+        página, o radar está varrendo os portais. A próxima oportunidade
+        do seu ramo pode fechar proposta esta semana.</p>
+      <a href="/login" class="btn">Entrar na plataforma</a>
+      <p class="convite">Acesso por convite durante o período de
+        lançamento.</p>
+    </div>
+  </section>
+</div>
+
+<footer>Licerta · licitação certa — {{ ano if ano else 2026 }}</footer>
+
+<script src="/static/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+</body>
+</html>
