@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Laudo pericial — Licerta{% endblock %}
+{% block conteudo %}
+<div class="mb-4">
+{% call c.faixa('info', 'stamp') %}
+  <b>Laudo preliminar — apoio à decisão.</b> Achado documental é indício,
+  não prova: use para pedir diligência ou fundamentar recurso, sempre com
+  revisão humana. Não substitui perícia formal por profissional
+  habilitado.
+{% endcall %}
+</div>
+
+<div class="flex items-center gap-3 flex-wrap mb-3">
+  <h1 class="text-lg font-bold">Laudo pericial documental</h1>
+  <span class="text-xs text-slate-500">
+    {{ caso.titulo }} · gerado em
+    {{ laudo.criado_em.strftime('%d/%m/%Y %H:%M') }}
+    {% if sou_admin %} · {{ laudo.modelo }} ·
+      US$ {{ '%.4f' % (laudo.custo_usd or 0) }}{% endif %}</span>
+  <span class="ml-auto flex gap-2">
+    <a href="/pericias/laudos/{{ laudo.id }}/baixar" class="btn-sec"
+       style="min-height: 36px">
+      <i data-lucide="download" class="lucide"></i> Baixar em Word</a>
+    <button onclick="navigator.clipboard.writeText(document.getElementById('texto').innerText).then(() => this.innerText = 'Copiado')"
+            class="btn-sec" style="min-height: 36px">
+      <i data-lucide="copy" class="lucide"></i> Copiar</button>
+  </span>
+</div>
+
+<pre id="texto" class="card p-6 text-sm whitespace-pre-wrap
+     leading-relaxed overflow-x-auto"
+     style="font-family: var(--fonte)">{{ laudo.texto }}</pre>
+{% endblock %}

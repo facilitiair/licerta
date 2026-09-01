@@ -16,6 +16,9 @@
       <span class="text-xs text-slate-500">{{ u.email }}</span>
       {% if u.papel == 'admin' %}<span class="text-xs px-2 py-0.5 rounded-full
         bg-purple-100 text-purple-800">admin</span>{% endif %}
+      {% if u.plano == 'premium' or u.papel == 'admin' %}
+      <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100
+        text-amber-800">premium</span>{% endif %}
       <span class="text-xs px-2 py-0.5 rounded-full
         {{ 'bg-green-100 text-green-800' if u.ativo else 'bg-slate-200 text-slate-600' }}">
         {{ 'ativo' if u.ativo else 'desativado' }}</span>
@@ -30,6 +33,14 @@
       <form method="post" action="/usuarios/{{ u.id }}/toggle">
         <button class="px-3 py-1 border border-slate-300 rounded-lg
               hover:bg-slate-50">{{ 'Desativar' if u.ativo else 'Reativar' }}</button>
+      </form>
+      {% endif %}
+      {% if u.papel != 'admin' %}
+      <form method="post" action="/usuarios/{{ u.id }}/plano">
+        <button class="px-3 py-1 border border-slate-300 rounded-lg
+              hover:bg-slate-50">
+          {{ 'Tirar do premium' if u.plano == 'premium'
+             else 'Dar plano premium' }}</button>
       </form>
       {% endif %}
       <form method="post" action="/usuarios/{{ u.id }}/senha" class="flex gap-2">

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}{{ caso.titulo }} — Licerta{% endblock %}
+{% block conteudo %}
+<p class="text-xs mb-2"><a href="/pericias" class="text-blue-700
+  underline">← Perito documental</a></p>
+<h1 class="text-xl font-bold mb-1">{{ caso.titulo }}</h1>
+{% if caso.observacao %}
+<p class="text-xs text-slate-500 mb-4">{{ caso.observacao }}</p>
+{% endif %}
+
+{% if aviso %}
+<p class="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-4
+          py-2 text-sm mb-4">{{ aviso }}</p>
+{% endif %}
+
+{% if sou_premium %}
+<form method="post" action="/pericias/{{ caso.id }}/documentos"
+      enctype="multipart/form-data"
+      class="card p-4 mb-4 flex gap-3 flex-wrap items-end text-sm">
+  <label class="flex-1 min-w-64">Caderno do concorrente (PDF) — pode
+    selecionar vários<br>
+    <input type="file" name="arquivos" multiple required accept=".pdf"
+           class="mt-1 w-full text-xs"></label>
+  <button class="btn-sec" style="min-height: 36px">
+    <i data-lucide="upload" class="lucide"></i> Adicionar ao caderno</button>
+</form>
+{% endif %}
+
+<div class="card p-4 mb-4 text-sm">
+  <h3 class="font-semibold mb-2">Documentos do caderno
+    ({{ docs|length }})</h3>
+  {% for d in docs %}
+  <div class="flex items-center gap-2 py-1 border-b border-slate-100
+              last:border-0 text-xs">
+    <i data-lucide="file-text" class="lucide text-slate-400"></i>
+    {{ d.nome }}
+  </div>
+  {% else %}
+  {{ c.estado_vazio('Nenhum documento ainda — suba o caderno acima.',
+                    'folder-open') }}
+  {% endfor %}
+</div>
+
+{% if sou_premium %}
+<div class="card p-3 flex items-center gap-3 flex-wrap text-xs mb-4">
+  <button hx-post="/pericias/{{ caso.id }}/laudo"
+          hx-target="#laudomsg" hx-swap="innerHTML" hx-disabled-elt="this"
+          hx-confirm="Iniciar o exame pericial? O caderno passa pelo leitor, pelos peritos, pelo contraditório e pela revisão. Leva alguns minutos e custa alguns dólares (em geral entre 2 e 5)."
+          class="btn" style="min-height: 36px">
+    <i data-lucide="stamp" class="lucide"></i> Gerar laudo pericial
+    <span class="htmx-indicator">— iniciando...</span>
+  </button>
+  <span class="text-slate-500">Exame completo do caderno, com achados que
+    sobreviveram ao contraditório e recomendação de uso.</span>
+  <span id="laudomsg" class="w-full"></span>
+</div>
+{% else %}
+<div class="mb-4">
+{% call c.faixa('atencao', 'stamp') %}
+  Gerar laudo é um recurso do <b>plano premium</b>.
+{% endcall %}
+</div>
+{% endif %}
+
+<div class="space-y-2">
+  {% for l in laudos %}
+  <a href="/pericias/laudos/{{ l.id }}" class="card p-3 flex items-center
+     gap-3 text-sm hover:border-blue-300 block">
+    <i data-lucide="file-search" class="lucide text-slate-400"></i>
+    Laudo de {{ l.criado_em.strftime('%d/%m/%Y %H:%M') }}
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

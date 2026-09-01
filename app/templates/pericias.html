@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Perito documental — Licerta{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">Perito documental</h1>
+<p class="text-xs text-slate-500 mb-4">Exame do caderno de uma empresa
+  concorrente — coerência formal e cronológica, atestados, balanço,
+  contraditório interno e laudo pronto para fundamentar diligência ou
+  recurso.</p>
+
+{% if aviso %}
+<p class="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-4
+          py-2 text-sm mb-4">{{ aviso }}</p>
+{% endif %}
+
+{% if not sou_premium %}
+<div class="mb-4">
+{% call c.faixa('atencao', 'stamp') %}
+  O perito documental é um recurso do <b>plano premium</b> — fale com o
+  administrador da sua conta para ativar.
+{% endcall %}
+</div>
+{% else %}
+<form method="post" action="/pericias/criar"
+      class="card p-4 mb-6 flex gap-3 flex-wrap items-end text-sm">
+  <label class="flex-1 min-w-64">Novo caso — de quem é o caderno?<br>
+    <input name="titulo" required maxlength="200"
+           placeholder="ex.: Empresa X — Pregão 24/2026"
+           class="input w-full mt-1"></label>
+  <label class="flex-1 min-w-64">Observações (opcional)<br>
+    <input name="observacao" maxlength="2000"
+           placeholder="o que se quer demonstrar, prazo do recurso…"
+           class="input w-full mt-1"></label>
+  <button class="btn" style="min-height: 36px">
+    <i data-lucide="stamp" class="lucide"></i> Abrir caso</button>
+</form>
+{% endif %}
+
+<div class="space-y-2">
+  {% for caso in casos %}
+  <a href="/pericias/{{ caso.id }}" class="card p-4 flex items-center gap-3
+     text-sm hover:border-blue-300 block">
+    <i data-lucide="stamp" class="lucide text-slate-400"></i>
+    <span class="font-semibold">{{ caso.titulo }}</span>
+    <span class="text-xs text-slate-500 ml-auto">
+      {{ docs_por_caso[caso.id] }} documento(s) ·
+      {{ laudos_por_caso[caso.id] }} laudo(s) ·
+      {{ caso.criado_em.strftime('%d/%m/%Y') }}</span>
+  </a>
+  {% else %}
+  <div class="card">
+    {{ c.estado_vazio('Nenhum caso aberto ainda. Abra o primeiro acima —
+                       suba o caderno do concorrente e peça o laudo.',
+                      'stamp') }}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

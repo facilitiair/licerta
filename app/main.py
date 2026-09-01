@@ -30,7 +30,8 @@ from . import sincronizar
 from .radar.coleta import (MSG_INTERROMPIDA, coleta_em_andamento,
                            coletar_em_background)
 from .config import PASTA_DADOS, VERSAO, agora, config, hoje
-from .db import (ArquivoEdital, Ata, ColetaLog, DocumentoEmpresa, EditalFicha,
+from .db import (ArquivoEdital, Ata, ColetaLog, DocumentoCaso,
+                 DocumentoEmpresa, EditalFicha,
                  EmpresaDados, Licitacao, LicitacaoAlteracao, Minuta,
                  Modalidade, Municipio, PerfilBusca, PerfilMatch,
                  PushAssinatura, Sessao, Usuario, VigiaProblema,
@@ -1616,6 +1617,8 @@ def licitacao_pericia(request: Request, lic_id: int):
     """Dispara a perícia completa (pipeline de peritos) em segundo plano."""
     from .analista import parecer as parecer_mod
     from .analista import pericia as pericia_mod
+    if not _sou_premium(request):
+        return HTMLResponse(FAIXA_PREMIUM)
     s = Sessao()
     try:
         lic = s.get(Licitacao, lic_id)
@@ -1647,6 +1650,198 @@ def licitacao_pericia(request: Request, lic_id: int):
             'caderno, peritos e síntese — leva alguns minutos. O parecer '
             'aparece em <a href="/pareceres" class="underline">Pareceres'
             '</a> quando pronto.</div>')
+    finally:
+        s.close()
+
+
+def _sou_premium(request):
+    """Perícia completa e perito documental são do plano premium.
+    Administrador sempre tem acesso (é o dono da instância)."""
+    u = getattr(request.state, "usuario", None)
+    return bool(u and (u.papel == "admin"
+                       or getattr(u, "plano", "") == "premium"))
+
+
+FAIXA_PREMIUM = ('<div class="faixa faixa-atencao text-xs">Este recurso é '
+                 'do plano premium — fale com o administrador da sua '
+                 'conta para ativar.</div>')
+
+
+# ------------------------------------------------------ perito documental
+@app.get("/pericias", response_class=HTMLResponse)
+def pericias_lista(request: Request, aviso: str = ""):
+    from .db import CasoPericial, LaudoPericial
+    s = Sessao()
+    try:
+        casos = (s.query(CasoPericial)
+                 .order_by(CasoPericial.criado_em.desc()).limit(60).all())
+        docs_por_caso = {c.id: s.query(DocumentoCaso)
+                         .filter_by(caso_id=c.id).count() for c in casos}
+        laudos_por_caso = {c.id: s.query(LaudoPericial)
+                           .filter_by(caso_id=c.id).count() for c in casos}
+        return templates.TemplateResponse(request, "pericias.html", {
+            "casos": casos, "docs_por_caso": docs_por_caso,
+            "laudos_por_caso": laudos_por_caso, "aviso": aviso,
+            "sou_premium": _sou_premium(request)})
+    finally:
+        s.close()
+
+
+@app.post("/pericias/criar")
+async def pericias_criar(request: Request, titulo: str = Form(""),
+                         observacao: str = Form("")):
+    from .db import CasoPericial
+    if not _sou_premium(request):
+        return RedirectResponse("/pericias", status_code=303)
+    titulo = titulo.strip()[:200]
+    if not titulo:
+        return RedirectResponse(
+            f"/pericias?aviso={quote('Dê um título ao caso — ex.: Empresa X — PE 24/2026.')}",
+            status_code=303)
+    s = Sessao()
+    try:
+        caso = CasoPericial(titulo=titulo,
+                            observacao=observacao.strip()[:2000],
+                            criado_por=eu(request).id)
+        s.add(caso)
+        s.commit()
+        return RedirectResponse(f"/pericias/{caso.id}", status_code=303)
+    finally:
+        s.close()
+
+
+@app.get("/pericias/{caso_id:int}", response_class=HTMLResponse)
+def pericia_caso(request: Request, caso_id: int, aviso: str = ""):
+    from .db import CasoPericial, LaudoPericial
+    s = Sessao()
+    try:
+        caso = s.get(CasoPericial, caso_id)
+        if not caso:
+            return HTMLResponse("Caso não encontrado.", status_code=404)
+        docs = (s.query(DocumentoCaso)
+                .filter_by(caso_id=caso.id).all())
+        laudos = (s.query(LaudoPericial).filter_by(caso_id=caso.id)
+                  .order_by(LaudoPericial.criado_em.desc()).all())
+        return templates.TemplateResponse(request, "pericia_caso.html", {
+            "caso": caso, "docs": docs, "laudos": laudos, "aviso": aviso,
+            "sou_premium": _sou_premium(request)})
+    finally:
+        s.close()
+
+
+@app.post("/pericias/{caso_id:int}/documentos")
+async def pericia_docs_upload(request: Request, caso_id: int,
+                              arquivos: list[UploadFile] = File(None)):
+    from .analista.pericia_documental import MAX_DOCS_POR_CASO, PASTA_CASOS
+    from .db import CasoPericial
+    if not _sou_premium(request):
+        return RedirectResponse("/pericias", status_code=303)
+    s = Sessao()
+    try:
+        caso = s.get(CasoPericial, caso_id)
+        if not caso:
+            return HTMLResponse("Caso não encontrado.", status_code=404)
+        ja_tem = s.query(DocumentoCaso).filter_by(caso_id=caso.id).count()
+        pasta = os.path.join(PASTA_CASOS, str(caso.id))
+        adicionados = 0
+        for arquivo in (arquivos or []):
+            if not (arquivo and arquivo.filename):
+                continue
+            if ja_tem + adicionados >= MAX_DOCS_POR_CASO:
+                break
+            os.makedirs(pasta, exist_ok=True)
+            seguro = re.sub(r"[^\w.\-]+", "_",
+                            arquivo.filename).strip("_")[:80]
+            doc = DocumentoCaso(caso_id=caso.id,
+                                nome=arquivo.filename[:200])
+            s.add(doc)
+            s.flush()
+            caminho = os.path.join(pasta, f"{doc.id}-{seguro}")
+            with open(caminho, "wb") as f:
+                f.write(await arquivo.read())
+            doc.caminho_local = os.path.relpath(caminho, PASTA_DADOS)
+            adicionados += 1
+        s.commit()
+        aviso = (f"{adicionados} documento(s) no caderno."
+                 if adicionados else
+                 "Nenhum arquivo chegou — selecione os arquivos antes "
+                 "de enviar.")
+        return RedirectResponse(
+            f"/pericias/{caso.id}?aviso={quote(aviso)}", status_code=303)
+    finally:
+        s.close()
+
+
+@app.post("/pericias/{caso_id:int}/laudo", response_class=HTMLResponse)
+def pericia_gerar_laudo(request: Request, caso_id: int):
+    from .analista import parecer as parecer_mod
+    from .analista import pericia_documental as pd
+    from .db import CasoPericial
+    if not _sou_premium(request):
+        return HTMLResponse(FAIXA_PREMIUM)
+    s = Sessao()
+    try:
+        caso = s.get(CasoPericial, caso_id)
+        if not caso:
+            return HTMLResponse("Caso não encontrado.", status_code=404)
+        try:
+            comecou = pd.iniciar(s, caso, usuario=eu(request))
+        except (parecer_mod.ParecerIndevido, SemChaveIA) as e:
+            return HTMLResponse(
+                f'<div class="faixa faixa-atencao text-xs">{escape(str(e))}'
+                '</div>')
+        except Exception:  # noqa: BLE001 — erro técnico não vaza (UI §7)
+            log.exception("Laudo do caso %s não iniciou", caso_id)
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">O laudo não '
+                'começou desta vez. Tente de novo em instantes.</div>')
+        if not comecou:
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">Já existe um '
+                'laudo deste caso em andamento — recarregue a página em '
+                'alguns minutos.</div>')
+        return HTMLResponse(
+            '<div class="faixa text-xs">Exame iniciado: leitor, peritos, '
+            'contraditório e revisão — leva alguns minutos. O laudo '
+            'aparece nesta página quando pronto.</div>')
+    finally:
+        s.close()
+
+
+@app.get("/pericias/laudos/{laudo_id:int}", response_class=HTMLResponse)
+def pericia_laudo(request: Request, laudo_id: int):
+    from .db import CasoPericial, LaudoPericial
+    s = Sessao()
+    try:
+        laudo = s.get(LaudoPericial, laudo_id)
+        if not laudo:
+            return HTMLResponse("Laudo não encontrado.", status_code=404)
+        caso = s.get(CasoPericial, laudo.caso_id)
+        return templates.TemplateResponse(request, "laudo.html", {
+            "laudo": laudo, "caso": caso,
+            "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
+@app.get("/pericias/laudos/{laudo_id:int}/baixar")
+def pericia_laudo_baixar(request: Request, laudo_id: int,
+                         formato: str = "docx"):
+    from .db import LaudoPericial
+    from .docx_export import MEDIA_DOCX, markdown_para_docx
+    s = Sessao()
+    try:
+        laudo = s.get(LaudoPericial, laudo_id)
+        if not laudo:
+            return HTMLResponse("Laudo não encontrado.", status_code=404)
+        if formato == "md":
+            return Response(laudo.texto, media_type="text/markdown",
+                            headers={"Content-Disposition":
+                                     f'attachment; filename="laudo-{laudo.caso_id}.md"'})
+        return Response(markdown_para_docx(laudo.texto),
+                        media_type=MEDIA_DOCX,
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="laudo-{laudo.caso_id}.docx"'})
     finally:
         s.close()
 
@@ -2348,6 +2543,22 @@ async def usuarios_criar(request: Request, nome: str = Form(""),
                       papel="admin" if papel == "admin" else "usuario",
                       senha_hash=usuarios_mod.gerar_hash(senha)))
         s.commit()
+        return RedirectResponse("/usuarios", status_code=303)
+    finally:
+        s.close()
+
+
+@app.post("/usuarios/{usuario_id}/plano")
+async def usuarios_plano(request: Request, usuario_id: int):
+    """Liga/desliga o plano premium de uma conta (só admin)."""
+    if not _sou_admin(request):
+        return RedirectResponse("/", status_code=303)
+    s = Sessao()
+    try:
+        u = s.get(Usuario, usuario_id)
+        if u:
+            u.plano = "padrao" if u.plano == "premium" else "premium"
+            s.commit()
         return RedirectResponse("/usuarios", status_code=303)
     finally:
         s.close()

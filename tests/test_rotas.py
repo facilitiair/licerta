@@ -55,6 +55,10 @@ ROTAS_GET = [
     "/licitacoes/exportar?formato=xlsx",
     "/documentos",
     "/documentos/999999/arquivo",           # 404 sem 500
+    "/pericias",
+    "/pericias/999999",                     # 404 sem 500
+    "/pericias/laudos/999999",              # 404 sem 500
+    "/pericias/laudos/999999/baixar",       # 404 sem 500
     "/fichas",
     "/minutas",
     "/pareceres",
@@ -87,6 +91,9 @@ ROTAS_POST = [
     ("/licitacoes/999999/minuta", {}),                # 404 sem 500
     ("/licitacoes/999999/parecer", {}),               # 404 sem 500
     ("/licitacoes/999999/pericia", {}),               # 404 sem 500
+    ("/pericias/criar", {"titulo": ""}),              # sem título -> aviso
+    ("/pericias/999999/laudo", {}),                   # 404 sem 500
+    ("/usuarios/999999/plano", {}),                   # id inexistente
     ("/funil/mover/999999/novo", {}),                 # id inexistente
     ("/funil/sugerir", {}),                           # sem chave -> redirect
     ("/funil/mover/1/status_invalido", {}),           # status inválido

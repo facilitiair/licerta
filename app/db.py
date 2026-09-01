@@ -34,6 +34,9 @@ class Usuario(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     senha_hash = Column(String, nullable=False)     # scrypt salgado
     papel = Column(String, default="usuario", nullable=False)  # admin|usuario
+    # Plano comercial: recursos de análise profunda (perícia completa e
+    # perito documental) são do plano premium; admin sempre tem acesso.
+    plano = Column(String, default="padrao", nullable=False)  # padrao|premium
     ativo = Column(Boolean, default=True, nullable=False)
     # Canais de aviso — cada um liga e desliga o seu
     telegram_chat_id = Column(String, default="", nullable=False)
@@ -270,6 +273,44 @@ class Minuta(Base):
     licitacao = relationship("Licitacao")
 
 
+class CasoPericial(Base):
+    """Caso do perito documental: um caderno de CONCORRENTE sob exame.
+
+    Diferente do dossiê (documentos da própria empresa), aqui cada caso é
+    um conjunto avulso de documentos de terceiro, examinado para
+    fundamentar recurso ou diligência. Recurso do plano premium."""
+    __tablename__ = "casos_periciais"
+    id = Column(Integer, primary_key=True)
+    titulo = Column(String, nullable=False)          # ex.: "Empresa X — PE 24/2026"
+    observacao = Column(Text, default="")
+    criado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    criado_em = Column(DateTime, default=agora, nullable=False)
+
+
+class DocumentoCaso(Base):
+    """Um arquivo do caderno sob exame (PDF do concorrente)."""
+    __tablename__ = "documentos_caso"
+    id = Column(Integer, primary_key=True)
+    caso_id = Column(Integer, ForeignKey("casos_periciais.id"),
+                     nullable=False, index=True)
+    nome = Column(String, nullable=False)
+    caminho_local = Column(String, default="")       # relativo a data/
+    criado_em = Column(DateTime, default=agora, nullable=False)
+
+
+class LaudoPericial(Base):
+    """Laudo do perito documental sobre um caso — sempre preliminar."""
+    __tablename__ = "laudos_periciais"
+    id = Column(Integer, primary_key=True)
+    caso_id = Column(Integer, ForeignKey("casos_periciais.id"),
+                     nullable=False, index=True)
+    texto = Column(Text, default="")
+    modelo = Column(String, default="")
+    custo_usd = Column(Float, default=0.0)
+    criado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    criado_em = Column(DateTime, default=agora, nullable=False)
+
+
 class Parecer(Base):
     """Parecer completo do analista sobre um edital (camada 3, perícia).
 
@@ -361,6 +402,7 @@ def _migrar():
         "perfil_matches": [("termos", "TEXT DEFAULT ''"),
                            ("sugestao", "TEXT DEFAULT ''"),
                            ("sugestao_motivo", "TEXT DEFAULT ''")],
+        "usuarios": [("plano", "TEXT DEFAULT 'padrao'")],
         "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'"),
                          ("situacoes", "TEXT DEFAULT '[]'"),
                          ("somente_vigentes", "BOOLEAN DEFAULT 1"),
