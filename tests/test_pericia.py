@@ -64,23 +64,43 @@ def test_pipeline_completo_com_material(sessao, lic, ambiente):
     ])
     sessao.commit()
     p = pericia.gerar_pericia(sessao, lic, hoje=HOJE)
-    assert ambiente == ["pericia_leitor", "pericia_atestados",
-                       "pericia_contabil", "pericia_sintese"]
-    assert p.custo_usd == 2.0                      # 4 etapas × 0.5
+    assert ambiente == ["pericia_leitor", "pericia_documental",
+                       "pericia_atestados", "pericia_contabil",
+                       "pericia_contraditorio", "pericia_sintese",
+                       "pericia_revisao", "pericia_correcao"]
+    assert p.custo_usd == 4.0                      # 8 etapas × 0.5
     assert "peritos" in p.modelo
     assert "Anexos — laudos dos peritos" in p.texto
     assert "perito de atestados" in p.texto
+    assert "Contraditório" in p.texto
     assert p.texto.startswith("> Parecer gerado automaticamente") or \
         "Parecer gerado automaticamente" in p.texto[:400]
 
 
-def test_peritos_so_entram_com_material(sessao, lic, ambiente):
+def test_peritos_condicionais_so_entram_com_material(sessao, lic, ambiente):
+    """Documental e contraditório sempre acompanham docs legíveis;
+    atestados e contábil só com material do seu tipo."""
     sessao.add(DocumentoEmpresa(nome="CND Federal",
                                 tipo="CND Federal (RFB/PGFN)"))
     sessao.commit()
-    p = pericia.gerar_pericia(sessao, lic, hoje=HOJE)
-    assert ambiente == ["pericia_leitor", "pericia_sintese"]
-    assert "Anexos" not in p.texto
+    pericia.gerar_pericia(sessao, lic, hoje=HOJE)
+    assert "pericia_atestados" not in ambiente
+    assert "pericia_contabil" not in ambiente
+    assert "pericia_documental" in ambiente
+    assert "pericia_contraditorio" in ambiente
+
+
+def test_revisor_aprovado_pula_a_correcao(sessao, lic, ambiente,
+                                          monkeypatch):
+    def falso(*a, **k):
+        ambiente.append(k["job"])
+        if k["job"] == "pericia_revisao":
+            return ("PARECER DE REVISÃO\nCorreções obrigatórias:\n"
+                    "  nenhuma\nVEREDITO: aprovado")
+        return f"# Saída de {k['job']}\n\nParecer gerado automaticamente"
+    monkeypatch.setattr(pericia.cliente, "chamar", falso)
+    pericia.gerar_pericia(sessao, lic, hoje=HOJE)
+    assert "pericia_correcao" not in ambiente
 
 
 def test_iniciar_nao_duplica(sessao, lic, ambiente, monkeypatch):

@@ -92,6 +92,32 @@ def gerar_pericia(sessao_db, lic, usuario=None, hoje=None):
     habilitacao = ficha.get("habilitacao") or {}
     laudos = []
 
+    # 1b) exame técnico por código — hash, formato real, revisões,
+    # metadados, assinatura (a bancada forense determinística)
+    from .exame import examinar_dossie
+    try:
+        exame_tecnico = examinar_dossie(sessao_db, dossie)
+    except Exception:  # noqa: BLE001 — exame é cortesia, nunca derruba
+        log.exception("Exame técnico do dossiê falhou")
+        exame_tecnico = {}
+
+    contexto_certame = {"objeto": lic.objeto, "orgao": lic.orgao_nome,
+                        "municipio": lic.municipio_nome, "uf": lic.uf,
+                        "data_da_sessao": data_sessao}
+
+    # 2·pré) perito documental — coerência formal/cronológica do caderno
+    if legiveis:
+        laudo = _chamar(
+            "pericia_documental", "peritos/perito-documental",
+            json.dumps({
+                "parte_examinada": "empresa_cliente",
+                "documentos_do_caso": legiveis,
+                "exame_tecnico": exame_tecnico,
+                "contexto_do_certame": contexto_certame,
+            }, ensure_ascii=False), camadas.GERACAO, custos)
+        laudos.append(("Laudo do perito documental "
+                       "(coerência formal e cronológica)", laudo))
+
     # 2a) perito de atestados — só com material técnico no dossiê
     tecnicos = [d for d in legiveis if d["tipo"] in TIPOS_TECNICOS]
     if tecnicos:
@@ -132,20 +158,58 @@ def gerar_pericia(sessao_db, lic, usuario=None, hoje=None):
         laudos.append(("Laudo do perito contábil "
                        "(econômico-financeira)", laudo))
 
-    # 3) síntese no modelo forte, com os laudos como insumo
+    # 3) contraditório — o adversário interno tenta derrubar cada achado
     secao_laudos = "\n\n".join(
         f"### {titulo}\n\n{laudo}" for titulo, laudo in laudos) \
         or "(nenhum perito acionado — dossiê sem material técnico/contábil)"
+    contraditorio = None
+    if laudos:
+        contraditorio = _chamar(
+            "pericia_contraditorio", "peritos/perito-contraditor",
+            json.dumps({"contexto_do_certame": contexto_certame},
+                       ensure_ascii=False)
+            + "\n\nLAUDOS A REFUTAR:\n\n" + secao_laudos
+            + "\n\nTRECHOS DO EDITAL:\n\n"
+            + (insumos["texto_edital"][:80_000] or "(sem texto)"),
+            camadas.GERACAO, custos)
+
+    # 4) síntese no modelo forte, com laudos E contraditório como insumo
     mensagem = (
         json.dumps(entrada, ensure_ascii=False, indent=1)
         + "\n\nLAUDOS DOS PERITOS (insumo verificado — incorpore as "
         "conclusões e cite os achados relevantes):\n\n" + secao_laudos
+        + "\n\nCONTRADITÓRIO (vereditos do perito adversário — achado "
+        "`derrubado` NÃO entra no parecer; `enfraquecido` entra com a "
+        "ressalva; `sobrevive` entra com a confiança que restou):\n\n"
+        + (contraditorio or "(sem laudos a contraditar)")
         + "\n\nBASE JURÍDICA:\n\n" + _base_juridica()
         + "\n\nTEXTO DO EDITAL E ANEXOS:\n\n"
         + (insumos["texto_edital"][:LIMITE_EDITAL]
            or "(sem texto legível — análise pela ficha)"))
     texto = _chamar("pericia_sintese", "parecer-edital", mensagem,
                     camadas.PERICIA, custos)
+
+    # 5) revisão — controle de qualidade antes da entrega; correções
+    # obrigatórias são aplicadas numa passada de edição barata
+    revisao = _chamar(
+        "pericia_revisao", "peritos/perito-revisor",
+        json.dumps({"contexto": contexto_certame}, ensure_ascii=False)
+        + "\n\nPARECER A REVISAR:\n\n" + texto
+        + "\n\nLAUDOS DE ORIGEM:\n\n" + secao_laudos[:60_000]
+        + "\n\nCONTRADITÓRIO:\n\n" + (contraditorio or "(não houve)"),
+        camadas.GERACAO, custos)
+    if "Correções obrigatórias:\n  nenhuma" not in revisao \
+            and "VEREDITO: aprovado\n" not in revisao + "\n":
+        texto = cliente.chamar(
+            job="pericia_correcao",
+            prompt_sistema=("Você aplica correções pontuais de revisão a "
+                           "um parecer, sem mudar o mérito, a estrutura "
+                           "nem acrescentar conteúdo novo. Devolva o "
+                           "parecer inteiro corrigido, e nada além dele."),
+            mensagem=("PARECER:\n\n" + texto
+                      + "\n\nPARECER DE REVISÃO A APLICAR:\n\n" + revisao),
+            modelo=camadas.GERACAO, max_tokens=16000)
+        custos.append(_custo_da_ultima_chamada())
     if "Parecer gerado automaticamente" not in texto[:400]:
         texto = ("> Parecer gerado automaticamente pela plataforma — apoio "
                  "à decisão. Não substitui a leitura do edital nem "
@@ -153,6 +217,9 @@ def gerar_pericia(sessao_db, lic, usuario=None, hoje=None):
     if laudos:
         texto += ("\n\n---\n\n# Anexos — laudos dos peritos\n\n"
                   + "\n\n---\n\n".join(f"## {t}\n\n{l}" for t, l in laudos))
+    if contraditorio:
+        texto += ("\n\n---\n\n## Contraditório — tentativas de refutação "
+                  "e vereditos\n\n" + contraditorio)
     parecer = Parecer(licitacao_id=lic.id, texto=texto,
                       modelo=f"{camadas.PERICIA} + peritos",
                       custo_usd=round(sum(custos), 4),
