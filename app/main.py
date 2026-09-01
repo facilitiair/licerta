@@ -1124,6 +1124,10 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
         dados = _dados_ficha(ficha)
         minutas = (s.query(Minuta).filter_by(licitacao_id=lic_id)
                    .order_by(Minuta.criada_em.desc()).all())
+        from .db import Parecer
+        pareceres_da_lic = (s.query(Parecer).filter_by(licitacao_id=lic_id)
+                            .order_by(Parecer.criado_em.desc())
+                            .limit(3).all())
         return templates.TemplateResponse(request, "_licitacao_detalhe.html",
                                           {"lic": lic, "matches": matches,
                                            "arquivos": arquivos,
@@ -1131,6 +1135,7 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
                                            "alteracoes": alteracoes,
                                            "rotulos_alteracao": CAMPOS_VIGIADOS,
                                            "minutas": minutas,
+                                           "pareceres_da_lic": pareceres_da_lic,
                                            "sou_admin": _sou_admin(request),
                                            "acompanho": any(
                                                m.status == "vou_participar"
@@ -1475,6 +1480,83 @@ async def pesquisar_salvar(request: Request):
 
 
 # ----------------------------------------------------------------------- logs
+# ------------------------------------------------------------------ analista
+@app.post("/licitacoes/{lic_id}/parecer", response_class=HTMLResponse)
+def licitacao_parecer(request: Request, lic_id: int):
+    """Gera o parecer completo do analista (camada 3) e abre a página."""
+    from .analista import parecer as parecer_mod
+    from .db import Parecer
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        try:
+            novo = parecer_mod.gerar_parecer(s, lic, usuario=eu(request))
+        except (parecer_mod.ParecerIndevido, SemChaveIA) as e:
+            corpo = escape(str(e))
+            extra = (' <a href="/config" class="underline">Configurações</a>'
+                     if isinstance(e, SemChaveIA) and _sou_admin(request)
+                     else "")
+            return HTMLResponse(
+                f'<div class="faixa faixa-atencao text-xs">{corpo}{extra}'
+                '</div>')
+        except Exception:  # noqa: BLE001 — erro técnico não vaza (UI §7)
+            log.exception("Parecer da licitação %s falhou", lic_id)
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">O parecer não '
+                'terminou desta vez. Tente de novo em instantes.</div>')
+        resposta = HTMLResponse("")
+        resposta.headers["HX-Redirect"] = f"/pareceres/{novo.id}"
+        return resposta
+    finally:
+        s.close()
+
+
+@app.get("/pareceres", response_class=HTMLResponse)
+def pareceres_lista(request: Request):
+    from .db import Parecer
+    s = Sessao()
+    try:
+        pareceres = (s.query(Parecer)
+                     .order_by(Parecer.criado_em.desc()).limit(60).all())
+        return templates.TemplateResponse(request, "pareceres.html", {
+            "pareceres": pareceres, "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
+@app.get("/pareceres/{parecer_id}", response_class=HTMLResponse)
+def parecer_ver(request: Request, parecer_id: int):
+    from .db import Parecer
+    s = Sessao()
+    try:
+        parecer = s.get(Parecer, parecer_id)
+        if not parecer:
+            return HTMLResponse("Parecer não encontrado.", status_code=404)
+        return templates.TemplateResponse(request, "parecer.html", {
+            "parecer": parecer, "lic": parecer.licitacao,
+            "sou_admin": _sou_admin(request)})
+    finally:
+        s.close()
+
+
+@app.get("/pareceres/{parecer_id}/baixar")
+def parecer_baixar(request: Request, parecer_id: int):
+    from .db import Parecer
+    s = Sessao()
+    try:
+        parecer = s.get(Parecer, parecer_id)
+        if not parecer:
+            return HTMLResponse("Parecer não encontrado.", status_code=404)
+        nome = f"parecer-{parecer.licitacao_id}.md"
+        return Response(parecer.texto, media_type="text/markdown",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{nome}"'})
+    finally:
+        s.close()
+
+
 # ------------------------------------------------------- analista (listagens)
 @app.get("/fichas", response_class=HTMLResponse)
 def fichas_lista(request: Request):

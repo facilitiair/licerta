@@ -54,6 +54,28 @@
 
   {% include "_ficha_edital.html" %}
 
+  <div class="card p-3 flex items-center gap-3 flex-wrap text-xs">
+    <button hx-post="/licitacoes/{{ lic.id }}/parecer"
+            hx-target="#parecermsg{{ lic.id }}" hx-swap="innerHTML"
+            hx-disabled-elt="this"
+            hx-confirm="Gerar o parecer completo? A perícia lê o edital inteiro e o seu dossiê no modelo mais forte — custa mais que a ficha (em torno de meio dólar)."
+            class="btn-sec" style="min-height: 36px">
+      <i data-lucide="file-search" class="lucide"></i>
+      Parecer do analista
+      <span class="htmx-indicator">— periciando (até 2 min)...</span>
+    </button>
+    <span class="text-slate-500">Perícia completa: edital × seu dossiê ×
+      base jurídica, com recomendação de participar ou não.
+      {% if pareceres_da_lic %}
+        Já gerados:
+        {% for p in pareceres_da_lic %}
+        <a href="/pareceres/{{ p.id }}" class="text-blue-700 underline">
+          {{ p.criado_em.strftime('%d/%m %H:%M') }}</a>{{ ',' if not loop.last }}
+        {% endfor %}
+      {% endif %}</span>
+    <span id="parecermsg{{ lic.id }}" class="w-full"></span>
+  </div>
+
   {% if minutas %}
   <div class="card text-xs px-3 py-2">
     <b>Minutas geradas:</b>

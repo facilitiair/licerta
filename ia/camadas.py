@@ -11,12 +11,16 @@ linha — nunca um prompt, nunca um worker.
 TRIAGEM = "claude-haiku-4-5-20251001"
 EXTRACAO = "claude-sonnet-5"
 GERACAO = "claude-sonnet-5"
+# Perícia (parecer completo): o modelo forte — análise que orienta a
+# decisão de participar merece o melhor cérebro disponível.
+PERICIA = "claude-opus-4-8"
 
 # Preço por milhão de tokens (entrada, saída) — para o log de custo.
 # Atualizar junto com os modelos acima.
 PRECOS = {
     "claude-haiku-4-5-20251001": (1.00, 5.00),
-    "claude-sonnet-5": (3.00, 15.00),
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-opus-4-8": (5.00, 25.00),
 }
 
 

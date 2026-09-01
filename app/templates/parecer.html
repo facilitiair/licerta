@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Parecer — Licerta{% endblock %}
+{% block conteudo %}
+<div class="mb-4">
+{% call c.faixa('info', 'file-search') %}
+  <b>Parecer do analista — apoio à decisão.</b> Gerado automaticamente a
+  partir do edital e do seu dossiê. Não substitui a leitura do edital nem
+  orientação jurídica; itens marcados [CONFERIR] pedem verificação humana.
+{% endcall %}
+</div>
+
+<div class="flex items-center gap-3 flex-wrap mb-3">
+  <h1 class="text-lg font-bold">Parecer do analista</h1>
+  <span class="text-xs text-slate-500">
+    {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }} —
+    {{ lic.municipio_nome }}/{{ lic.uf }} · gerado em
+    {{ parecer.criado_em.strftime('%d/%m/%Y %H:%M') }}
+    {% if sou_admin %} · {{ parecer.modelo }} ·
+      US$ {{ '%.4f' % (parecer.custo_usd or 0) }}{% endif %}</span>
+  <span class="ml-auto flex gap-2">
+    <a href="/pareceres/{{ parecer.id }}/baixar" class="btn-sec"
+       style="min-height: 36px">
+      <i data-lucide="download" class="lucide"></i> Baixar</a>
+    <button onclick="navigator.clipboard.writeText(document.getElementById('texto').innerText).then(() => this.innerText = 'Copiado')"
+            class="btn-sec" style="min-height: 36px">
+      <i data-lucide="copy" class="lucide"></i> Copiar</button>
+  </span>
+</div>
+
+<pre id="texto" class="card p-6 text-sm whitespace-pre-wrap
+     leading-relaxed overflow-x-auto"
+     style="font-family: var(--fonte)">{{ parecer.texto }}</pre>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Pareceres — Licerta{% endblock %}
+{% block conteudo %}
+<h1 class="text-xl font-bold mb-1">Pareceres do analista</h1>
+<p class="text-xs text-slate-500 mb-4">A perícia completa: edital inteiro
+  cruzado com o seu dossiê e a base jurídica, com recomendação de
+  participar ou não. Cada parecer retrata o dossiê do momento em que foi
+  gerado — dossiê mudou, gere outro.</p>
+
+{% if pareceres %}
+<div class="card divide-y divide-slate-100">
+  {% for p in pareceres %}
+  <a href="/pareceres/{{ p.id }}"
+     class="flex items-center gap-3 px-4 py-3 text-sm
+            hover:bg-slate-50/70 transition-colors">
+    <i data-lucide="file-search" class="lucide text-blue-700"></i>
+    <span class="min-w-0">
+      <span class="block font-semibold">
+        {{ p.licitacao.modalidade_nome or 'Licitação' }}
+        {{ p.licitacao.numero_compra }}/{{ p.licitacao.ano_compra }} —
+        {{ p.licitacao.municipio_nome or '' }}{{ '/' + p.licitacao.uf
+        if p.licitacao.uf }}</span>
+      <span class="block text-xs text-slate-500 truncar"
+            title="{{ p.licitacao.objeto or '' }}">
+        {{ (p.licitacao.objeto|sentenca)[:90] }}</span>
+    </span>
+    <span class="ml-auto flex items-center gap-2 shrink-0">
+      <span class="text-[11px] text-slate-400">
+        {{ p.criado_em.strftime('%d/%m %H:%M') }}
+        {% if sou_admin %} · US$ {{ '%.2f' % (p.custo_usd or 0) }}{% endif %}
+      </span>
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  {{ c.estado_vazio('Nenhum parecer ainda. Abra uma oportunidade que
+                     interessa e clique em "Parecer do analista" — a
+                     perícia completa aparece aqui.',
+                    'file-search', '/licitacoes', 'Ver oportunidades') }}
+</div>
+{% endif %}
+{% endblock %}

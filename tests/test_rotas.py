@@ -53,6 +53,9 @@ ROTAS_GET = [
     "/documentos/999999/arquivo",           # 404 sem 500
     "/fichas",
     "/minutas",
+    "/pareceres",
+    "/pareceres/999999",                    # 404 sem 500
+    "/pareceres/999999/baixar",
     "/minutas/999999",                      # 404 sem 500
     "/minutas/999999/baixar",
     "/atas",
@@ -78,6 +81,7 @@ ROTAS_POST = [
     ("/documentos/999999/salvar", {"nome": "x", "validade": "lixo"}),
     ("/documentos/999999/arquivar", {}),
     ("/licitacoes/999999/minuta", {}),                # 404 sem 500
+    ("/licitacoes/999999/parecer", {}),               # 404 sem 500
     ("/funil/mover/999999/novo", {}),                 # id inexistente
     ("/funil/mover/1/status_invalido", {}),           # status inválido
     ("/pesquisar/salvar", {}),                        # sem identificador -> 400

@@ -266,6 +266,26 @@ class Minuta(Base):
     licitacao = relationship("Licitacao")
 
 
+class Parecer(Base):
+    """Parecer completo do analista sobre um edital (camada 3, perícia).
+
+    Diferente da ficha (ativo global, 1× por edital), o parecer cruza o
+    edital com o DOSSIÊ da empresa no momento do clique — dossiê muda,
+    parecer envelhece. Por isso cada geração é nova, sob demanda, com o
+    custo gravado (dá para cobrar à parte, arquitetura §7).
+    """
+    __tablename__ = "pareceres"
+    id = Column(Integer, primary_key=True)
+    licitacao_id = Column(Integer, ForeignKey("licitacoes.id"),
+                          nullable=False, index=True)
+    texto = Column(Text, default="")
+    modelo = Column(String, default="")
+    custo_usd = Column(Float, default=0.0)
+    criado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    criado_em = Column(DateTime, default=agora, nullable=False)
+    licitacao = relationship("Licitacao")
+
+
 class DocumentoEmpresa(Base):
     """Documento do dossiê da EMPRESA (certidão, atestado, balanço...).
 
