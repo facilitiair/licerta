@@ -98,8 +98,18 @@ def baixar_arquivos(sessao_db, lic, sessao=None):
     if not seq:
         return 0
     http = sessao or requests
-    ja_baixados = {a.url_origem for a in
-                   sessao_db.query(ArquivoEdital).filter_by(licitacao_id=lic.id)}
+    # Só conta como "já baixado" o que está de fato no disco. Linha cujo
+    # arquivo sumiu (poda antiga, volume limpo à mão) é mentira no banco:
+    # sai daqui e o documento volta a ser candidato a download.
+    ja_baixados = set()
+    orfaos = 0
+    for a in sessao_db.query(ArquivoEdital).filter_by(licitacao_id=lic.id):
+        caminho_a = os.path.join(PASTA_DADOS, a.caminho_local or "")
+        if a.caminho_local and os.path.exists(caminho_a):
+            ja_baixados.add(a.url_origem)
+        else:
+            sessao_db.delete(a)
+            orfaos += 1
     docs = listar_arquivos_compra(lic.orgao_cnpj, lic.ano_compra, seq,
                                   sessao=sessao)
     pasta = os.path.join(PASTA_EDITAIS, str(lic.id))
@@ -144,6 +154,6 @@ def baixar_arquivos(sessao_db, lic, sessao=None):
             baixados += 1
         except Exception as e:  # noqa: BLE001 — segue para o próximo arquivo
             log.warning("Falha ao baixar %s: %s", url, e)
-    if baixados:
+    if baixados or orfaos:
         sessao_db.commit()
     return baixados

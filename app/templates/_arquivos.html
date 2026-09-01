@@ -4,13 +4,25 @@
     <a href="/arquivos/{{ a.id }}"
        class="text-blue-700 underline text-sm"><i data-lucide="file-text" class="lucide"></i> {{ a.tipo }} — {{ a.titulo }}</a>
   {% else %}
-    <span class="text-sm text-slate-500">nenhum baixado ainda.</span>
+    {% if lic.fonte == 'pncp' and not busca_feita %}
+    <!-- Busca automática: a página abre já procurando os documentos, sem
+         exigir clique (o botão manual continua para re-buscar). A resposta
+         de /baixar volta com busca_feita=True — sem isso este gatilho
+         renasceria a cada troca e viraria loop contra o PNCP. -->
+    <span hx-post="/licitacoes/{{ lic.id }}/baixar" hx-trigger="load"
+          hx-target="#arqs{{ lic.id }}" hx-swap="innerHTML"
+          class="text-sm text-slate-500">
+      <i data-lucide="loader-circle" class="lucide animate-spin"></i>
+      buscando os documentos publicados...</span>
+    {% else %}
+    <span class="text-sm text-slate-500">nenhum publicado ainda.</span>
+    {% endif %}
   {% endfor %}
-  {% if lic.fonte == 'pncp' %}
+  {% if lic.fonte == 'pncp' and (arquivos or busca_feita) %}
   <button hx-post="/licitacoes/{{ lic.id }}/baixar" hx-target="#arqs{{ lic.id }}"
           hx-swap="innerHTML" hx-indicator="#ind{{ lic.id }}"
           class="border border-blue-700 text-blue-700 px-3 py-1 rounded-lg
-                 text-xs hover:bg-blue-50"><i data-lucide="download" class="lucide"></i> Buscar documentos no PNCP</button>
+                 text-xs hover:bg-blue-50"><i data-lucide="refresh-cw" class="lucide"></i> Buscar de novo no PNCP</button>
   <span id="ind{{ lic.id }}" class="htmx-indicator text-xs text-slate-500">
     baixando...</span>
   {% endif %}

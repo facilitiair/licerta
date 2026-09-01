@@ -137,6 +137,33 @@ def _custo_da_ultima_chamada():
         return 0.0
 
 
+def _motivo_sem_texto(lic):
+    """Por que não há documento para ler? Consulta o portal e diz a verdade.
+
+    Distingue os três mundos que antes viravam a mesma frase (e uma frase
+    errada): o órgão realmente não publicou nada, o portal listou mas o
+    download falhou agora, ou o portal nem respondeu.
+    """
+    if lic.fonte != "pncp":
+        return ("os documentos desta fonte não ficam no PNCP. Abra o portal "
+                "de origem para ler o edital.")
+    from ..ingestao.pncp import listar_arquivos_compra
+    from .arquivos import _sequencial
+    seq = _sequencial(lic.numero_controle_pncp)
+    try:
+        docs = (listar_arquivos_compra(lic.orgao_cnpj, lic.ano_compra, seq)
+                if seq and lic.orgao_cnpj and lic.ano_compra else [])
+        ativos = [d for d in docs if d.get("statusAtivo", True)]
+    except Exception:  # noqa: BLE001 — portal fora do ar não é culpa do órgão
+        return ("o PNCP não respondeu agora. Tente de novo em instantes.")
+    if ativos:
+        return ("os documentos existem no PNCP, mas o download não funcionou "
+                "agora. Tente de novo em instantes.")
+    return ("o órgão ainda não publicou os arquivos desta licitação no "
+            "PNCP. O edital deve estar no portal do órgão — use o link "
+            "\"Sistema de origem\" desta página.")
+
+
 def analisar_edital(sessao_db, lic, forcar=False):
     """Gera (ou devolve) a ficha estruturada de uma licitação.
 
@@ -156,10 +183,16 @@ def analisar_edital(sessao_db, lic, forcar=False):
         ficha = EditalFicha(licitacao_id=lic.id)
         sessao_db.add(ficha)
 
+    def _no_disco(lista):
+        return [a for a in lista
+                if a.caminho_local and os.path.exists(
+                    os.path.join(PASTA_DADOS, a.caminho_local))]
+
     arquivos = (sessao_db.query(ArquivoEdital)
                 .filter_by(licitacao_id=lic.id).all())
-    if not arquivos:
-        # Melhor esforço: busca os documentos agora, na hora do clique.
+    if not _no_disco(arquivos):
+        # Melhor esforço: busca os documentos agora, na hora do clique —
+        # inclusive quando o banco tem linhas mas o arquivo saiu do disco.
         from .arquivos import baixar_arquivos
         try:
             baixar_arquivos(sessao_db, lic)
@@ -170,11 +203,10 @@ def analisar_edital(sessao_db, lic, forcar=False):
 
     texto, lidos = extrair_texto_pdfs(arquivos)
     if not texto:
-        ficha.erro = ("Nenhum texto extraível: " +
-                      ("a licitação não tem documento publicado no PNCP."
-                       if not arquivos else
-                       "os PDFs parecem escaneados (só imagem). Abra o "
-                       "documento pelo link e leia manualmente."))
+        ficha.erro = ("Não deu para ler o edital: "
+                      + (_motivo_sem_texto(lic) if not _no_disco(arquivos)
+                         else "os PDFs parecem escaneados (só imagem). Abra "
+                              "o documento pelo link e leia manualmente."))
         ficha.ficha_json = ""
         ficha.gerada_em = agora()
         sessao_db.commit()

@@ -1307,8 +1307,11 @@ def licitacao_baixar_docs(request: Request, lic_id: int):
             return HTMLResponse("Licitação não encontrada.", status_code=404)
         baixar_arquivos(s, lic)
         arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
+        # busca_feita corta o gatilho automático do parcial: sem ele, uma
+        # licitação sem documento re-dispararia a busca em loop.
         return templates.TemplateResponse(request, "_arquivos.html",
-                                          {"lic": lic, "arquivos": arquivos})
+                                          {"lic": lic, "arquivos": arquivos,
+                                           "busca_feita": True})
     finally:
         s.close()
 

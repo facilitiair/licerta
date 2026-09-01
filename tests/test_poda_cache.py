@@ -68,6 +68,29 @@ def test_cache_inexistente_nao_quebra(sessao, tmp_path, monkeypatch):
     assert arquivos.podar_cache(sessao, limite_mb=1) == (0, 0)
 
 
+def test_linha_orfa_nao_bloqueia_novo_download(sessao, cache_falso,
+                                               monkeypatch):
+    """A causa do bug de Bacabeira: linha no banco cujo arquivo saiu do
+    disco fazia o download ser pulado para sempre ('url já baixada')."""
+    lic = sessao.query(Licitacao).first()
+    lic.orgao_cnpj, lic.ano_compra = "00000000000000", 2026
+    lic.numero_controle_pncp = "00000000000000-1-000001/2026"
+    vitima = sessao.query(ArquivoEdital).filter_by(titulo="velho").first()
+    vitima.url_origem = "https://pncp.gov.br/doc/1"
+    sessao.commit()
+    os.remove(os.path.join(str(cache_falso.parent), vitima.caminho_local))
+
+    listadas = []
+    monkeypatch.setattr(arquivos, "listar_arquivos_compra",
+                        lambda *a, **k: listadas.append(1) or [])
+    arquivos.baixar_arquivos(sessao, lic)
+    # A linha órfã sumiu do banco — na próxima listagem com documentos, a
+    # url volta a ser baixada em vez de cair no "já baixado".
+    assert listadas
+    titulos = [a.titulo for a in sessao.query(ArquivoEdital)]
+    assert "velho" not in titulos and len(titulos) == 2
+
+
 # ----------------------------------------------------------- vigia de disco
 def test_disco_com_folga_nao_e_problema():
     assert checar_disco_cheio(5000) is None

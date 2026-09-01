@@ -32,9 +32,12 @@ def lic(sessao):
 
 
 @pytest.fixture()
-def ia_dublada(monkeypatch, sessao, lic):
+def ia_dublada(monkeypatch, sessao, lic, tmp_path):
     """Ambiente completo de mentira: chave presente, PDF 'lido', IA que
     devolve o que o teste mandar e contador de chamadas."""
+    # O arquivo precisa EXISTIR no disco: linha órfã não conta como baixada.
+    (tmp_path / "x.pdf").write_bytes(b"%PDF-1.4 de mentira")
+    monkeypatch.setattr(analise, "PASTA_DADOS", str(tmp_path))
     estado = {"chamadas": 0, "resposta": json.dumps({
         "resumo": "Pregão de manutenção de ar condicionado.",
         "habilitacao": {"tecnica": ["atestado de capacidade"]},
@@ -116,6 +119,51 @@ def test_pdf_escaneado_vira_erro_legivel(sessao, lic, ia_dublada, monkeypatch):
     ficha = analise.analisar_edital(sessao, lic)
     assert not ficha.ficha_json and "escaneados" in ficha.erro
     assert ia_dublada["chamadas"] == 0     # não paga IA por imagem
+
+
+def test_sem_arquivo_no_disco_diz_a_verdade(sessao, lic, ia_dublada,
+                                            monkeypatch):
+    """Linha no banco sem arquivo no disco: tenta baixar de novo e, se nada
+    vier, a mensagem distingue 'download falhou' de 'órgão não publicou' —
+    nunca mais a mentira 'não tem documento publicado'."""
+    import os
+    monkeypatch.setattr(analise, "extrair_texto_pdfs", lambda arqs: ("", []))
+    os.remove(os.path.join(analise.PASTA_DADOS, "x.pdf"))   # arquivo sumiu
+    monkeypatch.setattr("app.editais.arquivos.baixar_arquivos",
+                        lambda *a, **k: 0)
+    # O portal LISTA documentos → a culpa é do download, e a frase diz isso.
+    monkeypatch.setattr(
+        "app.ingestao.pncp.listar_arquivos_compra",
+        lambda *a, **k: [{"url": "https://pncp.gov.br/x", "statusAtivo": True}])
+    ficha = analise.analisar_edital(sessao, lic)
+    assert "download não funcionou" in ficha.erro
+    assert ia_dublada["chamadas"] == 0
+
+
+def test_orgao_sem_documento_publicado(sessao, lic, ia_dublada, monkeypatch):
+    monkeypatch.setattr(analise, "extrair_texto_pdfs", lambda arqs: ("", []))
+    import os
+    os.remove(os.path.join(analise.PASTA_DADOS, "x.pdf"))
+    monkeypatch.setattr("app.editais.arquivos.baixar_arquivos",
+                        lambda *a, **k: 0)
+    monkeypatch.setattr("app.ingestao.pncp.listar_arquivos_compra",
+                        lambda *a, **k: [])
+    ficha = analise.analisar_edital(sessao, lic)
+    assert "ainda não publicou" in ficha.erro
+
+
+def test_pncp_fora_do_ar_nao_culpa_o_orgao(sessao, lic, ia_dublada,
+                                           monkeypatch):
+    import os
+    monkeypatch.setattr(analise, "extrair_texto_pdfs", lambda arqs: ("", []))
+    os.remove(os.path.join(analise.PASTA_DADOS, "x.pdf"))
+    monkeypatch.setattr("app.editais.arquivos.baixar_arquivos",
+                        lambda *a, **k: 0)
+    def explode(*a, **k):
+        raise RuntimeError("timeout")
+    monkeypatch.setattr("app.ingestao.pncp.listar_arquivos_compra", explode)
+    ficha = analise.analisar_edital(sessao, lic)
+    assert "não respondeu" in ficha.erro
 
 
 def test_ia_fora_do_ar_vira_erro_e_pode_tentar_de_novo(sessao, lic, ia_dublada,
