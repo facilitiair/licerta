@@ -141,6 +141,10 @@ class PerfilMatch(Base):
     status = Column(String, default="novo", nullable=False)
     termos = Column(String, default="")        # quais palavras do perfil casaram
     anotacao = Column(Text, default="")
+    # Triagem sugerida pela IA (participar|analisar|descartar) — SUGESTÃO:
+    # quem move o cartão é sempre o usuário.
+    sugestao = Column(String, default="")
+    sugestao_motivo = Column(String, default="")
     perfil = relationship("PerfilBusca", back_populates="matches")
     licitacao = relationship("Licitacao", back_populates="matches")
     __table_args__ = (UniqueConstraint("perfil_id", "licitacao_id",
@@ -354,7 +358,9 @@ def _migrar():
     pendencias = {
         "licitacoes": [("fonte", "TEXT DEFAULT 'pncp'"), ("situacao", "TEXT"),
                        ("objeto_norm", "TEXT")],
-        "perfil_matches": [("termos", "TEXT DEFAULT ''")],
+        "perfil_matches": [("termos", "TEXT DEFAULT ''"),
+                           ("sugestao", "TEXT DEFAULT ''"),
+                           ("sugestao_motivo", "TEXT DEFAULT ''")],
         "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'"),
                          ("situacoes", "TEXT DEFAULT '[]'"),
                          ("somente_vigentes", "BOOLEAN DEFAULT 1"),

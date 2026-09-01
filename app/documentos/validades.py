@@ -125,6 +125,37 @@ def avisar_vencimentos(sessao_db=None, hoje=None, host=None):
             sessao.close()
 
 
+_VAL_NO_NOME = re.compile(
+    r"VAL[.\s]*([0-3]?\d)[-/.]([01]?\d)[-/.](\d{4})", re.IGNORECASE)
+
+
+def validade_do_nome(nome_arquivo):
+    """Validade embutida no NOME do arquivo ('CND VAL.30-08-2026.pdf').
+
+    Quem organiza dossiê costuma carimbar a validade no nome — é a fonte
+    mais barata que existe, e o upload em lote a aproveita antes de abrir
+    o PDF.
+    """
+    m = _VAL_NO_NOME.search(nome_arquivo or "")
+    if not m:
+        return None
+    try:
+        return date(int(m.group(3)), int(m.group(2)),
+                    int(m.group(1))).isoformat()
+    except ValueError:
+        return None
+
+
+def nome_amigavel(nome_arquivo):
+    """'02 - FGTS VAL.24-08-2026.pdf' → 'FGTS' — o rótulo que a lista mostra."""
+    base = os.path.splitext(os.path.basename(nome_arquivo or ""))[0]
+    base = re.sub(r"^\s*\d+\s*[-–.]\s*", "", base)      # prefixo numérico
+    base = _VAL_NO_NOME.sub("", base)                    # carimbo de validade
+    base = re.sub(r"[_]+", " ", base)
+    base = re.sub(r"\s{2,}", " ", base).strip(" -–.")
+    return base[:120] or "Documento"
+
+
 # ------------------------------------------------ sugestão de validade (regex)
 _MESES = {"janeiro": 1, "fevereiro": 2, "março": 3, "marco": 3, "abril": 4,
           "maio": 5, "junho": 6, "julho": 7, "agosto": 8, "setembro": 9,

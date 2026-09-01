@@ -2,13 +2,23 @@
 {% block titulo %}Agenda — Licerta{% endblock %}
 {% block conteudo %}
 <h1 class="text-xl font-bold mb-1">Agenda de disputas</h1>
-<p class="text-xs text-slate-500 mb-4">Encerramentos de proposta das
-  oportunidades ativas (tudo que não foi descartado), dia a dia.</p>
+<p class="text-xs text-slate-500 mb-4">
+  {% if tudo %}Mostrando TUDO que não foi descartado (inclui o não triado).
+    <a href="/agenda" class="text-blue-700 underline">Voltar às minhas
+    disputas</a>
+  {% else %}A sua semana de trabalho: prazos do que você está analisando
+    ou vai disputar, dia a dia.
+    <a href="/agenda?tudo=1" class="text-blue-700 underline">incluir não
+    triadas</a>
+  {% endif %}</p>
 
 {% for dia in agenda_dias %}
 <section class="mb-5">
+  {% set tem_disputa = dia.matches | selectattr('status', 'equalto', 'vou_participar') | list %}
   <h2 class="font-bold text-sm mb-2
       {{ 'text-red-600' if dia.dias_ate is not none and dia.dias_ate <= 3
+           and tem_disputa
+         else 'text-amber-700' if dia.dias_ate is not none and dia.dias_ate <= 3
          else 'text-slate-700' }}">
     <i data-lucide="calendar-days" class="lucide"></i> {{ dia.rotulo }}
     {% if dia.dias_ate == 1 %}— AMANHÃ{% elif dia.dias_ate == 0 %}— HOJE{% else %}
@@ -23,9 +33,9 @@
         {{ {'novo':'bg-amber-100 text-amber-800',
             'analisando':'bg-blue-100 text-blue-800',
             'vou_participar':'bg-green-100 text-green-800'}
-           .get(m.status, 'bg-slate-100') }}">{{ m.status.replace('_',' ') }}</span>
+           .get(m.status, 'bg-slate-100') }}">{{ 'a triar' if m.status == 'novo' else m.status.replace('_',' ') }}</span>
       <span class="flex-1 min-w-60 line-clamp-2"
-            title="{{ lic.objeto or '' }}">{{ lic.objeto or '' }}</span>
+            title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</span>
       <span class="text-xs text-slate-500">{{ lic.municipio_nome }}/{{ lic.uf }} ·
         {{ lic.valor_total_estimado|dinheiro }}</span>
       {% if lic.link_pncp or lic.link_sistema_origem %}
@@ -36,7 +46,8 @@
   </div>
 </section>
 {% else %}
-<p class="text-slate-500 text-sm">Nada na agenda — mova oportunidades no
+<p class="text-slate-500 text-sm">Nada na agenda ainda — marque oportunidades
+  como "analisar" ou "participar" no
   <a href="/funil" class="text-blue-700 underline">funil</a> ou aguarde a
   próxima coleta.</p>
 {% endfor %}

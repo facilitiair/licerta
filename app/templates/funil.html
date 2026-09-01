@@ -1,9 +1,45 @@
 {% extends "base.html" %}
+{% import "_componentes.html" as c %}
 {% block titulo %}Funil — Licerta{% endblock %}
 {% block conteudo %}
-<h1 class="text-xl font-bold mb-1">Funil de oportunidades</h1>
-<p class="text-xs text-slate-500 mb-4">Triagem das licitações que casaram com
-  seus perfis — mova cada cartão com os botões: analisar, participar ou
-  descartar.</p>
+<div class="flex items-center gap-3 flex-wrap mb-1">
+  <h1 class="text-xl font-bold">Funil de oportunidades</h1>
+  <form method="get" action="/funil" class="ml-auto flex gap-2 items-center">
+    <select name="perfil_id" class="select" style="min-height: 36px"
+            onchange="this.form.submit()">
+      <option value="">todos os perfis</option>
+      {% for p in perfis %}
+      <option value="{{ p.id }}" {{ 'selected' if perfil_id == p.id }}>
+        {{ p.nome }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <form method="post" action="/funil/sugerir?perfil_id={{ perfil_id or 0 }}">
+    <button class="btn-sec" style="min-height: 36px"
+            title="A análise automática lê as novidades contra o seu dossiê
+                   e sugere participar, analisar ou descartar — custa
+                   centavos e a palavra final é sua.">
+      <i data-lucide="wand-sparkles" class="lucide"></i>
+      Sugerir triagem</button>
+  </form>
+</div>
+<p class="text-xs text-slate-500 mb-4">Só o que casou com os seus perfis.
+  A coluna "A triar" mostra o que chegou nos últimos dias; mova cada cartão
+  com os botões.</p>
+
+{% if aviso %}
+<div class="mb-4">
+{% call c.faixa('info', 'wand-sparkles') %}{{ aviso }}{% endcall %}
+</div>
+{% endif %}
+
+{% if antigas_a_triar %}
+<p class="text-xs text-slate-500 mb-3">Há
+  <b>{{ antigas_a_triar }}</b> não triada{{ 's' if antigas_a_triar != 1 }}
+  mais antiga{{ 's' if antigas_a_triar != 1 }} fora desta tela —
+  <a href="/licitacoes?status=novo&tudo=1"
+     class="text-blue-700 underline">ver em Oportunidades</a>.</p>
+{% endif %}
+
 <div id="board">{% include "_funil_board.html" %}</div>
 {% endblock %}

@@ -13,26 +13,16 @@
 {% endif %}
 
 <form method="post" action="/documentos" enctype="multipart/form-data"
-      class="card p-4 mb-6
-             flex gap-3 flex-wrap items-end text-sm">
-  <label class="flex-1 min-w-52">Arquivo (PDF)<br>
-    <input type="file" name="arquivo" accept=".pdf,.jpg,.png,.jpeg"
-           class="mt-1 w-full text-xs"></label>
-  <label class="flex-1 min-w-40">Nome<br>
-    <input name="nome" placeholder="ex.: CND Federal set/2026"
-           class="input w-full mt-1" style="min-height: 36px"></label>
-  <label>Tipo<br>
-    <select name="tipo" class="select mt-1" style="min-height: 36px">
-      {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
-    </select></label>
-  <label>Válido até<br>
-    <input type="date" name="validade"
-           class="select mt-1" style="min-height: 36px"></label>
+      class="card p-4 mb-6 flex gap-3 flex-wrap items-end text-sm">
+  <label class="flex-1 min-w-64">Arquivos (PDF) — pode selecionar vários de uma vez<br>
+    <input type="file" name="arquivos" multiple
+           accept=".pdf,.jpg,.png,.jpeg" class="mt-1 w-full text-xs"></label>
   <button class="btn"><i data-lucide="upload" class="lucide"></i>
-    Adicionar documento</button>
-  <p class="w-full text-[11px] text-slate-400 -mt-1">Deixe a validade em
-    branco num PDF de certidão: o app tenta ler a data do próprio documento
-    e avisa que foi sugestão.</p>
+    Adicionar documentos</button>
+  <p class="w-full text-[11px] text-slate-400 -mt-1">Nome, tipo e validade
+    são reconhecidos automaticamente (carimbo "VAL.dd-mm-aaaa" no nome do
+    arquivo ou a data dentro do PDF) — depois é só conferir e ajustar em
+    cada item.</p>
 </form>
 
 <div class="space-y-2">

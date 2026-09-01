@@ -16,6 +16,14 @@
         <p class="text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
           <span class="font-semibold text-slate-600">{{ lic.municipio_nome or '?' }}/{{ lic.uf }}</span>
           · {{ m.perfil.nome }} {% if m.favorito %}<i data-lucide="star" class="lucide"></i>{% endif %}
+          {% if m.sugestao and col.status == 'novo' %}
+          <span title="{{ m.sugestao_motivo }}"
+                class="px-1.5 rounded-full font-semibold
+            {{ 'bg-green-100 text-green-800' if m.sugestao == 'participar'
+               else 'bg-blue-100 text-blue-800' if m.sugestao == 'analisar'
+               else 'bg-slate-200 text-slate-500' }}">
+            sugestão: {{ m.sugestao }}</span>
+          {% endif %}
           {% if lic.situacao and lic.situacao not in ('Divulgada', 'Aberta') %}
           <span class="px-1.5 rounded-full font-semibold bg-amber-100
                 text-amber-800">{{ lic.situacao }}</span>{% endif %}

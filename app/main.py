@@ -574,36 +574,87 @@ COLUNAS_FUNIL = [("novo", "A triar"), ("analisando", "Em análise"),
                  ("descartado", "Descartadas")]
 
 
-def _contexto_funil(s, usuario):
-    hoje = agora().strftime("%Y-%m-%d")
+def _contexto_funil(s, usuario, perfil_id=None):
+    """O funil filtra, não repassa (UI §10): a coluna "A triar" mostra só
+    o que chegou nos últimos dias — o estoque antigo fica atrás de um
+    link, senão o perfil largo afoga a tela (reclamação real)."""
+    agora_ = agora()
+    hoje = agora_.strftime("%Y-%m-%d")
+    corte_novas = agora_ - timedelta(hours=96)
     colunas = []
+    antigas_a_triar = 0
     for status, rotulo in COLUNAS_FUNIL:
         consulta = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
                     .filter(PerfilMatch.status == status,
                             PerfilBusca.usuario_id == usuario.id)
                     .order_by(Licitacao.data_encerramento_proposta))
+        if perfil_id:
+            consulta = consulta.filter(PerfilMatch.perfil_id == perfil_id)
         if status != "descartado":     # descartadas antigas não interessam
             consulta = consulta.filter(
                 Licitacao.data_encerramento_proposta >= hoje)
+        if status == "novo":
+            antigas_a_triar = consulta.filter(
+                PerfilMatch.data_match < corte_novas).count()
+            consulta = consulta.filter(
+                PerfilMatch.data_match >= corte_novas)
         matches = consulta.limit(40).all()
+        if status == "novo":
+            # Sugestão da IA puxa para cima: participar > analisar > resto
+            ordem = {"participar": 0, "analisar": 1, "": 2, "descartar": 3}
+            matches.sort(key=lambda m: ordem.get(m.sugestao or "", 2))
         cartoes = [{"m": m, "dias": _dias_ate(
             m.licitacao.data_encerramento_proposta)} for m in matches]
         colunas.append({"status": status, "rotulo": rotulo, "cartoes": cartoes})
-    return {"colunas": colunas}
+    perfis = (s.query(PerfilBusca)
+              .filter_by(usuario_id=usuario.id)
+              .filter(PerfilBusca.nome != sincronizar.PERFIL_SISTEMA)
+              .order_by(PerfilBusca.nome).all())
+    return {"colunas": colunas, "antigas_a_triar": antigas_a_triar,
+            "perfis": perfis, "perfil_id": perfil_id}
 
 
 @app.get("/funil", response_class=HTMLResponse)
-async def funil(request: Request):
+async def funil(request: Request, perfil_id: int = 0, aviso: str = ""):
     s = Sessao()
     try:
-        return templates.TemplateResponse(request, "funil.html",
-                                          _contexto_funil(s, eu(request)))
+        contexto = _contexto_funil(s, eu(request), perfil_id or None)
+        contexto["aviso"] = aviso
+        return templates.TemplateResponse(request, "funil.html", contexto)
+    finally:
+        s.close()
+
+
+@app.post("/funil/sugerir")
+async def funil_sugerir(request: Request, perfil_id: int = 0):
+    """Triagem sugerida pela IA barata sobre as novas dos últimos dias."""
+    from .analista import triagem as triagem_mod
+    s = Sessao()
+    try:
+        try:
+            contagem = triagem_mod.sugerir_triagem(s, eu(request).id)
+        except SemChaveIA as e:
+            return RedirectResponse(
+                f"/funil?aviso={quote(str(e))}", status_code=303)
+        if not contagem:
+            aviso = "Nada novo para sugerir — as novidades já têm sugestão."
+        else:
+            aviso = ("Sugestões prontas: "
+                     f"{contagem.get('participar', 0)} participar, "
+                     f"{contagem.get('analisar', 0)} analisar, "
+                     f"{contagem.get('descartar', 0)} descartar. "
+                     "A palavra final é sua — mova os cartões.")
+        destino = f"/funil?aviso={quote(aviso)}"
+        if perfil_id:
+            destino += f"&perfil_id={perfil_id}"
+        return RedirectResponse(destino, status_code=303)
     finally:
         s.close()
 
 
 @app.post("/funil/mover/{match_id}/{status}", response_class=HTMLResponse)
-async def funil_mover(request: Request, match_id: int, status: str):
+async def funil_mover(request: Request, match_id: int, status: str,
+                      perfil_id: int = 0):
     s = Sessao()
     try:
         m = s.get(PerfilMatch, match_id)
@@ -613,23 +664,32 @@ async def funil_mover(request: Request, match_id: int, status: str):
             m.status = status
             m.lido = True
             s.commit()
-        return templates.TemplateResponse(request, "_funil_board.html",
-                                          _contexto_funil(s, eu(request)))
+        return templates.TemplateResponse(
+            request, "_funil_board.html",
+            _contexto_funil(s, eu(request), perfil_id or None))
     finally:
         s.close()
 
 
 # --------------------------------------------------------------------- agenda
 @app.get("/agenda", response_class=HTMLResponse)
-async def agenda(request: Request):
+async def agenda(request: Request, tudo: int = 0):
+    """A agenda é a SEMANA DE TRABALHO: só o que você puxou para si
+    (em análise + vou participar), dia a dia. O não-triado tem a triagem
+    no funil — jogado aqui, afogava a agenda (reclamação real)."""
     s = Sessao()
     try:
         hoje = agora().strftime("%Y-%m-%d")
-        matches = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
-                   .filter(PerfilMatch.status != "descartado",
-                           PerfilBusca.usuario_id == eu(request).id,
-                           Licitacao.data_encerramento_proposta >= hoje)
-                   .order_by(Licitacao.data_encerramento_proposta).all())
+        consulta = (s.query(PerfilMatch).join(Licitacao).join(PerfilBusca)
+                    .filter(PerfilBusca.usuario_id == eu(request).id,
+                            Licitacao.data_encerramento_proposta >= hoje)
+                    .order_by(Licitacao.data_encerramento_proposta))
+        if tudo:
+            consulta = consulta.filter(PerfilMatch.status != "descartado")
+        else:
+            consulta = consulta.filter(PerfilMatch.status.in_(
+                ("analisando", "vou_participar")))
+        matches = consulta.all()
         dias = {}
         for m in matches:
             chave = m.licitacao.data_encerramento_proposta[:10]
@@ -651,7 +711,8 @@ async def agenda(request: Request):
                 "rotulo": rotulo,
                 "dias_ate": _dias_ate(d), "matches": ms})
         return templates.TemplateResponse(request, "agenda.html",
-                                          {"agenda_dias": agenda_dias})
+                                          {"agenda_dias": agenda_dias,
+                                           "tudo": tudo})
     finally:
         s.close()
 
@@ -1703,40 +1764,52 @@ async def documentos(request: Request, aviso: str = ""):
 
 @app.post("/documentos")
 async def documentos_upload(request: Request,
-                            arquivo: UploadFile = File(None),
-                            nome: str = Form(""), tipo: str = Form("Outro"),
-                            validade: str = Form("")):
-    """Sobe um documento do dossiê. Validade em branco + PDF legível =
-    o app sugere a data lida do próprio arquivo (regex, nunca IA) — e diz
-    que foi sugestão, para o usuário conferir."""
+                            arquivos: list[UploadFile] = File(None)):
+    """Sobe um LOTE de documentos de uma vez — rapidez sem perder rigor.
+
+    Para cada arquivo, o app decide sozinho (sempre por código, nunca IA):
+    nome amigável (limpa prefixo numérico e carimbo de validade), tipo
+    (mesmas regras do checklist) e validade (carimbo 'VAL.dd-mm-aaaa' no
+    nome; senão, lida de dentro do PDF). Tudo editável item a item depois
+    — o aviso manda conferir.
+    """
+    from .documentos.checklist import tipo_sugerido
     s = Sessao()
-    aviso = ""
     try:
-        doc = DocumentoEmpresa(
-            nome=(nome or "").strip()
-                 or os.path.splitext(arquivo.filename or "Documento")[0][:80],
-            tipo=(tipo or "Outro").strip()[:60],
-            validade=_data_ou_nada(validade),
-            enviado_por=eu(request).id)
-        s.add(doc)
-        s.flush()
-        if arquivo and arquivo.filename:
+        adicionados = com_validade = 0
+        for arquivo in (arquivos or []):
+            if not (arquivo and arquivo.filename):
+                continue
+            nome = validades_mod.nome_amigavel(arquivo.filename)
+            doc = DocumentoEmpresa(
+                nome=nome,
+                tipo=(tipo_sugerido(nome)
+                      or tipo_sugerido(arquivo.filename) or "Outro"),
+                validade=validades_mod.validade_do_nome(arquivo.filename),
+                enviado_por=eu(request).id)
+            s.add(doc)
+            s.flush()
             os.makedirs(PASTA_DOCUMENTOS, exist_ok=True)
-            seguro = re.sub(r"[^\w.\-]+", "_", arquivo.filename).strip("_")[:80]
+            seguro = re.sub(r"[^\w.\-]+", "_",
+                            arquivo.filename).strip("_")[:80]
             caminho = os.path.join(PASTA_DOCUMENTOS, f"{doc.id}-{seguro}")
             with open(caminho, "wb") as f:
                 f.write(await arquivo.read())
             doc.caminho_local = os.path.relpath(caminho, PASTA_DADOS)
-        if not doc.validade and doc.caminho_local:
-            sugerida = validades_mod.sugerir_validade(doc.caminho_local)
-            if sugerida:
-                doc.validade = sugerida
-                d, m, a = sugerida.split("-")[::-1]
-                aviso = (f"Validade {d}/{m}/{a} lida do PDF — confira no "
-                         "documento antes de confiar.")
+            if not doc.validade:
+                doc.validade = validades_mod.sugerir_validade(
+                    doc.caminho_local)
+            com_validade += 1 if doc.validade else 0
+            adicionados += 1
         s.commit()
-        destino = "/documentos" + (f"?aviso={quote(aviso)}" if aviso else "")
-        return RedirectResponse(destino, status_code=303)
+        if not adicionados:
+            return RedirectResponse("/documentos", status_code=303)
+        aviso = (f"{adicionados} documento{'s' if adicionados != 1 else ''} "
+                 f"adicionado{'s' if adicionados != 1 else ''}, "
+                 f"{com_validade} com validade lida automaticamente — "
+                 "confira o tipo e a validade de cada um antes de confiar.")
+        return RedirectResponse(f"/documentos?aviso={quote(aviso)}",
+                                status_code=303)
     finally:
         s.close()
 
