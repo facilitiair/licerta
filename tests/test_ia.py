@@ -5,8 +5,9 @@ from ia import camadas, cliente
 
 
 def test_custo_por_modelo_e_calculado_certo():
-    assert camadas.custo_usd("claude-sonnet-5", 1_000_000, 0) == 3.00
-    assert camadas.custo_usd("claude-sonnet-5", 0, 1_000_000) == 15.00
+    assert camadas.custo_usd("claude-sonnet-5", 1_000_000, 0) == 2.00
+    assert camadas.custo_usd("claude-sonnet-5", 0, 1_000_000) == 10.00
+    assert camadas.custo_usd("claude-opus-4-8", 1_000_000, 0) == 5.00
     assert camadas.custo_usd("modelo-desconhecido", 999, 999) == 0.0
 
 
@@ -32,5 +33,5 @@ def test_registro_de_custo_vai_para_o_jsonl(tmp_path, monkeypatch):
                              10_000, 2_000, 3.2)
     linha = json.loads((tmp_path / "custos.jsonl").read_text("utf-8"))
     assert linha["job"] == "analisar_edital"
-    assert linha["custo_usd"] == round((10_000 * 3 + 2_000 * 15) / 1e6, 6)
+    assert linha["custo_usd"] == round((10_000 * 2 + 2_000 * 10) / 1e6, 6)
     assert cliente.custo_total() >= 0                  # nunca explode
