@@ -1327,7 +1327,12 @@ async def arquivo_download(arquivo_id: int):
         caminho = os.path.join(PASTA_DADOS, arq.caminho_local)
         if not os.path.exists(caminho):
             return HTMLResponse("Arquivo sumiu do disco.", status_code=404)
-        return FileResponse(caminho, filename=os.path.basename(caminho))
+        # Acervo antigo tem arquivo sem extensão (PNCP manda octet-stream):
+        # o nome de download ganha a extensão farejada do conteúdo, senão o
+        # sistema do usuário não sabe com o que abrir.
+        from .editais.arquivos import para_download
+        nome, media = para_download(caminho)
+        return FileResponse(caminho, filename=nome, media_type=media)
     finally:
         s.close()
 

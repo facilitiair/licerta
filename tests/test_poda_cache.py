@@ -100,3 +100,28 @@ def test_disco_com_folga_nao_e_problema():
 def test_disco_no_limite_avisa():
     p = checar_disco_cheio(120)
     assert p and p["chave"] == "disco_cheio" and "120 MB" in p["titulo"]
+
+
+# ------------------------------------------- extensão e tipo para download
+def test_para_download_fareja_pdf_sem_extensao(tmp_path):
+    """PNCP manda octet-stream sem extensão: o download chegava ilegível
+    no Windows do usuário ('tive que escolher o Adobe para abrir')."""
+    caminho = tmp_path / "1-Edital_PE_39_2026"
+    caminho.write_bytes(b"%PDF-1.7 conteudo")
+    nome, media = arquivos.para_download(str(caminho))
+    assert nome == "1-Edital_PE_39_2026.pdf" and media == "application/pdf"
+
+
+def test_para_download_respeita_extensao_existente(tmp_path):
+    caminho = tmp_path / "2-Planilha.xlsx"
+    caminho.write_bytes(b"PK\x03\x04zipzip")
+    nome, media = arquivos.para_download(str(caminho))
+    assert nome == "2-Planilha.xlsx"
+    assert "spreadsheet" in media
+
+
+def test_extensao_do_conteudo():
+    assert arquivos.extensao_do_conteudo(b"%PDF-1.4") == ".pdf"
+    assert arquivos.extensao_do_conteudo(b"PK\x03\x04") == ".zip"
+    assert arquivos.extensao_do_conteudo(b"Rar!\x1a") == ".rar"
+    assert arquivos.extensao_do_conteudo(b"???") == ""

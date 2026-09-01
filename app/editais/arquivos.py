@@ -12,6 +12,7 @@ coleta nacional encheu o volume inteiro do Railway.
 import logging
 import os
 import re
+from itertools import chain
 
 import requests
 
@@ -24,6 +25,57 @@ log = logging.getLogger("radar.documentos")
 PASTA_EDITAIS = os.path.join(PASTA_DADOS, "editais")
 MAX_ARQUIVOS_POR_LICITACAO = 5
 MAX_TAMANHO = 60 * 1024 * 1024   # 60 MB por arquivo
+
+# O PNCP muitas vezes entrega anexo como application/octet-stream e título
+# sem extensão — o arquivo ia para o disco sem ".pdf" e o Windows do usuário
+# não sabia com o que abrir o download ("tive que escolher o Adobe").
+EXTENSAO_POR_TIPO = {
+    "application/pdf": ".pdf",
+    "application/zip": ".zip",
+    "application/x-zip-compressed": ".zip",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml."
+    "document": ".docx",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml."
+    "sheet": ".xlsx",
+    "application/vnd.rar": ".rar",
+    "application/x-rar-compressed": ".rar",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+}
+_MAGIAS = [(b"%PDF", ".pdf"), (b"PK\x03\x04", ".zip"), (b"Rar!", ".rar"),
+           (b"\xd0\xcf\x11\xe0", ".doc"), (b"\x89PNG", ".png"),
+           (b"\xff\xd8\xff", ".jpg")]
+_TEM_EXTENSAO = re.compile(r"\.[A-Za-z]\w{1,4}$")
+
+
+def extensao_do_conteudo(inicio):
+    """Extensão pelos primeiros bytes do arquivo ('' se não reconhecer)."""
+    for magia, ext in _MAGIAS:
+        if inicio.startswith(magia):
+            return ext
+    return ""
+
+
+def para_download(caminho):
+    """(nome_de_download, media_type) para servir um arquivo do acervo.
+
+    Downloads antigos estão no disco SEM extensão: o nome que vai no
+    Content-Disposition ganha a extensão farejada do conteúdo, senão o
+    navegador salva um arquivo que o sistema não sabe abrir.
+    """
+    import mimetypes
+    nome = os.path.basename(caminho)
+    if not _TEM_EXTENSAO.search(nome):
+        try:
+            with open(caminho, "rb") as f:
+                inicio = f.read(8)
+        except OSError:
+            inicio = b""
+        nome += extensao_do_conteudo(inicio)
+    media = mimetypes.guess_type(nome)[0] or "application/octet-stream"
+    return nome, media
 
 
 def _sequencial(numero_controle):
@@ -132,8 +184,17 @@ def baixar_arquivos(sessao_db, lic, sessao=None):
             tipo = doc.get("tipoDocumentoNome") or "Documento"
             titulo = _nome_seguro(doc.get("titulo"),
                                   f"doc{doc.get('sequencialDocumento', 1)}")
-            extensao = ".pdf" if "pdf" in resp.headers.get(
-                "content-type", "").lower() else ""
+            # Extensão: a do título, senão a do content-type, senão a dos
+            # primeiros bytes — octet-stream sem extensão era o normal do
+            # PNCP e o download chegava ilegível no computador do usuário.
+            partes = resp.iter_content(1024 * 256)
+            primeira = next(partes, b"")
+            extensao = ""
+            if not _TEM_EXTENSAO.search(titulo):
+                tipo_http = resp.headers.get(
+                    "content-type", "").split(";")[0].strip().lower()
+                extensao = (EXTENSAO_POR_TIPO.get(tipo_http)
+                            or extensao_do_conteudo(primeira))
             # Prefixo com o sequencial: dois documentos de mesmo título — caso
             # comum em edital retificado — gravavam no MESMO arquivo. O segundo
             # truncava o primeiro e as duas linhas do banco passavam a apontar
@@ -142,7 +203,7 @@ def baixar_arquivos(sessao_db, lic, sessao=None):
             caminho = os.path.join(pasta, f"{ordem}-{titulo}{extensao}")
             tamanho = 0
             with open(caminho, "wb") as f:
-                for parte in resp.iter_content(1024 * 256):
+                for parte in chain([primeira], partes):
                     tamanho += len(parte)
                     if tamanho > MAX_TAMANHO:
                         raise RuntimeError("arquivo maior que o limite")
