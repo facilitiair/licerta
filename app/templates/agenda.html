@@ -39,8 +39,6 @@
          title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</a>
       <span class="text-xs text-slate-500">{{ lic.municipio_nome }}/{{ lic.uf }} ·
         {{ lic.valor_total_estimado|dinheiro }}</span>
-      <a href="/licitacoes/{{ lic.id }}"
-         class="text-blue-700 underline text-xs font-semibold">abrir</a>
       {% if lic.link_pncp or lic.link_sistema_origem %}
       <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
          class="text-slate-400 underline text-xs"

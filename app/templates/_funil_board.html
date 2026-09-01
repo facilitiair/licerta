@@ -42,8 +42,6 @@
                  if c.dias is not none and c.dias <= 3
                else 'bg-slate-100' }}">
             <i data-lucide="hourglass" class="lucide"></i> {{ lic.data_encerramento_proposta|quando }}</span>
-          <a href="/licitacoes/{{ lic.id }}"
-             class="text-blue-700 underline font-semibold">abrir</a>
         </p>
         <div class="flex gap-1 mt-2 flex-wrap">
           {% set rotulos = {'novo': '↩ voltar a triar', 'analisando': 'analisar',

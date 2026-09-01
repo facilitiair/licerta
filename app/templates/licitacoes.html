@@ -187,7 +187,6 @@
                        filtros.ordenar == 'valor_desc') }}
         {% endcall %}
       </th>
-      <th class="px-3 py-2"></th>
     </tr>
   </thead>
   <tbody class="divide-y divide-slate-100">
@@ -224,20 +223,18 @@
           {% if m.favorito %}<i data-lucide="star"
              class="lucide text-amber-500"></i>{% endif %}
         {% endif %}
-        <span class="line-clamp-2 text-slate-700"
+        {# O próprio texto abre o detalhe: azula sob o mouse, sem botão. #}
+        <span hx-get="/licitacoes/{{ l.id }}/detalhe?perfil_id={{ filtros.perfil_id or 0 }}"
+              hx-target="#det{{ l.id }}" hx-swap="innerHTML"
+              class="line-clamp-2 text-slate-700 cursor-pointer
+                     hover:text-blue-700"
               title="{{ l.objeto or '' }}">{{ l.objeto|sentenca }}</span></td>
       <td class="px-3 py-2 text-right whitespace-nowrap font-medium">
         {{ l.valor_total_estimado|dinheiro }}</td>
-      <td class="px-3 py-2">
-        <button hx-get="/licitacoes/{{ l.id }}/detalhe?perfil_id={{ filtros.perfil_id or 0 }}"
-                hx-target="#det{{ l.id }}" hx-swap="innerHTML"
-                class="text-xs border border-blue-200 text-blue-700 px-2 py-1
-                       rounded-lg hover:bg-blue-50 font-medium
-                       whitespace-nowrap">abrir ▾</button></td>
     </tr>
-    <tr><td colspan="7" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
+    <tr><td colspan="6" id="det{{ l.id }}" class="bg-slate-50/60"></td></tr>
     {% else %}
-    <tr><td colspan="7">
+    <tr><td colspan="6">
       {% if vivo %}
       <p class="px-3 py-4 text-center text-sm text-slate-500">Nada por aqui
         com esses filtros — mas buscamos ao vivo no PNCP e encontramos, logo
