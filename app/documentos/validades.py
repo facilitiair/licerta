@@ -161,9 +161,15 @@ _MESES = {"janeiro": 1, "fevereiro": 2, "março": 3, "marco": 3, "abril": 4,
           "maio": 5, "junho": 6, "julho": 7, "agosto": 8, "setembro": 9,
           "outubro": 10, "novembro": 11, "dezembro": 12}
 
+_DATA = (r"\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}"
+         r"|\d{1,2}\s+de\s+\w+\s+de\s+\d{4}")
 _PADRAO_DATA = re.compile(
     r"(?:v[áa]lid[ao][^.\n]{0,40}?|validade[^.\n]{0,40}?|vencimento[^.\n]{0,40}?)"
-    r"(\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})",
+    rf"({_DATA})"
+    # O CRF do FGTS escreve "Validade: 19/08/2026 a 17/09/2026" — o fim do
+    # intervalo é a validade; pegar a primeira data marcava o documento
+    # novo como vencido.
+    rf"(?:\s*(?:a|à|ate|até)\s*({_DATA}))?",
     re.IGNORECASE)
 
 
@@ -206,8 +212,9 @@ def sugerir_validade(caminho_relativo, hoje=None):
         return None
     hoje = hoje or hoje_local()
     candidatas = []
-    for bruto in _PADRAO_DATA.findall(texto):
-        iso = _para_iso(bruto)
+    for inicio, fim in _PADRAO_DATA.findall(texto):
+        # num intervalo "19/08/2026 a 17/09/2026", a validade é o FIM
+        iso = _para_iso(fim or inicio)
         if not iso:
             continue
         data = _data_iso(iso)

@@ -138,6 +138,17 @@ def test_sugestao_de_validade_em_pdf(tmp_path, monkeypatch):
     assert validades.sugerir_validade("cnd.pdf", hoje=HOJE) == "2026-09-05"
 
 
+def test_validade_em_intervalo_pega_o_fim():
+    """CRF do FGTS: 'Validade: 19/08/2026 a 17/09/2026' — pegar a primeira
+    data marcava o certificado NOVO como vencido há dias."""
+    achados = validades._PADRAO_DATA.findall(
+        "Validade: 19/08/2026 a 17/09/2026")
+    assert achados == [("19/08/2026", "17/09/2026")]
+    # data única continua funcionando (grupo do fim vem vazio)
+    achados = validades._PADRAO_DATA.findall("VÁLIDA ATÉ 31/10/2026")
+    assert achados == [("31/10/2026", "")]
+
+
 def test_tipo_do_conteudo_frases_especificas():
     """Nome mutilado pelo celular ('Certido de Dvida Ativa') não diz o
     tipo — o texto do PDF, com acento intacto, diz. Cabeçalho não pode
@@ -177,7 +188,7 @@ def test_data_no_passado_distante_nao_e_sugerida():
     """'Lei de 12/03/1990' não pode virar validade."""
     padrao = validades._PADRAO_DATA
     achados = padrao.findall("documento válido até 12/03/1990 conforme lei")
-    assert achados == ["12/03/1990"]       # regex acha, o filtro descarta
+    assert achados == [("12/03/1990", "")]  # regex acha, o filtro descarta
     # o filtro de faixa fica em sugerir_validade; testado via faixa:
     from datetime import timedelta
     iso = validades._para_iso("12/03/1990")
