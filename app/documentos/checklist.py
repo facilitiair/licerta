@@ -44,6 +44,43 @@ def _norm(texto):
     return "".join(c for c in texto if not unicodedata.combining(c))
 
 
+# Frases ESPECÍFICAS para reconhecer o tipo pelo CONTEÚDO do PDF — usadas
+# quando o nome do arquivo não diz nada (celular que envia o nome sem as
+# letras acentuadas: "Certido de Dvida Ativa"). Aqui palavra solta é
+# proibida: todo PDF oficial carrega "SERVIÇO PÚBLICO FEDERAL" ou "ESTADO
+# DO PIAUÍ" no cabeçalho, e um "federal" genérico marcaria a certidão do
+# CREA como CND Federal. A ordem importa: a primeira que casar decide.
+REGRAS_CONTEUDO = [
+    (("certificado de regularidade do fgts",), "CRF do FGTS"),
+    (("debitos trabalhistas", "justica do trabalho"), "CNDT Trabalhista"),
+    (("registro e quitacao", "conselho regional de engenharia",
+      "conselho de arquitetura"), "Registro CREA/CAU"),
+    (("falencia", "concordata", "recuperacao judicial"),
+     "Certidão de Falência"),
+    (("receita federal", "divida ativa da uniao",
+      "procuradoria-geral da fazenda nacional"), "CND Federal (RFB/PGFN)"),
+    (("divida ativa do estado", "fazenda publica estadual", "sefaz",
+      "secretaria da fazenda do estado",
+      "secretaria de fazenda do estado"), "CND Estadual"),
+    (("divida ativa do municipio", "fazenda publica municipal",
+      "codigo tributario do municipio",
+      "secretaria municipal de financas"), "CND Municipal"),
+    (("balanco patrimonial",), "Balanço Patrimonial"),
+    (("acervo tecnico",), "CAT"),
+    (("atestado de capacidade",), "Atestado de Capacidade"),
+    (("alvara de funcionamento", "alvara de localizacao"), "Alvará"),
+]
+
+
+def tipo_do_conteudo(texto):
+    """Tipo lido do texto do PDF — só frases específicas, ordem decide."""
+    plano = _norm(texto)
+    for frases, tipo in REGRAS_CONTEUDO:
+        if any(f in plano for f in frases):
+            return tipo
+    return None
+
+
 def tipo_sugerido(exigencia):
     """Qual tipo de documento do dossiê esta exigência provavelmente pede."""
     plano = _norm(exigencia)

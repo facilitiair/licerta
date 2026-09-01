@@ -180,6 +180,20 @@ def _para_iso(bruto):
         return None
 
 
+def texto_do_pdf(caminho_relativo):
+    """Texto das primeiras páginas de um PDF do dossiê ('' se não der)."""
+    caminho = os.path.join(PASTA_DADOS, caminho_relativo or "")
+    if not (caminho_relativo and caminho.lower().endswith(".pdf")
+            and os.path.exists(caminho)):
+        return ""
+    try:
+        from pypdf import PdfReader
+        return "\n".join((p.extract_text() or "")
+                         for p in PdfReader(caminho).pages[:5])
+    except Exception:  # noqa: BLE001 — sugestão é cortesia
+        return ""
+
+
 def sugerir_validade(caminho_relativo, hoje=None):
     """Tenta ler a validade de um PDF de certidão — SUGESTÃO, nunca decisão.
 
@@ -187,15 +201,8 @@ def sugerir_validade(caminho_relativo, hoje=None):
     primeiras páginas. Datas no passado distante ou absurdas no futuro são
     descartadas (é mais provável ser a data de emissão ou um artigo de lei).
     """
-    caminho = os.path.join(PASTA_DADOS, caminho_relativo or "")
-    if not (caminho_relativo and caminho.lower().endswith(".pdf")
-            and os.path.exists(caminho)):
-        return None
-    try:
-        from pypdf import PdfReader
-        texto = "\n".join((p.extract_text() or "")
-                          for p in PdfReader(caminho).pages[:5])
-    except Exception:  # noqa: BLE001 — sugestão é cortesia
+    texto = texto_do_pdf(caminho_relativo)
+    if not texto:
         return None
     hoje = hoje or hoje_local()
     candidatas = []

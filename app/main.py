@@ -1824,11 +1824,24 @@ async def documentos_upload(request: Request,
             if not doc.validade:
                 doc.validade = validades_mod.sugerir_validade(
                     doc.caminho_local)
+            if doc.tipo == "Outro":
+                # Celular costuma mandar o nome sem as letras acentuadas
+                # ("Certido de Dvida Ativa") e o nome deixa de dizer o
+                # tipo — o conteúdo do PDF, com acento intacto, diz.
+                from .documentos.checklist import tipo_do_conteudo
+                doc.tipo = (tipo_do_conteudo(
+                    validades_mod.texto_do_pdf(doc.caminho_local))
+                    or "Outro")
             com_validade += 1 if doc.validade else 0
             adicionados += 1
         s.commit()
         if not adicionados:
-            return RedirectResponse("/documentos", status_code=303)
+            # Sem isso o clique no botão com o campo vazio recarregava a
+            # página em silêncio — "não aconteceu nada" era o sintoma real.
+            aviso = ("Nenhum arquivo chegou — use “Escolher arquivos” "
+                     "e confira se os nomes aparecem ao lado antes de enviar.")
+            return RedirectResponse(f"/documentos?aviso={quote(aviso)}",
+                                    status_code=303)
         aviso = (f"{adicionados} documento{'s' if adicionados != 1 else ''} "
                  f"adicionado{'s' if adicionados != 1 else ''}, "
                  f"{com_validade} com validade lida automaticamente — "

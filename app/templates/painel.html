@@ -7,11 +7,6 @@
     <p class="text-xs text-slate-500">
       {% if ultima_coleta %}
         Atualizado {{ ultima_coleta.fim.strftime('%d/%m às %H:%M') }}
-        {% if not ultima_coleta.sucesso %}
-        <a href="/logs" title="a última atualização teve tropeços — veja o
-           diagnóstico" class="align-middle text-amber-600">
-          <i data-lucide="triangle-alert" class="lucide"></i></a>
-        {% endif %}
       {% else %}Ainda sem dados — atualize agora{% endif %}
       · busca automática ao longo do dia</p>
   </div>

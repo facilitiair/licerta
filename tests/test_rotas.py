@@ -107,6 +107,15 @@ def test_post_nao_da_erro_500(cliente, rota, dados):
     assert resposta.status_code < 500, f"{rota} -> {resposta.status_code}"
 
 
+def test_upload_sem_arquivo_avisa_em_vez_de_silencio(cliente):
+    """Regressão: enviar o formulário do dossiê com o campo vazio
+    recarregava a página sem UMA palavra — 'cliquei e nada aconteceu'."""
+    r = cliente.post("/documentos", follow_redirects=False)
+    assert r.status_code == 303
+    assert "aviso=" in r.headers["location"], \
+        "o redirect de upload vazio precisa levar o aviso"
+
+
 def test_detalhe_de_licitacao_existente_abre(cliente):
     """Regressão: o decorador de /licitacoes/{id}/detalhe chegou a ficar
     pendurado no helper _contexto_detalhe — todo clique devolvia 422 e a

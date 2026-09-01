@@ -138,6 +138,34 @@ def test_sugestao_de_validade_em_pdf(tmp_path, monkeypatch):
     assert validades.sugerir_validade("cnd.pdf", hoje=HOJE) == "2026-09-05"
 
 
+def test_tipo_do_conteudo_frases_especificas():
+    """Nome mutilado pelo celular ('Certido de Dvida Ativa') não diz o
+    tipo — o texto do PDF, com acento intacto, diz. Cabeçalho não pode
+    enganar: a certidão do CREA carrega 'SERVIÇO PÚBLICO FEDERAL'."""
+    from app.documentos.checklist import tipo_do_conteudo
+    crea = ("SERVIÇO PÚBLICO FEDERAL\nCONSELHO REGIONAL DE ENGENHARIA "
+            "E AGRONOMIA DO PIAUÍ\nCERTIDÃO DE REGISTRO E QUITAÇÃO DE "
+            "PESSOA JURÍDICA")
+    assert tipo_do_conteudo(crea) == "Registro CREA/CAU"
+    assert tipo_do_conteudo(
+        "SECRETARIA DA FAZENDA DO ESTADO — certidão quanto à "
+        "DÍVIDA ATIVA DO ESTADO") == "CND Estadual"
+    assert tipo_do_conteudo(
+        "ESTADO DO PIAUÍ\nPREFEITURA MUNICIPAL DE TERESINA\n"
+        "SECRETARIA MUNICIPAL DE FINANÇAS - SEMF\nCERTIDAO CONJUNTA "
+        "POSITIVA COM EFEITO NEGATIVA E DA DIVIDA ATIVA DO "
+        "MUNICIPIO") == "CND Municipal"
+    assert tipo_do_conteudo(
+        "PODER JUDICIÁRIO\nCERTIDÃO NEGATIVA DE FALÊNCIA, CONCORDATA, "
+        "RECUPERAÇÃO JUDICIAL") == "Certidão de Falência"
+    assert tipo_do_conteudo(
+        "CERTIFICADO DE REGULARIDADE DO FGTS - CRF") == "CRF do FGTS"
+    assert tipo_do_conteudo(
+        "CERTIDÃO NEGATIVA DE DÉBITOS TRABALHISTAS") == "CNDT Trabalhista"
+    assert tipo_do_conteudo("") is None
+    assert tipo_do_conteudo("texto qualquer sem certidão") is None
+
+
 def test_para_iso_formatos():
     assert validades._para_iso("05/09/2026") == "2026-09-05"
     assert validades._para_iso("2026-09-05") == "2026-09-05"
