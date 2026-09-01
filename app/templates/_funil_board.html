@@ -28,8 +28,10 @@
           <span class="px-1.5 rounded-full font-semibold bg-amber-100
                 text-amber-800">{{ lic.situacao }}</span>{% endif %}
         </p>
-        <p class="my-1.5 leading-snug line-clamp-3 text-slate-700"
-           title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</p>
+        <a href="/licitacoes/{{ lic.id }}"
+           class="block my-1.5 leading-snug line-clamp-3 text-slate-700
+                  hover:text-blue-700"
+           title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</a>
         <p class="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
           <span class="font-semibold text-slate-700">{{ lic.valor_total_estimado|dinheiro }}</span>
           <span class="px-1.5 py-0.5 rounded-md
@@ -40,9 +42,8 @@
                  if c.dias is not none and c.dias <= 3
                else 'bg-slate-100' }}">
             <i data-lucide="hourglass" class="lucide"></i> {{ lic.data_encerramento_proposta|quando }}</span>
-          {% if lic.link_pncp or lic.link_sistema_origem %}
-          <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
-             class="text-blue-700 underline">edital ↗</a>{% endif %}
+          <a href="/licitacoes/{{ lic.id }}"
+             class="text-blue-700 underline font-semibold">abrir</a>
         </p>
         <div class="flex gap-1 mt-2 flex-wrap">
           {% set rotulos = {'novo': '↩ voltar a triar', 'analisando': 'analisar',

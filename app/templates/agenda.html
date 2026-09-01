@@ -34,13 +34,18 @@
             'analisando':'bg-blue-100 text-blue-800',
             'vou_participar':'bg-green-100 text-green-800'}
            .get(m.status, 'bg-slate-100') }}">{{ 'a triar' if m.status == 'novo' else m.status.replace('_',' ') }}</span>
-      <span class="flex-1 min-w-60 line-clamp-2"
-            title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</span>
+      <a href="/licitacoes/{{ lic.id }}"
+         class="flex-1 min-w-60 line-clamp-2 hover:text-blue-700"
+         title="{{ lic.objeto or '' }}">{{ lic.objeto|sentenca }}</a>
       <span class="text-xs text-slate-500">{{ lic.municipio_nome }}/{{ lic.uf }} ·
         {{ lic.valor_total_estimado|dinheiro }}</span>
+      <a href="/licitacoes/{{ lic.id }}"
+         class="text-blue-700 underline text-xs font-semibold">abrir</a>
       {% if lic.link_pncp or lic.link_sistema_origem %}
       <a href="{{ lic.link_pncp or lic.link_sistema_origem }}" target="_blank"
-         class="text-blue-700 underline text-xs">abrir</a>{% endif %}
+         class="text-slate-400 underline text-xs"
+         title="abre o portal de origem, fora da plataforma">portal ↗</a>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

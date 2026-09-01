@@ -49,6 +49,8 @@ ROTAS_GET = [
     "/licitacoes?status=novo&ordenar=valor_asc",
     "/licitacoes?ordenar=inexistente",      # ordenação inválida -> padrão
     "/licitacoes/999999/detalhe",           # 404 sem 500
+    "/licitacoes/999999",                   # página própria: 404 sem 500
+    "/licitacoes/1",                        # página própria da primeira
     "/licitacoes/exportar?formato=csv&modalidade=abc",
     "/licitacoes/exportar?formato=xlsx",
     "/documentos",

@@ -429,7 +429,9 @@ async def painel(request: Request):
                 "detalhe": f"{lic.modalidade_nome or 'Licitação'} — "
                            f"{lic.municipio_nome or ''}/{lic.uf or ''}: "
                            f"{_filtro_sentenca(lic.objeto or '')[:120]}",
-                "rota": "/agenda", "rotulo": "ver na agenda"})
+                # Direto na tela do item (UI §11), nunca numa lista genérica
+                "rota": f"/licitacoes/{lic.id}",
+                "rotulo": "abrir a oportunidade"})
 
         # 2º — certidões da empresa vencendo (vermelho só ≤ 7 dias, §5)
         docs_alerta = []
@@ -1160,48 +1162,68 @@ def licitacoes_lista(request: Request, pagina: int = 1):
 
 
 @app.get("/licitacoes/{lic_id}/detalhe", response_class=HTMLResponse)
+def _contexto_detalhe(s, request, lic, perfil_id=0):
+    """Tudo que a visão de uma licitação carrega — usado pelo painel
+    embutido na lista E pela página própria /licitacoes/{id}."""
+    consulta = (s.query(PerfilMatch).join(PerfilBusca)
+                .filter(PerfilMatch.licitacao_id == lic.id,
+                        PerfilBusca.usuario_id == eu(request).id))
+    if perfil_id:
+        consulta = consulta.filter_by(perfil_id=perfil_id)
+    matches = consulta.all()
+    for m in matches:                # abrir o detalhe marca como lido
+        m.lido = True
+    s.commit()
+    arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic.id).all()
+    ficha = s.query(EditalFicha).filter_by(licitacao_id=lic.id).first()
+    from .radar.alteracoes import CAMPOS_VIGIADOS
+    alteracoes = (s.query(LicitacaoAlteracao)
+                  .filter_by(licitacao_id=lic.id)
+                  .order_by(LicitacaoAlteracao.detectada_em.desc())
+                  .limit(20).all())
+    dados = _dados_ficha(ficha)
+    minutas = (s.query(Minuta).filter_by(licitacao_id=lic.id)
+               .order_by(Minuta.criada_em.desc()).all())
+    from .db import Parecer
+    pareceres_da_lic = (s.query(Parecer).filter_by(licitacao_id=lic.id)
+                        .order_by(Parecer.criado_em.desc())
+                        .limit(3).all())
+    return {"lic": lic, "matches": matches, "arquivos": arquivos,
+            "hoje_iso": agora().strftime("%Y-%m-%d"),
+            "ficha": ficha, "dados": dados, "alteracoes": alteracoes,
+            "rotulos_alteracao": CAMPOS_VIGIADOS, "minutas": minutas,
+            "pareceres_da_lic": pareceres_da_lic,
+            "sou_admin": _sou_admin(request),
+            "acompanho": any(m.status == "vou_participar" for m in matches),
+            **_contexto_checklist(s, dados, lic)}
+
+
 def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
     s = Sessao()
     try:
         lic = s.get(Licitacao, lic_id)
         if not lic:
             return HTMLResponse("Licitação não encontrada.", status_code=404)
-        consulta = (s.query(PerfilMatch).join(PerfilBusca)
-                    .filter(PerfilMatch.licitacao_id == lic_id,
-                            PerfilBusca.usuario_id == eu(request).id))
-        if perfil_id:
-            consulta = consulta.filter_by(perfil_id=perfil_id)
-        matches = consulta.all()
-        for m in matches:            # abrir o detalhe marca como lido
-            m.lido = True
-        s.commit()
-        arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
-        ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
-        from .radar.alteracoes import CAMPOS_VIGIADOS
-        alteracoes = (s.query(LicitacaoAlteracao)
-                      .filter_by(licitacao_id=lic_id)
-                      .order_by(LicitacaoAlteracao.detectada_em.desc())
-                      .limit(20).all())
-        dados = _dados_ficha(ficha)
-        minutas = (s.query(Minuta).filter_by(licitacao_id=lic_id)
-                   .order_by(Minuta.criada_em.desc()).all())
-        from .db import Parecer
-        pareceres_da_lic = (s.query(Parecer).filter_by(licitacao_id=lic_id)
-                            .order_by(Parecer.criado_em.desc())
-                            .limit(3).all())
-        return templates.TemplateResponse(request, "_licitacao_detalhe.html",
-                                          {"lic": lic, "matches": matches,
-                                           "arquivos": arquivos,
-                                           "ficha": ficha, "dados": dados,
-                                           "alteracoes": alteracoes,
-                                           "rotulos_alteracao": CAMPOS_VIGIADOS,
-                                           "minutas": minutas,
-                                           "pareceres_da_lic": pareceres_da_lic,
-                                           "sou_admin": _sou_admin(request),
-                                           "acompanho": any(
-                                               m.status == "vou_participar"
-                                               for m in matches),
-                                           **_contexto_checklist(s, dados, lic)})
+        return templates.TemplateResponse(
+            request, "_licitacao_detalhe.html",
+            _contexto_detalhe(s, request, lic, perfil_id))
+    finally:
+        s.close()
+
+
+@app.get("/licitacoes/{lic_id:int}", response_class=HTMLResponse)
+def licitacao_pagina(request: Request, lic_id: int):
+    """A página da oportunidade DENTRO da plataforma (UI §11): tudo num
+    lugar só — ficha, checklist, parecer, minutas, triagem — em vez de
+    jogar a pessoa no portal externo para decidir."""
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        return templates.TemplateResponse(
+            request, "licitacao.html",
+            _contexto_detalhe(s, request, lic))
     finally:
         s.close()
 

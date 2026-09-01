@@ -136,7 +136,8 @@
   </div>
   <div class="card divide-y divide-slate-100">
     {% for m in andamento %}
-    <div class="px-4 py-3 hover:bg-slate-50/70 transition-colors">
+    <a href="/licitacoes/{{ m.lic.id }}"
+       class="block px-4 py-3 hover:bg-slate-50/70 transition-colors">
       <p class="text-xs flex items-center gap-1.5 flex-wrap">
         {{ c.badge(m.lic.data_encerramento_proposta|quando,
                    'critico' if m.dias is not none and m.dias <= 1
@@ -152,7 +153,7 @@
       </p>
       <p class="text-sm mt-1 line-clamp-2 text-slate-700"
          title="{{ m.lic.objeto or '' }}">{{ m.lic.objeto|sentenca }}</p>
-    </div>
+    </a>
     {% endfor %}
   </div>
 </section>

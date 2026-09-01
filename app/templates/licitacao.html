@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "_componentes.html" as c %}
+{% block titulo %}Oportunidade — Licerta{% endblock %}
+{% block conteudo %}
+<div class="mb-4">
+  <p class="text-xs text-slate-500 mb-1">
+    <a href="/licitacoes" class="underline">Oportunidades</a> ·
+    {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }}
+    · {{ lic.municipio_nome or '' }}{{ '/' + lic.uf if lic.uf }}</p>
+  <div class="flex items-start gap-3 flex-wrap">
+    <h1 class="text-xl font-bold max-w-3xl" title="{{ lic.objeto or '' }}">
+      {{ (lic.objeto|sentenca)[:160] }}</h1>
+    <span class="ml-auto flex items-center gap-2">
+      {{ c.badge(lic.data_encerramento_proposta|quando,
+                 'critico' if acompanho and
+                   (lic.data_encerramento_proposta or '')[:10] <= hoje_iso
+                 else 'neutro', 'alarm-clock') }}
+      {% if lic.situacao %}{{ c.badge(lic.situacao) }}{% endif %}
+    </span>
+  </div>
+</div>
+
+<div class="card">
+  {% include "_licitacao_detalhe.html" %}
+</div>
+{% endblock %}
