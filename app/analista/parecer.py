@@ -87,11 +87,13 @@ def _base_juridica():
     return "\n\n---\n\n".join(partes)
 
 
-def gerar_parecer(sessao_db, lic, usuario=None, hoje=None):
-    """Gera o parecer completo. Devolve o Parecer gravado.
+def montar_insumos(sessao_db, lic, hoje=None):
+    """Reúne tudo que uma perícia precisa: edital, ficha, prazos por
+    código, dossiê com validade aferida na sessão. Usado pelo parecer
+    rápido e pela perícia completa (analista/pericia.py).
 
-    Levanta ParecerIndevido quando faltam insumos (a mensagem orienta) e
-    SemChaveIA quando a análise automática está desligada.
+    Levanta ParecerIndevido quando faltam insumos e SemChaveIA quando a
+    análise automática está desligada.
     """
     hoje = hoje or hoje_local()
     cliente.exigir_chave()
@@ -149,6 +151,14 @@ def gerar_parecer(sessao_db, lic, usuario=None, hoje=None):
         "dossie": _dossie(sessao_db, sessao_data),
         "data_de_hoje": hoje.strftime("%d/%m/%Y"),
     }
+    return {"entrada": entrada, "texto_edital": texto_edital,
+            "dados_ficha": dados_ficha, "data_sessao": sessao_data}
+
+
+def gerar_parecer(sessao_db, lic, usuario=None, hoje=None):
+    """Gera o parecer rápido (uma chamada). Devolve o Parecer gravado."""
+    insumos = montar_insumos(sessao_db, lic, hoje)
+    entrada, texto_edital = insumos["entrada"], insumos["texto_edital"]
     mensagem = (json.dumps(entrada, ensure_ascii=False, indent=1)
                 + "\n\nBASE JURÍDICA:\n\n" + _base_juridica()
                 + "\n\nTEXTO DO EDITAL E ANEXOS:\n\n"

@@ -1604,6 +1604,46 @@ def licitacao_parecer(request: Request, lic_id: int):
         s.close()
 
 
+@app.post("/licitacoes/{lic_id}/pericia", response_class=HTMLResponse)
+def licitacao_pericia(request: Request, lic_id: int):
+    """Dispara a perícia completa (pipeline de peritos) em segundo plano."""
+    from .analista import parecer as parecer_mod
+    from .analista import pericia as pericia_mod
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        try:
+            comecou = pericia_mod.iniciar(s, lic, usuario=eu(request))
+        except (parecer_mod.ParecerIndevido, SemChaveIA) as e:
+            corpo = escape(str(e))
+            extra = (' <a href="/config" class="underline">Configurações</a>'
+                     if isinstance(e, SemChaveIA) and _sou_admin(request)
+                     else "")
+            return HTMLResponse(
+                f'<div class="faixa faixa-atencao text-xs">{corpo}{extra}'
+                '</div>')
+        except Exception:  # noqa: BLE001 — erro técnico não vaza (UI §7)
+            log.exception("Perícia da licitação %s não iniciou", lic_id)
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">A perícia não '
+                'começou desta vez. Tente de novo em instantes.</div>')
+        if not comecou:
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">Já existe uma '
+                'perícia desta licitação em andamento — o resultado '
+                'aparece em <a href="/pareceres" class="underline">'
+                'Pareceres</a>.</div>')
+        return HTMLResponse(
+            '<div class="faixa text-xs">Perícia iniciada: leitor de '
+            'caderno, peritos e síntese — leva alguns minutos. O parecer '
+            'aparece em <a href="/pareceres" class="underline">Pareceres'
+            '</a> quando pronto.</div>')
+    finally:
+        s.close()
+
+
 @app.get("/pareceres", response_class=HTMLResponse)
 def pareceres_lista(request: Request):
     from .db import Parecer

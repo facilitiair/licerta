@@ -55,17 +55,18 @@
   {% include "_ficha_edital.html" %}
 
   <div class="card p-3 flex items-center gap-3 flex-wrap text-xs">
-    <button hx-post="/licitacoes/{{ lic.id }}/parecer"
+    <button hx-post="/licitacoes/{{ lic.id }}/pericia"
             hx-target="#parecermsg{{ lic.id }}" hx-swap="innerHTML"
             hx-disabled-elt="this"
-            hx-confirm="Gerar o parecer completo? A perícia lê o edital inteiro e o seu dossiê no modelo mais forte — custa mais que a ficha (em torno de meio dólar)."
+            hx-confirm="Iniciar a perícia completa? O caderno passa pelo leitor de documentos, pelos peritos de atestados e de balanço e pela síntese no modelo mais forte. Leva alguns minutos e custa alguns dólares (em geral entre 2 e 5)."
             class="btn-sec" style="min-height: 36px">
       <i data-lucide="file-search" class="lucide"></i>
-      Parecer do analista
-      <span class="htmx-indicator">— periciando (até 2 min)...</span>
+      Perícia completa
+      <span class="htmx-indicator">— iniciando...</span>
     </button>
-    <span class="text-slate-500">Perícia completa: edital × seu dossiê ×
-      base jurídica, com recomendação de participar ou não.
+    <span class="text-slate-500">O analista sênior: leitor de caderno,
+      perito de atestados, perito contábil e síntese — edital × seu dossiê
+      × base jurídica, com recomendação e laudos anexos.
       {% if pareceres_da_lic %}
         Já gerados:
         {% for p in pareceres_da_lic %}

@@ -86,6 +86,7 @@ ROTAS_POST = [
     ("/documentos/999999/arquivar", {}),
     ("/licitacoes/999999/minuta", {}),                # 404 sem 500
     ("/licitacoes/999999/parecer", {}),               # 404 sem 500
+    ("/licitacoes/999999/pericia", {}),               # 404 sem 500
     ("/funil/mover/999999/novo", {}),                 # id inexistente
     ("/funil/sugerir", {}),                           # sem chave -> redirect
     ("/funil/mover/1/status_invalido", {}),           # status inválido
