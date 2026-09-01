@@ -1073,6 +1073,10 @@ def _consulta_licitacoes(s, filtros):
                          (PerfilMatch.perfil_id == int(filtros["perfil_id"])))
         if filtros.get("status"):
             consulta = consulta.filter(PerfilMatch.status == filtros["status"])
+        else:
+            # Descartado não disputa espaço com o ativo (UI §10): só
+            # aparece quando o filtro de triagem pede por ele.
+            consulta = consulta.filter(PerfilMatch.status != "descartado")
     elif filtros.get("status"):
         consulta = (consulta.join(PerfilMatch,
                                   PerfilMatch.licitacao_id == Licitacao.id)
