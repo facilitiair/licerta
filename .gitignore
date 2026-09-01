@@ -10,3 +10,4 @@ data/editais/
 *.db-wal
 data/.segredo_sessao
 data/vapid_privada.pem
+entrada/

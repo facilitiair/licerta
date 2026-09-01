@@ -1680,15 +1680,22 @@ def parecer_ver(request: Request, parecer_id: int):
 
 
 @app.get("/pareceres/{parecer_id}/baixar")
-def parecer_baixar(request: Request, parecer_id: int):
+def parecer_baixar(request: Request, parecer_id: int, formato: str = "docx"):
     from .db import Parecer
+    from .docx_export import MEDIA_DOCX, markdown_para_docx
     s = Sessao()
     try:
         parecer = s.get(Parecer, parecer_id)
         if not parecer:
             return HTMLResponse("Parecer não encontrado.", status_code=404)
-        nome = f"parecer-{parecer.licitacao_id}.md"
-        return Response(parecer.texto, media_type="text/markdown",
+        if formato == "md":
+            nome = f"parecer-{parecer.licitacao_id}.md"
+            return Response(parecer.texto, media_type="text/markdown",
+                            headers={"Content-Disposition":
+                                     f'attachment; filename="{nome}"'})
+        nome = f"parecer-{parecer.licitacao_id}.docx"
+        return Response(markdown_para_docx(parecer.texto),
+                        media_type=MEDIA_DOCX,
                         headers={"Content-Disposition":
                                  f'attachment; filename="{nome}"'})
     finally:
@@ -1774,14 +1781,21 @@ def minuta_ver(request: Request, minuta_id: int):
 
 
 @app.get("/minutas/{minuta_id}/baixar")
-def minuta_baixar(request: Request, minuta_id: int):
+def minuta_baixar(request: Request, minuta_id: int, formato: str = "docx"):
+    from .docx_export import MEDIA_DOCX, markdown_para_docx
     s = Sessao()
     try:
         minuta = s.get(Minuta, minuta_id)
         if not minuta:
             return HTMLResponse("Minuta não encontrada.", status_code=404)
-        nome = f"minuta-{minuta.tipo}-{minuta.licitacao_id}.md"
-        return Response(minuta.texto, media_type="text/markdown",
+        if formato == "md":
+            nome = f"minuta-{minuta.tipo}-{minuta.licitacao_id}.md"
+            return Response(minuta.texto, media_type="text/markdown",
+                            headers={"Content-Disposition":
+                                     f'attachment; filename="{nome}"'})
+        nome = f"minuta-{minuta.tipo}-{minuta.licitacao_id}.docx"
+        return Response(markdown_para_docx(minuta.texto),
+                        media_type=MEDIA_DOCX,
                         headers={"Content-Disposition":
                                  f'attachment; filename="{nome}"'})
     finally:
