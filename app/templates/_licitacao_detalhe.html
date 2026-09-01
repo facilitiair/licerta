@@ -1,5 +1,10 @@
 {% import "_componentes.html" as c %}
 <div class="p-4 text-sm space-y-3">
+  {% if recolhivel %}
+  <p class="text-right -mb-2">
+    <button onclick="const c = this.closest('td'); if (c) c.innerHTML = ''"
+            class="text-xs text-slate-500 underline">Recolher</button></p>
+  {% endif %}
   <div class="grid sm:grid-cols-2 gap-x-8 gap-y-1">
     <p><b>Nº no PNCP:</b> {{ lic.numero_controle_pncp }}</p>
     {% if lic.processo %}<p><b>Processo:</b> {{ lic.processo }}</p>{% endif %}

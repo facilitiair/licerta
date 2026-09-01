@@ -168,6 +168,20 @@ async def vida(app_):
         log.exception("Poda do cache no startup falhou")
     finally:
         s.close()
+    # Higiene dos casamentos: perfil editado no passado pode ter deixado
+    # matches órfãos de outros estados/palavras (defeito real de 01/09).
+    s = Sessao()
+    try:
+        from .radar.matcher import ressintonizar_matches
+        total = sum(ressintonizar_matches(s, p) for p in
+                    s.query(PerfilBusca).filter_by(ativo=True))
+        s.commit()
+        if total:
+            log.info("Higiene de casamentos no startup: %s removidos", total)
+    except Exception:  # noqa: BLE001
+        log.exception("Higiene de casamentos no startup falhou")
+    finally:
+        s.close()
     agendador.add_job(_job_coleta, "cron", id="coleta", replace_existing=True,
                       **_gatilho_coleta())
     agendador.add_job(_job_alerta, "interval", minutes=10, id="alerta",
@@ -889,6 +903,15 @@ async def perfil_salvar(request: Request):
         else:
             s.add(PerfilBusca(**dados, usuario_id=eu(request).id))
         s.commit()
+        if perfil:
+            # perfil mudou: casamentos antigos que não casam mais saem
+            # (preservando o que o usuário já triou/anotou/favoritou)
+            from .radar.matcher import ressintonizar_matches
+            removidos = ressintonizar_matches(s, perfil)
+            s.commit()
+            if removidos:
+                log.info("Perfil %s reeditado: %s casamentos antigos "
+                         "removidos", perfil.id, removidos)
         return RedirectResponse("/perfis", status_code=303)
     finally:
         s.close()
@@ -1212,9 +1235,10 @@ def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
         lic = s.get(Licitacao, lic_id)
         if not lic:
             return HTMLResponse("Licitação não encontrada.", status_code=404)
-        return templates.TemplateResponse(
-            request, "_licitacao_detalhe.html",
-            _contexto_detalhe(s, request, lic, perfil_id))
+        contexto = _contexto_detalhe(s, request, lic, perfil_id)
+        contexto["recolhivel"] = True     # aberto dentro da lista: dá
+        return templates.TemplateResponse(  # para fechar sem navegar
+            request, "_licitacao_detalhe.html", contexto)
     finally:
         s.close()
 

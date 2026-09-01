@@ -3,6 +3,12 @@
 {% block titulo %}Oportunidade — Licerta{% endblock %}
 {% block conteudo %}
 <div class="mb-4">
+  <p class="text-xs mb-2">
+    <a href="/licitacoes" class="btn-sec"
+       onclick="if (history.length > 1) { history.back(); return false; }"
+       style="min-height: 32px; display: inline-flex; align-items: center;
+              gap: 6px; text-decoration: none">
+      <i data-lucide="arrow-left" class="lucide"></i> Voltar</a></p>
   <p class="text-xs text-slate-500 mb-1">
     <a href="/licitacoes" class="underline">Oportunidades</a> ·
     {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }}

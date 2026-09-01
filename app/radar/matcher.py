@@ -145,3 +145,24 @@ def ordenar_licitacoes(lics, ordenacao):
     chave, reverso = CHAVES_ORDENACAO.get(ordenacao,
                                           CHAVES_ORDENACAO["encerramento_asc"])
     return sorted(lics, key=chave, reverse=reverso)
+
+
+def ressintonizar_matches(sessao_db, perfil):
+    """Depois que um perfil muda, os casamentos antigos que não casam mais
+    SAEM da lista — era o defeito de perfil 'PI' exibindo editais do Acre
+    herdados da época em que o perfil era nacional.
+
+    Preserva tudo que tem interação humana (triado no funil, favorito ou
+    anotado): decisão de gente não se apaga por edição de filtro.
+    Devolve quantos casamentos foram removidos.
+    """
+    from ..db import Licitacao, PerfilMatch
+    removidos = 0
+    for m in sessao_db.query(PerfilMatch).filter_by(perfil_id=perfil.id):
+        if m.status != "novo" or m.favorito or (m.anotacao or "").strip():
+            continue
+        lic = sessao_db.get(Licitacao, m.licitacao_id)
+        if lic is None or not licitacao_casa_perfil(lic, perfil):
+            sessao_db.delete(m)
+            removidos += 1
+    return removidos
