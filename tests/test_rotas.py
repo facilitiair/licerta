@@ -107,6 +107,20 @@ def test_post_nao_da_erro_500(cliente, rota, dados):
     assert resposta.status_code < 500, f"{rota} -> {resposta.status_code}"
 
 
+def test_detalhe_de_licitacao_existente_abre(cliente):
+    """Regressão: o decorador de /licitacoes/{id}/detalhe chegou a ficar
+    pendurado no helper _contexto_detalhe — todo clique devolvia 422 e a
+    lista nunca abria (o smoke acima só barra 500, deixou passar)."""
+    from app.db import Licitacao, Sessao
+    s = Sessao()
+    lic = s.query(Licitacao).first()
+    s.close()
+    if lic is None:
+        pytest.skip("banco local sem licitações")
+    r = cliente.get(f"/licitacoes/{lic.id}/detalhe?perfil_id=0")
+    assert r.status_code == 200, f"detalhe -> {r.status_code}"
+
+
 def test_sem_login_redireciona():
     with TestClient(app) as anonimo:
         r = anonimo.get("/licitacoes", follow_redirects=False)

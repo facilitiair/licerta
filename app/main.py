@@ -1161,7 +1161,6 @@ def licitacoes_lista(request: Request, pagina: int = 1):
         s.close()
 
 
-@app.get("/licitacoes/{lic_id}/detalhe", response_class=HTMLResponse)
 def _contexto_detalhe(s, request, lic, perfil_id=0):
     """Tudo que a visão de uma licitação carrega — usado pelo painel
     embutido na lista E pela página própria /licitacoes/{id}."""
@@ -1198,6 +1197,7 @@ def _contexto_detalhe(s, request, lic, perfil_id=0):
             **_contexto_checklist(s, dados, lic)}
 
 
+@app.get("/licitacoes/{lic_id}/detalhe", response_class=HTMLResponse)
 def licitacao_detalhe(request: Request, lic_id: int, perfil_id: int = 0):
     s = Sessao()
     try:
