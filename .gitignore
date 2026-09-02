@@ -11,3 +11,6 @@ data/editais/
 data/.segredo_sessao
 data/vapid_privada.pem
 entrada/
+data/erros.jsonl
+data/ia_custos.jsonl
+data/*.ocr.txt

@@ -148,3 +148,87 @@ def test_rotas_de_download_e_pente_fino():
             assert c.get(f"/licitacoes/{sem_ficha[0]}/ficha/baixar").status_code \
                 == 404
         assert c.post("/licitacoes/999999/pente-fino").status_code == 404
+
+
+def test_ficha_antiga_sem_chaves_nao_derruba_a_pagina():
+    """Produção (02/09): /licitacoes/95 e /licitacoes/95/ficha davam 500 —
+    ficha gravada por versão antiga, sem `datas` e com itens que são
+    dicionários. A leitura agora normaliza como a geração faz."""
+    from fastapi.testclient import TestClient
+    from app.config import config
+    from app.db import Sessao
+    from app.main import _dados_ficha, app
+    velha = json.dumps({"resumo": "antiga",
+                        "habilitacao": {"tecnica": [{"documento": "CAT",
+                                                     "observacao": "x"}]},
+                        "riscos": ["prazo apertado"],
+                        "datas": {"sessao_abertura": {"iso": "2026-09-30"}}})
+    dados = _dados_ficha(type("F", (), {"ficha_json": velha})())
+    assert dados["habilitacao"]["tecnica"] == ["documento: CAT; observacao: x"]
+    assert dados["riscos"][0]["motivo"] == "prazo apertado"
+    assert isinstance(dados["datas"]["sessao_abertura"], str)
+    assert dados["habilitacao"]["juridica"] == []
+    s = Sessao()
+    try:
+        lic = (s.query(Licitacao).outerjoin(EditalFicha)
+               .filter(EditalFicha.id.is_(None)).first())
+        if lic is None:
+            pytest.skip("banco local sem licitação livre")
+        ficha = EditalFicha(licitacao_id=lic.id, ficha_json=velha)
+        s.add(ficha)
+        s.commit()
+        lic_id, ficha_id = lic.id, ficha.id
+    finally:
+        s.close()
+    try:
+        with TestClient(app) as c:
+            c.post("/login", data={"email": "", "senha": config.APP_SENHA},
+                   follow_redirects=False)
+            for rota in (f"/licitacoes/{lic_id}", f"/licitacoes/{lic_id}/ficha",
+                         f"/licitacoes/{lic_id}/detalhe",
+                         f"/licitacoes/{lic_id}/ficha/baixar?formato=pdf"):
+                assert c.get(rota).status_code == 200, rota
+    finally:
+        s = Sessao()
+        try:
+            s.query(EditalFicha).filter_by(id=ficha_id).delete()
+            s.commit()
+        finally:
+            s.close()
+
+
+def test_portal_cai_para_quem_publicou_no_pncp():
+    from app.main import _filtro_portal
+
+    class L:
+        link_sistema_origem, objeto, fonte = None, "Serviço de manutenção", "pncp"
+        payload_json = json.dumps({"usuarioNome": "ASSESI BRASIL"})
+    assert _filtro_portal(L()) == "Assesi (portal de compras)"
+    L.payload_json = json.dumps({"usuarioNome": "Licitanet Licitações LTDA"})
+    assert _filtro_portal(L()) == "Licitanet"
+    L.payload_json = json.dumps({"usuarioNome": "SISTEMA XYZ LTDA"})
+    assert _filtro_portal(L()) == "Sistema Xyz"
+    L.payload_json = None
+    assert _filtro_portal(L()) == ""
+
+
+def test_erro_inesperado_vira_pagina_humana_e_registro(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app import main
+    from app.config import config
+    monkeypatch.setattr(main, "CAMINHO_ERROS", str(tmp_path / "erros.jsonl"))
+
+    @main.app.get("/__explode")
+    def explode():
+        raise RuntimeError("boom de teste")
+    with TestClient(main.app, raise_server_exceptions=False) as c:
+        c.post("/login", data={"email": "", "senha": config.APP_SENHA},
+               follow_redirects=False)
+        r = c.get("/__explode")
+        assert r.status_code == 500 and "Internal Server Error" not in r.text
+        assert "Não conseguimos abrir esta página" in r.text
+        r = c.get("/__explode", headers={"HX-Request": "true"})
+        assert "faixa" in r.text
+    erros = main.erros_recentes()
+    assert erros and "boom de teste" in erros[0]["erro"]
+    assert "/__explode" in erros[0]["rota"]

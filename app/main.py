@@ -118,9 +118,48 @@ PORTAIS = {
 }
 
 
+# Quem publicou no PNCP (campo usuarioNome do portal) é a plataforma
+# onde a disputa acontece. Nomes de empresa viram o nome do portal.
+PLATAFORMAS_PUBLICADORAS = {
+    "ecustomize": "Portal de Compras Públicas",
+    "compras.gov": "Compras.gov.br", "comprasnet": "Compras.gov.br",
+    "licitanet": "Licitanet", "bll": "BLL Compras",
+    "bolsa nacional de compras": "BNC Compras", "bnc": "BNC Compras",
+    "licitar digital": "Licitar Digital", "bbmnet": "BBMNET",
+    "licitacoes-e": "Licitações-e (BB)", "licitações-e": "Licitações-e (BB)",
+    "ipm": "IPM Sistemas", "betha": "Betha Sistemas",
+    "br conectado": "BR Conectado", "startgov": "StartGov",
+    "assesi": "Assesi (portal de compras)", "publinexo": "Publinexo",
+    "licita mais": "Licita Mais Brasil", "dattacomp": "Dattacomp",
+    "governancabrasil": "GovBr (Governançabrasil)",
+    "governançabrasil": "GovBr (Governançabrasil)",
+    "procergs": "Compras RS", "ammlicita": "AMM Licita",
+    "centi": "Centi", "az informatica": "AZ Informática",
+}
+
+
+def _plataforma_publicadora(lic):
+    """Nome humano da plataforma que publicou (payload do PNCP)."""
+    bruto = getattr(lic, "payload_json", None)
+    if not bruto:
+        return ""
+    try:
+        nome = (json.loads(bruto) or {}).get("usuarioNome") or ""
+    except (ValueError, TypeError, AttributeError):
+        return ""
+    plano = normalizar(nome)
+    for chave, amigavel in PLATAFORMAS_PUBLICADORAS.items():
+        if normalizar(chave) in plano:
+            return amigavel
+    limpo = re.sub(r"\b(LTDA|S\.?A\.?|EIRELI|ME|EPP)\b\.?", "", nome,
+                   flags=re.I).strip(" -–")
+    return _filtro_sentenca(limpo).title() if limpo else ""
+
+
 def _filtro_portal(lic):
     """Onde a disputa acontece, em nome humano: pelo endereço do sistema
-    de origem ou pelo prefixo "[Portal X] -" do objeto. '' se não souber."""
+    de origem, pelo prefixo "[Portal X] -" do objeto ou por quem publicou
+    no PNCP. '' só quando nada disso existe."""
     from urllib.parse import urlparse
     link = getattr(lic, "link_sistema_origem", "") or ""
     host = urlparse(link).netloc.lower() if link else ""
@@ -130,7 +169,11 @@ def _filtro_portal(lic):
     m = re.match(r"^\s*\[([^\]]{2,40})\]", getattr(lic, "objeto", "") or "")
     if m:
         return m.group(1).strip().title()
-    return host.replace("www.", "") if host else ""
+    if host:
+        return host.replace("www.", "")
+    if getattr(lic, "fonte", "") == "tcepi":
+        return ""
+    return _plataforma_publicadora(lic)
 
 
 def _filtro_fonte(lic):
@@ -260,6 +303,63 @@ async def vida(app_):
 
 
 app = FastAPI(title="Licerta", lifespan=vida)
+
+CAMINHO_ERROS = os.path.join(PASTA_DADOS, "erros.jsonl")
+MAX_ERROS_GUARDADOS = 200
+
+
+def registrar_erro(request, exc):
+    """Erro inesperado vira registro legível (data/erros.jsonl) para o
+    diagnóstico — "Internal Server Error" seco não diz nada a ninguém."""
+    import traceback
+    linha = {
+        "quando": agora().isoformat(timespec="seconds"),
+        "rota": str(getattr(request, "url", "")).split("?")[0][-200:],
+        "metodo": getattr(request, "method", ""),
+        "erro": f"{type(exc).__name__}: {str(exc)[:300]}",
+        "onde": "".join(traceback.format_exception(exc))[-2500:],
+    }
+    try:
+        linhas = []
+        if os.path.exists(CAMINHO_ERROS):
+            with open(CAMINHO_ERROS, encoding="utf-8") as f:
+                linhas = f.readlines()[-(MAX_ERROS_GUARDADOS - 1):]
+        with open(CAMINHO_ERROS, "w", encoding="utf-8") as f:
+            f.writelines(linhas)
+            f.write(json.dumps(linha, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+    return linha
+
+
+def erros_recentes(quantos=20):
+    try:
+        with open(CAMINHO_ERROS, encoding="utf-8") as f:
+            linhas = f.readlines()[-quantos:]
+        return [json.loads(l) for l in reversed(linhas) if l.strip()]
+    except (OSError, ValueError):
+        return []
+
+
+@app.exception_handler(Exception)
+async def erro_inesperado(request: Request, exc: Exception):
+    """Tela de erro em linguagem humana (UI §9) + registro para o admin."""
+    registrar_erro(request, exc)
+    log.exception("Erro inesperado em %s", request.url.path)
+    if request.headers.get("hx-request"):
+        return HTMLResponse(
+            '<div class="faixa faixa-atencao text-xs">Não conseguimos '
+            'carregar esta parte agora. Tentaremos de novo em instantes.'
+            '</div>', status_code=500)
+    return HTMLResponse(
+        "<!doctype html><html lang='pt-BR'><meta charset='utf-8'>"
+        "<title>Licerta</title><body style='font-family:system-ui;"
+        "max-width:36rem;margin:4rem auto;padding:0 1rem;color:#1e293b'>"
+        "<h1 style='font-size:1.25rem'>Não conseguimos abrir esta página "
+        "agora.</h1><p>O problema já ficou registrado para o "
+        "administrador. Tente de novo em instantes ou volte ao "
+        "<a href='/'>Painel do dia</a>.</p></body></html>",
+        status_code=500)
 app.mount("/static", StaticFiles(
     directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
@@ -1342,7 +1442,7 @@ def _contexto_detalhe(s, request, lic, perfil_id=0):
             "pareceres_da_lic": pareceres_da_lic,
             "sou_admin": _sou_admin(request),
             "acompanho": any(m.status == "vou_participar" for m in matches),
-            **_contexto_checklist(s, dados, lic)}
+            **_contexto_checklist(s, dados, lic, request)}
 
 
 @app.get("/licitacoes/{lic_id}/detalhe", response_class=HTMLResponse)
@@ -1378,16 +1478,22 @@ def licitacao_pagina(request: Request, lic_id: int):
 
 
 def _dados_ficha(ficha):
-    """O JSON da ficha como dict para o template — ou None, sem nunca quebrar."""
+    """O JSON da ficha como dict para o template — ou None, sem nunca quebrar.
+
+    Passa pela mesma validação de forma da geração: ficha gravada por uma
+    versão antiga (sem `datas`, `habilitacao` como texto, item de lista
+    que é dicionário) derrubava a página inteira com erro 500 (02/09).
+    """
     if not (ficha and ficha.ficha_json):
         return None
+    from .editais.analise import _validar_ficha
     try:
-        return json.loads(ficha.ficha_json)
-    except ValueError:
+        return _validar_ficha(ficha.ficha_json)
+    except (ValueError, TypeError):
         return None
 
 
-def _contexto_checklist(s, dados, lic):
+def _contexto_checklist(s, dados, lic, request):
     """Extras da ficha: prazos em dias úteis (sempre que houver data de
     sessão) e o checklist exigência × dossiê (só quando há ficha E há
     documentos — dossiê vazio viraria uma coluna de 'falta' sem informação).
@@ -1467,7 +1573,7 @@ def _render_ficha(s, request, lic, ficha, analisando=False,
         "lic": lic, "ficha": ficha, "dados": dados, "analisando": analisando,
         "pente_fino": pente_fino,
         "sou_admin": _sou_admin(request), "acompanho": acompanho,
-        **_contexto_checklist(s, dados, lic)})
+        **_contexto_checklist(s, dados, lic, request)})
 
 
 @app.post("/licitacoes/{lic_id}/pente-fino", response_class=HTMLResponse)
@@ -2586,15 +2692,18 @@ async def logs_coletas(request: Request):
                      .order_by(ColetaLog.inicio.desc()).limit(60).all())
         # Custo de IA visível desde o dia 1 (arquitetura §7) — só ao admin.
         custo_ia = fichas = None
+        erros = []
         if _sou_admin(request):
             from ia.cliente import custo_total
             custo_ia = custo_total()
             fichas = s.query(EditalFicha).filter(
                 EditalFicha.ficha_json != "").count()
+            erros = erros_recentes()
         return templates.TemplateResponse(request, "logs.html",
                                           {"registros": registros,
                                            "custo_ia": custo_ia,
-                                           "fichas": fichas})
+                                           "fichas": fichas,
+                                           "erros": erros})
     finally:
         s.close()
 

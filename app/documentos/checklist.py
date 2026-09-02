@@ -41,7 +41,9 @@ REGRAS = [
 
 
 def _norm(texto):
-    texto = unicodedata.normalize("NFD", (texto or "").lower())
+    if not isinstance(texto, str):
+        texto = str(texto) if texto else ""
+    texto = unicodedata.normalize("NFD", texto.lower())
     return "".join(c for c in texto if not unicodedata.combining(c))
 
 

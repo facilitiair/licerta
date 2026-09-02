@@ -116,7 +116,36 @@ def _validar_ficha(texto_json):
                   "proposta_forma"):
         if not isinstance(dados[lista], list):
             dados[lista] = [str(dados[lista])]
+    # Item de lista tem de ser TEXTO: o modelo às vezes devolve
+    # {"documento": "...", "observacao": "..."} e a tela/checklist
+    # esperam string (era 500 em ficha antiga).
+    for bloco in ("juridica", "fiscal_social_trabalhista", "tecnica",
+                  "economico_financeira"):
+        dados["habilitacao"][bloco] = [_como_texto(i) for i in
+                                       dados["habilitacao"][bloco]]
+    for lista in ("pontos_atencao", "anexos_citados_ausentes",
+                  "proposta_forma"):
+        dados[lista] = [_como_texto(i) for i in dados[lista]]
+    dados["riscos"] = [r if isinstance(r, dict)
+                       else {"clausula": "", "motivo": _como_texto(r)}
+                       for r in dados["riscos"]]
+    dados["datas"] = {k: (v if isinstance(v, str) or v is None
+                          else _como_texto(v))
+                      for k, v in dados["datas"].items()}
+    if not isinstance(dados.get("revisoes"), list):
+        dados.pop("revisoes", None)
     return dados
+
+
+def _como_texto(item):
+    """Item de lista como uma linha legível, seja string, dict ou lista."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        return "; ".join(f"{k}: {v}" for k, v in item.items() if v)
+    if isinstance(item, (list, tuple)):
+        return "; ".join(_como_texto(i) for i in item)
+    return "" if item is None else str(item)
 
 
 def _mensagem(lic, texto_pdfs):
