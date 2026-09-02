@@ -64,7 +64,8 @@ def _chamar(job, prompt, mensagem, modelo, custos):
 
 def gerar_pericia(sessao_db, lic, usuario=None, hoje=None):
     """Roda o pipeline completo e grava UM Parecer com os laudos anexos."""
-    insumos = montar_insumos(sessao_db, lic, hoje)
+    usuario_id = getattr(usuario, "id", None)
+    insumos = montar_insumos(sessao_db, lic, hoje, usuario_id=usuario_id)
     entrada = insumos["entrada"]
     data_sessao = (insumos["data_sessao"].strftime("%d/%m/%Y")
                    if insumos["data_sessao"] else "não informada")
@@ -96,7 +97,7 @@ def gerar_pericia(sessao_db, lic, usuario=None, hoje=None):
     # metadados, assinatura (a bancada forense determinística)
     from .exame import examinar_dossie
     try:
-        exame_tecnico = examinar_dossie(sessao_db, dossie)
+        exame_tecnico = examinar_dossie(sessao_db, dossie, usuario_id)
     except Exception:  # noqa: BLE001 — exame é cortesia, nunca derruba
         log.exception("Exame técnico do dossiê falhou")
         exame_tecnico = {}
@@ -255,7 +256,8 @@ def _rodar_em_fundo(lic_id, usuario_id):
 def iniciar(sessao_db, lic, usuario=None, hoje=None):
     """Valida os insumos AGORA (erros aparecem na hora) e dispara a
     perícia em segundo plano. Devolve False se já há uma em andamento."""
-    montar_insumos(sessao_db, lic, hoje)      # levanta cedo se faltar algo
+    montar_insumos(sessao_db, lic, hoje,      # levanta cedo se faltar algo
+                   usuario_id=getattr(usuario, "id", None))
     with _trava:
         if lic.id in _em_andamento:
             return False

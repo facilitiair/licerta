@@ -119,6 +119,40 @@
                  hover:bg-blue-800"><i data-lucide="save" class="lucide"></i> Salvar preferências</button>
 </form>
 
+<!-- Dados da empresa são PRIVADOS desta conta: entram só nas minutas
+     e pareceres deste usuário. -->
+<form method="post" action="/conta/empresa"
+      class="bg-white rounded-xl border border-slate-200 p-4 space-y-3 mt-6">
+  <h3 class="font-semibold text-sm">Minha empresa (entra nas minutas
+    jurídicas)</h3>
+  <p class="text-xs text-slate-500">Identidade usada no cabeçalho das
+    minutas e pareceres desta conta. O que ficar em branco sai na minuta
+    como [PREENCHER].</p>
+  <div class="grid sm:grid-cols-2 gap-3 text-sm">
+    <label>Razão social
+      <input name="razao_social" value="{{ empresa.razao_social }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    <label>CNPJ
+      <input name="cnpj" value="{{ empresa.cnpj }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    <label class="sm:col-span-2">Endereço completo
+      <input name="endereco" value="{{ empresa.endereco }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    <label>Representante legal
+      <input name="representante_nome"
+             value="{{ empresa.representante_nome }}"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    <label>Cargo do representante
+      <input name="representante_cargo"
+             value="{{ empresa.representante_cargo }}"
+             placeholder="sócio-administrador"
+             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+  </div>
+  <button class="border border-blue-700 text-blue-700 px-4 py-1.5
+                 rounded-lg text-sm font-semibold hover:bg-blue-50">
+    <i data-lucide="save" class="lucide"></i> Salvar dados da empresa</button>
+</form>
+
 <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3 mt-6
             max-w-md">
   <h3 class="font-semibold text-sm">Trocar minha senha</h3>

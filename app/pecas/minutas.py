@@ -32,11 +32,12 @@ class MinutaIndevida(RuntimeError):
     sem riscos apontados) — a mensagem explica o caminho alternativo."""
 
 
-def dados_empresa(sessao_db):
-    """A linha única de identidade da empresa (cria vazia se não existir)."""
-    dados = sessao_db.get(EmpresaDados, 1)
+def dados_empresa(sessao_db, usuario_id=None):
+    """A identidade da empresa DESTA conta (cria vazia se não existir)."""
+    dados = (sessao_db.query(EmpresaDados)
+             .filter_by(usuario_id=usuario_id).first())
     if dados is None:
-        dados = EmpresaDados(id=1)
+        dados = EmpresaDados(usuario_id=usuario_id)
         sessao_db.add(dados)
         sessao_db.commit()
     return dados
@@ -83,7 +84,7 @@ def gerar_impugnacao(sessao_db, lic, ficha_dados, usuario=None, hoje=None):
     arquivos = (sessao_db.query(ArquivoEdital)
                 .filter_by(licitacao_id=lic.id).all())
     texto_edital, _ = extrair_texto_pdfs(arquivos)
-    empresa = dados_empresa(sessao_db)
+    empresa = dados_empresa(sessao_db, getattr(usuario, "id", None))
     entrada = {
         "ficha_edital": {
             "modalidade": lic.modalidade_nome,

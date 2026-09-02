@@ -60,10 +60,11 @@ def _texto_documento(doc):
         return None
 
 
-def _dossie(sessao_db, data_sessao):
-    """O dossiê como o prompt recebe: rótulo + validade NA SESSÃO + texto."""
+def _dossie(sessao_db, data_sessao, usuario_id=None):
+    """O dossiê DESTA conta como o prompt recebe: rótulo + validade NA
+    SESSÃO + texto. Dossiê é privado: só os documentos do usuário."""
     docs = (sessao_db.query(DocumentoEmpresa)
-            .filter_by(arquivado=False).all())
+            .filter_by(arquivado=False, enviado_por=usuario_id).all())
     itens, usado = [], 0
     for d in docs:
         situacao = "sem validade informada"
@@ -96,7 +97,7 @@ def _base_juridica():
     return "\n\n---\n\n".join(partes)
 
 
-def montar_insumos(sessao_db, lic, hoje=None):
+def montar_insumos(sessao_db, lic, hoje=None, usuario_id=None):
     """Reúne tudo que uma perícia precisa: edital, ficha, prazos por
     código, dossiê com validade aferida na sessão. Usado pelo parecer
     rápido e pela perícia completa (analista/pericia.py).
@@ -141,7 +142,7 @@ def montar_insumos(sessao_db, lic, hoje=None):
                    if prazos["impugnacao_passou"] else ""))
 
     from ..pecas.minutas import dados_empresa
-    empresa = dados_empresa(sessao_db)
+    empresa = dados_empresa(sessao_db, usuario_id)
     entrada = {
         "ficha_do_portal": {
             "modalidade": lic.modalidade_nome,
@@ -157,7 +158,7 @@ def montar_insumos(sessao_db, lic, hoje=None):
         "prazos_calculados": prazo_texto,
         "empresa": {"razao_social": empresa.razao_social or "não informado",
                     "cnpj": empresa.cnpj or "não informado"},
-        "dossie": _dossie(sessao_db, sessao_data),
+        "dossie": _dossie(sessao_db, sessao_data, usuario_id),
         "data_de_hoje": hoje.strftime("%d/%m/%Y"),
     }
     return {"entrada": entrada, "texto_edital": texto_edital,
@@ -166,7 +167,8 @@ def montar_insumos(sessao_db, lic, hoje=None):
 
 def gerar_parecer(sessao_db, lic, usuario=None, hoje=None):
     """Gera o parecer rápido (uma chamada). Devolve o Parecer gravado."""
-    insumos = montar_insumos(sessao_db, lic, hoje)
+    insumos = montar_insumos(sessao_db, lic, hoje,
+                             usuario_id=getattr(usuario, "id", None))
     entrada, texto_edital = insumos["entrada"], insumos["texto_edital"]
     mensagem = (json.dumps(entrada, ensure_ascii=False, indent=1)
                 + "\n\nBASE JURÍDICA:\n\n" + _base_juridica()

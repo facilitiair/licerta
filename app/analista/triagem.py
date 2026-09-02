@@ -29,7 +29,7 @@ SUGESTOES_VALIDAS = {"participar", "analisar", "descartar"}
 def _retrato_da_empresa(sessao_db, usuario_id):
     """O que a empresa é, deduzido do que ela tem: dossiê + perfis."""
     docs = (sessao_db.query(DocumentoEmpresa)
-            .filter_by(arquivado=False).all())
+            .filter_by(arquivado=False, enviado_por=usuario_id).all())
     atestados = [d.nome for d in docs
                  if d.tipo in ("Atestado de Capacidade", "CAT")]
     perfis = (sessao_db.query(PerfilBusca)

@@ -50,8 +50,10 @@ def cenario(sessao):
     p = PerfilBusca(nome="Ar", usuario_id=u.id,
                     palavras_incluir=["ar condicionado"])
     sessao.add(p)
+    # dossiê é privado: o documento é DESTE usuário
     sessao.add(DocumentoEmpresa(nome="Atestado clim.",
-                                tipo="Atestado de Capacidade"))
+                                tipo="Atestado de Capacidade",
+                                enviado_por=u.id))
     sessao.flush()
     matches = []
     for i, objeto in enumerate(["Manutenção de ar condicionado",

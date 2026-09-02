@@ -460,7 +460,8 @@ async def painel(request: Request):
 
         # 2º — certidões da empresa vencendo (vermelho só ≤ 7 dias, §5)
         docs_alerta = []
-        consulta_docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False)
+        consulta_docs = (s.query(DocumentoEmpresa)
+                         .filter_by(arquivado=False, enviado_por=eu(request).id)
                          .filter(DocumentoEmpresa.validade.isnot(None)))
         for d in consulta_docs:
             situ, dias = validades_mod.situacao_documento(d)
@@ -1251,10 +1252,14 @@ def _contexto_detalhe(s, request, lic, perfil_id=0):
                   .order_by(LicitacaoAlteracao.detectada_em.desc())
                   .limit(20).all())
     dados = _dados_ficha(ficha)
-    minutas = (s.query(Minuta).filter_by(licitacao_id=lic.id)
+    # Peças são privadas de quem as gerou (cada login é uma empresa).
+    minutas = (s.query(Minuta)
+               .filter_by(licitacao_id=lic.id, criado_por=eu(request).id)
                .order_by(Minuta.criada_em.desc()).all())
     from .db import Parecer
-    pareceres_da_lic = (s.query(Parecer).filter_by(licitacao_id=lic.id)
+    pareceres_da_lic = (s.query(Parecer)
+                        .filter_by(licitacao_id=lic.id,
+                                   criado_por=eu(request).id)
                         .order_by(Parecer.criado_em.desc())
                         .limit(3).all())
     return {"lic": lic, "matches": matches, "arquivos": arquivos,
@@ -1323,7 +1328,8 @@ def _contexto_checklist(s, dados, lic):
     sessao_data = checklist_mod.data_da_sessao(dados, lic)
     contexto["checklist_sessao"] = sessao_data
     contexto["prazos"] = prazos_da_sessao(sessao_data, hoje())
-    docs = (s.query(DocumentoEmpresa).filter_by(arquivado=False).all())
+    docs = (s.query(DocumentoEmpresa)
+            .filter_by(arquivado=False, enviado_por=eu(request).id).all())
     if not docs:
         return contexto
     itens, _ = checklist_mod.avaliar(dados, lic, docs)
@@ -1798,6 +1804,7 @@ def pericias_lista(request: Request, aviso: str = ""):
     s = Sessao()
     try:
         casos = (s.query(CasoPericial)
+                 .filter_by(criado_por=eu(request).id)
                  .order_by(CasoPericial.criado_em.desc()).limit(60).all())
         docs_por_caso = {c.id: s.query(DocumentoCaso)
                          .filter_by(caso_id=c.id).count() for c in casos}
@@ -1839,7 +1846,7 @@ def pericia_caso(request: Request, caso_id: int, aviso: str = ""):
     from .db import CasoPericial, LaudoPericial
     s = Sessao()
     try:
-        caso = s.get(CasoPericial, caso_id)
+        caso = _meu_caso(s, request, caso_id)
         if not caso:
             return HTMLResponse("Caso não encontrado.", status_code=404)
         docs = (s.query(DocumentoCaso)
@@ -1862,7 +1869,7 @@ async def pericia_docs_upload(request: Request, caso_id: int,
         return RedirectResponse("/pericias", status_code=303)
     s = Sessao()
     try:
-        caso = s.get(CasoPericial, caso_id)
+        caso = _meu_caso(s, request, caso_id)
         if not caso:
             return HTMLResponse("Caso não encontrado.", status_code=404)
         ja_tem = s.query(DocumentoCaso).filter_by(caso_id=caso.id).count()
@@ -1923,7 +1930,7 @@ def pericia_gerar_laudo(request: Request, caso_id: int):
         return HTMLResponse(FAIXA_PREMIUM)
     s = Sessao()
     try:
-        caso = s.get(CasoPericial, caso_id)
+        caso = _meu_caso(s, request, caso_id)
         if not caso:
             return HTMLResponse("Caso não encontrado.", status_code=404)
         try:
@@ -1956,9 +1963,9 @@ def pericia_laudo(request: Request, laudo_id: int):
     s = Sessao()
     try:
         laudo = s.get(LaudoPericial, laudo_id)
-        if not laudo:
+        caso = _meu_caso(s, request, laudo.caso_id) if laudo else None
+        if not caso:
             return HTMLResponse("Laudo não encontrado.", status_code=404)
-        caso = s.get(CasoPericial, laudo.caso_id)
         return templates.TemplateResponse(request, "laudo.html", {
             "laudo": laudo, "caso": caso,
             "sou_admin": _sou_admin(request)})
@@ -1974,7 +1981,7 @@ def pericia_laudo_baixar(request: Request, laudo_id: int,
     s = Sessao()
     try:
         laudo = s.get(LaudoPericial, laudo_id)
-        if not laudo:
+        if not (laudo and _meu_caso(s, request, laudo.caso_id)):
             return HTMLResponse("Laudo não encontrado.", status_code=404)
         if formato == "md":
             return Response(laudo.texto, media_type="text/markdown",
@@ -1994,6 +2001,7 @@ def pareceres_lista(request: Request):
     s = Sessao()
     try:
         pareceres = (s.query(Parecer)
+                     .filter_by(criado_por=eu(request).id)
                      .order_by(Parecer.criado_em.desc()).limit(60).all())
         return templates.TemplateResponse(request, "pareceres.html", {
             "pareceres": pareceres, "sou_admin": _sou_admin(request)})
@@ -2007,7 +2015,7 @@ def parecer_ver(request: Request, parecer_id: int):
     s = Sessao()
     try:
         parecer = s.get(Parecer, parecer_id)
-        if not parecer:
+        if not (parecer and parecer.criado_por == eu(request).id):
             return HTMLResponse("Parecer não encontrado.", status_code=404)
         return templates.TemplateResponse(request, "parecer.html", {
             "parecer": parecer, "lic": parecer.licitacao,
@@ -2023,7 +2031,7 @@ def parecer_baixar(request: Request, parecer_id: int, formato: str = "docx"):
     s = Sessao()
     try:
         parecer = s.get(Parecer, parecer_id)
-        if not parecer:
+        if not (parecer and parecer.criado_por == eu(request).id):
             return HTMLResponse("Parecer não encontrado.", status_code=404)
         if formato == "md":
             nome = f"parecer-{parecer.licitacao_id}.md"
@@ -2066,6 +2074,7 @@ def minutas_lista(request: Request):
     s = Sessao()
     try:
         minutas = (s.query(Minuta)
+                   .filter_by(criado_por=eu(request).id)
                    .order_by(Minuta.criada_em.desc()).limit(60).all())
         return templates.TemplateResponse(request, "minutas.html", {
             "minutas": minutas, "sou_admin": _sou_admin(request)})
@@ -2112,7 +2121,7 @@ def minuta_ver(request: Request, minuta_id: int):
     s = Sessao()
     try:
         minuta = s.get(Minuta, minuta_id)
-        if not minuta:
+        if not (minuta and minuta.criado_por == eu(request).id):
             return HTMLResponse("Minuta não encontrada.", status_code=404)
         return templates.TemplateResponse(request, "minuta.html", {
             "minuta": minuta, "lic": minuta.licitacao,
@@ -2127,7 +2136,7 @@ def minuta_baixar(request: Request, minuta_id: int, formato: str = "docx"):
     s = Sessao()
     try:
         minuta = s.get(Minuta, minuta_id)
-        if not minuta:
+        if not (minuta and minuta.criado_por == eu(request).id):
             return HTMLResponse("Minuta não encontrada.", status_code=404)
         if formato == "md":
             nome = f"minuta-{minuta.tipo}-{minuta.licitacao_id}.md"
@@ -2143,16 +2152,14 @@ def minuta_baixar(request: Request, minuta_id: int, formato: str = "docx"):
         s.close()
 
 
-@app.post("/config/empresa")
-async def config_empresa(request: Request):
-    """Identidade da empresa (linha única no banco) — entra nas minutas."""
-    if not _sou_admin(request):
-        return RedirectResponse("/", status_code=303)
+@app.post("/conta/empresa")
+async def conta_empresa(request: Request):
+    """Identidade da empresa DESTA conta — entra nas minutas do usuário."""
     from .pecas.minutas import dados_empresa
     form = await request.form()
     s = Sessao()
     try:
-        dados = dados_empresa(s)
+        dados = dados_empresa(s, eu(request).id)
         dados.razao_social = (form.get("razao_social") or "").strip()[:200]
         dados.cnpj = (form.get("cnpj") or "").strip()[:20]
         dados.endereco = (form.get("endereco") or "").strip()[:300]
@@ -2162,7 +2169,7 @@ async def config_empresa(request: Request):
                                      or "").strip()[:80]
         dados.atualizado_em = agora()
         s.commit()
-        return RedirectResponse("/config?salvo=1", status_code=303)
+        return RedirectResponse("/conta?salvo=1", status_code=303)
     finally:
         s.close()
 
@@ -2171,8 +2178,22 @@ async def config_empresa(request: Request):
 PASTA_DOCUMENTOS = os.path.join(PASTA_DADOS, "documentos")
 
 
-def _contexto_documentos(s, aviso=None):
+def _meu_doc(s, request, doc_id):
+    """Documento do dossiê SE for do usuário logado (dossiê é privado)."""
+    doc = s.get(DocumentoEmpresa, doc_id)
+    return doc if doc and doc.enviado_por == eu(request).id else None
+
+
+def _meu_caso(s, request, caso_id):
+    """Caso pericial SE for do usuário logado."""
+    from .db import CasoPericial
+    caso = s.get(CasoPericial, caso_id)
+    return caso if caso and caso.criado_por == eu(request).id else None
+
+
+def _contexto_documentos(s, request, aviso=None):
     docs = (s.query(DocumentoEmpresa)
+            .filter_by(enviado_por=eu(request).id)
             .order_by(DocumentoEmpresa.arquivado,
                       DocumentoEmpresa.validade.is_(None),
                       DocumentoEmpresa.validade).all())
@@ -2188,8 +2209,8 @@ def _contexto_documentos(s, aviso=None):
 async def documentos(request: Request, aviso: str = ""):
     s = Sessao()
     try:
-        return templates.TemplateResponse(request, "documentos.html",
-                                          _contexto_documentos(s, aviso))
+        return templates.TemplateResponse(
+            request, "documentos.html", _contexto_documentos(s, request, aviso))
     finally:
         s.close()
 
@@ -2290,7 +2311,7 @@ async def documento_salvar(request: Request, doc_id: int,
                            observacao: str = Form("")):
     s = Sessao()
     try:
-        doc = s.get(DocumentoEmpresa, doc_id)
+        doc = _meu_doc(s, request, doc_id)
         if doc:
             doc.nome = (nome.strip() or doc.nome)[:120]
             doc.tipo = (tipo.strip() or doc.tipo)[:60]
@@ -2309,7 +2330,7 @@ async def documento_salvar(request: Request, doc_id: int,
 async def documento_arquivar(request: Request, doc_id: int):
     s = Sessao()
     try:
-        doc = s.get(DocumentoEmpresa, doc_id)
+        doc = _meu_doc(s, request, doc_id)
         if doc:
             doc.arquivado = not doc.arquivado
             s.commit()
@@ -2322,7 +2343,7 @@ async def documento_arquivar(request: Request, doc_id: int):
 async def documento_arquivo(request: Request, doc_id: int):
     s = Sessao()
     try:
-        doc = s.get(DocumentoEmpresa, doc_id)
+        doc = _meu_doc(s, request, doc_id)
         caminho = (os.path.join(PASTA_DADOS, doc.caminho_local)
                    if doc and doc.caminho_local else "")
         if not (caminho and os.path.exists(caminho)):
@@ -2358,13 +2379,11 @@ async def logs_coletas(request: Request):
 async def config_form(request: Request, salvo: int = 0):
     if not _sou_admin(request):
         return RedirectResponse("/", status_code=303)
-    from .pecas.minutas import dados_empresa
     s = Sessao()
     try:
-        empresa = dados_empresa(s)
         return templates.TemplateResponse(request, "config.html", {
             "valores": envcfg.valores_para_tela(), "salvo": salvo,
-            "resultado_teste": None, "empresa": empresa,
+            "resultado_teste": None,
         })
     finally:
         s.close()
@@ -2408,10 +2427,12 @@ def _resposta_html(ok, msg_ok, msg_erro):
 def conta(request: Request, bemvindo: int = 0, salvo: int = 0):
     s = Sessao()
     try:
+        from .pecas.minutas import dados_empresa
         usuario = s.get(Usuario, eu(request).id)
         aparelhos = len(usuario.assinaturas_push)
         return templates.TemplateResponse(request, "conta.html", {
             "usuario": usuario, "aparelhos_push": aparelhos,
+            "empresa": dados_empresa(s, usuario.id),
             "bemvindo": bemvindo, "salvo": salvo,
             "bot": _nome_do_bot(),
             "tem_bot": bool(config.TELEGRAM_BOT_TOKEN),

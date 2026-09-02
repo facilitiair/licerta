@@ -85,13 +85,34 @@ def _frase(doc, marco, dias):
             f"{doc.nome} ({doc.tipo}) — {data}")
 
 
-def avisar_vencimentos(sessao_db=None, hoje=None, host=None):
-    """Varre o dossiê e avisa os administradores dos marcos cruzados.
+def _avisar_dono(sessao, usuario, texto, resumo):
+    """Pelos canais do DONO do dossiê. True se algum aceitou."""
+    from ..notificacoes import alerta, push
+    chegou = False
+    if usuario.receber_telegram and usuario.telegram_chat_id:
+        chegou |= alerta.enviar_telegram(texto, chat_id=usuario.telegram_chat_id)
+    if usuario.receber_email and usuario.email_alertas:
+        chegou |= alerta.enviar_email(texto, destino=usuario.email_alertas)
+    if usuario.receber_push:
+        try:
+            chegou |= push.enviar_push(
+                sessao, usuario, "📄 Validade do dossiê", resumo,
+                url=config.APP_URL + "/documentos") > 0
+        except Exception:  # noqa: BLE001 — push nunca derruba o aviso
+            log.exception("Push de validade falhou")
+    return chegou
 
-    Devolve quantos documentos entraram no aviso. Como nos alertas, o marco
-    só é gravado se algum canal aceitou a mensagem — canal fora do ar
-    tenta de novo no próximo ciclo.
+
+def avisar_vencimentos(sessao_db=None, hoje=None, host=None):
+    """Varre os dossiês e avisa CADA DONO dos marcos cruzados.
+
+    Dossiê é privado: o aviso vai para quem subiu o documento, pelos
+    canais dele. Documento sem dono (instalação antiga) vai aos
+    administradores. Devolve quantos documentos entraram em aviso. Como
+    nos alertas, o marco só é gravado se algum canal aceitou a mensagem —
+    canal fora do ar tenta de novo no próximo ciclo.
     """
+    from ..db import Usuario
     from ..vigia import avisar_admins
     hoje = hoje or hoje_local()
     sessao = sessao_db or Sessao()
@@ -99,23 +120,32 @@ def avisar_vencimentos(sessao_db=None, hoje=None, host=None):
         docs = (sessao.query(DocumentoEmpresa)
                 .filter_by(arquivado=False)
                 .filter(DocumentoEmpresa.validade.isnot(None)).all())
-        devidos = []
+        por_dono = {}
         for doc in docs:
             marco = marco_devido(doc, hoje)
             if marco is not None:
-                devidos.append((doc, marco, dias_para_vencer(doc, hoje)))
-        if not devidos:
-            return 0
-        devidos.sort(key=lambda t: t[2])   # o mais urgente primeiro
-        linhas = ["📄 Licerta — validades do dossiê da empresa\n"]
-        linhas += [_frase(doc, marco, dias) for doc, marco, dias in devidos]
-        linhas.append(f"\nRenovar e atualizar: "
-                      f"{(host or config.APP_URL)}/documentos")
-        if avisar_admins(sessao, "\n".join(linhas), resumo=_frase(*devidos[0])):
-            for doc, marco, _ in devidos:
-                doc.ultimo_aviso_dias = marco
-            sessao.commit()
-        return len(devidos)
+                por_dono.setdefault(doc.enviado_por, []).append(
+                    (doc, marco, dias_para_vencer(doc, hoje)))
+        total = 0
+        for dono_id, devidos in por_dono.items():
+            devidos.sort(key=lambda t: t[2])   # o mais urgente primeiro
+            linhas = ["📄 Licerta — validades do dossiê da empresa\n"]
+            linhas += [_frase(doc, marco, dias)
+                       for doc, marco, dias in devidos]
+            linhas.append(f"\nRenovar e atualizar: "
+                          f"{(host or config.APP_URL)}/documentos")
+            texto, resumo = "\n".join(linhas), _frase(*devidos[0])
+            dono = sessao.get(Usuario, dono_id) if dono_id else None
+            if dono is not None and dono.ativo:
+                chegou = _avisar_dono(sessao, dono, texto, resumo)
+            else:
+                chegou = avisar_admins(sessao, texto, resumo=resumo)
+            if chegou:
+                for doc, marco, _ in devidos:
+                    doc.ultimo_aviso_dias = marco
+                sessao.commit()
+            total += len(devidos)
+        return total
     except Exception:  # noqa: BLE001 — vigia de validade nunca derruba nada
         sessao.rollback()
         log.exception("Erro no aviso de validades")

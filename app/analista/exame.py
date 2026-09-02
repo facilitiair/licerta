@@ -91,7 +91,7 @@ def examinar_pdf(caminho_relativo, texto=None):
     return exame
 
 
-def examinar_dossie(sessao_db, itens_dossie):
+def examinar_dossie(sessao_db, itens_dossie, usuario_id=None):
     """Exame técnico de cada documento do dossiê que tem arquivo.
 
     `itens_dossie` é a lista que `parecer._dossie` monta (nome/tipo/
@@ -99,7 +99,7 @@ def examinar_dossie(sessao_db, itens_dossie):
     arquivo no disco. Devolve {nome: exame}."""
     from ..db import DocumentoEmpresa
     docs = {d.nome: d for d in sessao_db.query(DocumentoEmpresa)
-            .filter_by(arquivado=False)}
+            .filter_by(arquivado=False, enviado_por=usuario_id)}
     exames = {}
     for item in itens_dossie:
         doc = docs.get(item["nome"])

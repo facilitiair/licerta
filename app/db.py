@@ -238,14 +238,17 @@ class ArquivoEdital(Base):
 
 
 class EmpresaDados(Base):
-    """Identidade da empresa desta instalação — linha única (id=1).
+    """Identidade da empresa de UMA conta — uma linha por usuário.
 
     Vive no BANCO, não no código (produto genérico): entra nas peças
     jurídicas como dado. Nada aqui é obrigatório; o que faltar sai na
-    minuta como [PREENCHER].
+    minuta como [PREENCHER]. Cada login é privado: a empresa de um
+    usuário nunca aparece na minuta de outro.
     """
     __tablename__ = "empresa_dados"
-    id = Column(Integer, primary_key=True)      # sempre 1
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True,
+                        index=True)
     razao_social = Column(String, default="")
     cnpj = Column(String, default="")
     endereco = Column(String, default="")
@@ -334,8 +337,9 @@ class Parecer(Base):
 class DocumentoEmpresa(Base):
     """Documento do dossiê da EMPRESA (certidão, atestado, balanço...).
 
-    O documento é da empresa — a instalação inteira —, não de um usuário;
-    quem subiu fica registrado só para auditoria. A validade é vigiada por
+    O dossiê é PRIVADO de quem subiu (`enviado_por`): cada login é uma
+    empresa, e outro usuário nunca vê, baixa ou usa estes documentos —
+    nem no checklist, nem no parecer. A validade é vigiada por
     CÓDIGO (arquitetura: 'IA lê, código calcula' — alerta de prazo errado
     encerra a confiança). `ultimo_aviso_dias` guarda o último marco avisado
     (30/15/7/3/1/0/-1=vencido) para não repetir aviso todo dia.
@@ -403,6 +407,7 @@ def _migrar():
                            ("sugestao", "TEXT DEFAULT ''"),
                            ("sugestao_motivo", "TEXT DEFAULT ''")],
         "usuarios": [("plano", "TEXT DEFAULT 'padrao'")],
+        "empresa_dados": [("usuario_id", "INTEGER")],
         "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'"),
                          ("situacoes", "TEXT DEFAULT '[]'"),
                          ("somente_vigentes", "BOOLEAN DEFAULT 1"),
@@ -451,6 +456,19 @@ def _migrar():
     _migrar_para_multiusuario()
 
 
+def _adotar_orfaos(sessao, admin_id):
+    """Dado de empresa sem dono (anterior à privacidade por conta) passa
+    ao primeiro administrador — era ele quem o via e mantinha."""
+    for modelo, coluna in ((DocumentoEmpresa, DocumentoEmpresa.enviado_por),
+                           (CasoPericial, CasoPericial.criado_por),
+                           (LaudoPericial, LaudoPericial.criado_por),
+                           (Parecer, Parecer.criado_por),
+                           (Minuta, Minuta.criado_por),
+                           (EmpresaDados, EmpresaDados.usuario_id)):
+        sessao.query(modelo).filter(coluna.is_(None)).update(
+            {coluna.key: admin_id}, synchronize_session=False)
+
+
 def _migrar_para_multiusuario():
     """Instalação antiga (senha única no .env) vira multiusuário sem perder
     nada: o dono atual vira o primeiro administrador, herda todos os perfis
@@ -471,6 +489,7 @@ def _migrar_para_multiusuario():
                 sessao.query(PerfilBusca).filter(
                     PerfilBusca.usuario_id.is_(None)).update(
                     {"usuario_id": admin.id})
+                _adotar_orfaos(sessao, admin.id)
                 sessao.commit()
             return
         if not config.APP_SENHA:
