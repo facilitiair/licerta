@@ -24,6 +24,18 @@ _coletando = threading.Lock()
 MSG_INTERROMPIDA = "coleta interrompida por reinício do aplicativo"
 
 
+def coleta_deu_certo(combos_total, combos_ok):
+    """A coleta cumpriu o papel? Sim se varreu o portal (ao menos uma
+    combinação UF×modalidade respondeu) ou se não havia o que varrer.
+
+    Antes, um único 502 do PNCP numa combinação (MA/mod 1, por exemplo)
+    marcava a rodada inteira como FALHA — com milhares de editais gravados
+    — e o vigia acusava "a coleta falhou 7 vezes seguidas" no painel do
+    dono. Tropeço fica no detalhe do registro; falha é quando NADA vem.
+    """
+    return combos_total == 0 or combos_ok > 0
+
+
 def coleta_em_andamento():
     """Só LÊ o estado. Não pode adquirir a trava: o painel consulta isto por
     polling do htmx, e se o job das 3h caísse exatamente nessa janela o ciclo
@@ -395,7 +407,9 @@ def coletar():
         # Uma sessão HTTP só para toda a coleta: reaproveita a conexão TLS com
         # o pncp.gov.br em vez de refazer o handshake a cada chamada.
         http = requests.Session()
+        combos_ok = combos_total = 0
         for uf, modalidade in _combinacoes(perfis):
+            combos_total += 1
             try:
                 qtd = 0
                 for item in propostas_abertas(
@@ -409,6 +423,7 @@ def coletar():
                             # do usuário passarem no meio da coleta
                             sessao_db.commit()
                 sessao_db.commit()
+                combos_ok += 1
                 log.info("PNCP %s modalidade %s: %s registros",
                          uf or "BR", modalidade, qtd)
             except Exception as e:  # noqa: BLE001 — segue para a próxima combinação
@@ -440,7 +455,7 @@ def coletar():
             limpar(sessao_db)
         except Exception:  # noqa: BLE001 — faxina nunca derruba a coleta
             log.exception("Faxina do banco falhou")
-        registro.sucesso = len(erros) == 0
+        registro.sucesso = coleta_deu_certo(combos_total, combos_ok)
     except Exception as e:  # noqa: BLE001 — última linha de defesa
         if sessao_db is not None:
             sessao_db.rollback()

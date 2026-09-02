@@ -265,6 +265,23 @@ async def vida(app_):
         s.commit()
     finally:
         s.close()
+    # Registros antigos marcados como falha por um tropeço numa combinação
+    # (regra anterior): reclassificados para o vigia parar de acusar.
+    s = Sessao()
+    try:
+        for c in s.query(ColetaLog).filter(ColetaLog.sucesso.is_(False),
+                                           ColetaLog.fim.isnot(None)):
+            linhas = [l for l in (c.detalhe_erro or "").splitlines()
+                      if l.strip()]
+            so_tropecos = bool(linhas) and all(
+                re.match(r"^(BR|[A-Z]{2})/mod \d+: ", l) for l in linhas)
+            if so_tropecos:
+                c.sucesso = True
+        s.commit()
+    except Exception:  # noqa: BLE001
+        log.exception("Reclassificação dos registros de coleta falhou")
+    finally:
+        s.close()
     # O app se cura de um volume cheio ao subir: sem espaço em disco, até
     # gravar o .env falha (foi um 500 real em produção em 31/08/2026).
     s = Sessao()

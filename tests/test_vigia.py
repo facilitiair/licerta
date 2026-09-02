@@ -246,3 +246,12 @@ def test_canal_fora_do_ar_tenta_de_novo_no_proximo_ciclo(vigia_controlado,
     assert len(vigia_controlado["enviados"]) == 2
     sessao_memoria.refresh(reg)
     assert reg.avisado_em is not None
+
+
+def test_tropeco_numa_combinacao_nao_e_coleta_falhada():
+    """Um 502 do PNCP em MA/mod 1 marcava a rodada inteira como falha e o
+    painel do dono dizia 'a coleta falhou 7 vezes seguidas' (02/09)."""
+    from app.radar.coleta import coleta_deu_certo
+    assert coleta_deu_certo(combos_total=26, combos_ok=25)
+    assert coleta_deu_certo(combos_total=0, combos_ok=0)   # nada a varrer
+    assert not coleta_deu_certo(combos_total=26, combos_ok=0)
