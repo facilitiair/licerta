@@ -22,11 +22,8 @@
       <span class="text-xs px-2 py-0.5 rounded-full
         {{ 'bg-green-100 text-green-800' if u.ativo else 'bg-slate-200 text-slate-600' }}">
         {{ 'ativo' if u.ativo else 'desativado' }}</span>
-      <span class="text-xs text-slate-400">
-        {{ u.perfis|length }} perfil(is)
-        · canais: {{ 'Telegram' if u.telegram_chat_id }}
-        {% if u.email_alertas %}e-mail{% endif %}
-        {{ 'push' if u.assinaturas_push }}</span>
+      <!-- Perfis e canais de aviso são da pessoa: o administrador
+           gerencia contas, não vê o que cada uma configurou. -->
     </div>
     <div class="flex gap-2 mt-3 text-sm flex-wrap">
       {% if u.id != meu_id %}

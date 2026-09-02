@@ -112,8 +112,11 @@ def baixar_do_site(site=None, senha=None):
         if senha:
             s.post(f"{site}/login", data={"senha": senha},
                    allow_redirects=False, timeout=30)
+        # O cabeçalho identifica o ROBÔ: sem ele, a exportação devolve só
+        # os perfis da conta (cada login é privado, admin inclusive).
         r = s.get(f"{site}/api/perfis/exportar", timeout=30,
-                  allow_redirects=False)
+                  allow_redirects=False,
+                  headers={"X-Licerta-Robo": senha or ""})
         if r.status_code != 200:
             log.warning("Sincronização falhou: o site respondeu %s "
                         "(senha errada ou app antigo)", r.status_code)

@@ -2,6 +2,7 @@
 
 Subir com:  uvicorn app.main:app  (ou  python -m app.main)
 """
+import hmac
 import json
 import logging
 import os
@@ -986,14 +987,20 @@ async def perfis_exportar(request: Request):
 
     É o que mantém os três bancos (Railway, Actions, PC) com os MESMOS
     critérios: este app é a fonte da verdade e os outros sincronizam daqui.
-    O administrador (que é quem o robô usa) recebe todos; qualquer outra
-    conta recebe só os seus — palavras-chave e e-mail dos colegas não são
-    dela (AGENTS.md regra 6).
+
+    Cada login é privado, inclusive para o administrador: pelo navegador,
+    qualquer conta recebe SÓ os seus perfis. O conjunto completo só sai
+    para o robô da instalação (GitHub Actions / PC), que se identifica
+    com a senha da instalação no cabeçalho X-Licerta-Robo — é um
+    processo do sistema entregando alertas, não uma pessoa olhando.
     """
+    robo = request.headers.get("x-licerta-robo", "")
+    e_robo = bool(config.APP_SENHA) and hmac.compare_digest(
+        robo.encode(), config.APP_SENHA.encode())
     s = Sessao()
     try:
         return sincronizar.exportar_perfis(
-            s, usuario_id=None if _sou_admin(request) else eu(request).id)
+            s, usuario_id=None if e_robo else eu(request).id)
     finally:
         s.close()
 

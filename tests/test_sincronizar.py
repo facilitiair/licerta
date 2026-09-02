@@ -36,7 +36,8 @@ def _perfil_remoto(nome, **extra):
 
 
 def test_exportacao_exige_login_e_devolve_json(cliente):
-    r = cliente.get("/api/perfis/exportar")
+    r = cliente.get("/api/perfis/exportar",
+                    headers={"X-Licerta-Robo": config.APP_SENHA})
     assert r.status_code == 200
     perfis = r.json()
     assert isinstance(perfis, list) and perfis

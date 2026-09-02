@@ -189,6 +189,47 @@ def test_caso_pericial_e_pecas_do_admin_dao_404_ao_colega(como_colega):
             s.close()
 
 
+def test_exportacao_pelo_navegador_e_so_da_propria_conta(como_admin,
+                                                          como_colega, colega):
+    """Nem o administrador vê perfis alheios pelo navegador; o conjunto
+    completo só sai para o robô, identificado pela senha da instalação."""
+    from app.config import config
+    from app.db import PerfilBusca
+    s = Sessao()
+    try:
+        s.add(PerfilBusca(nome="Perfil secreto do colega", usuario_id=colega))
+        s.commit()
+    finally:
+        s.close()
+    try:
+        nomes_admin = {p["nome"] for p in
+                       como_admin.get("/api/perfis/exportar").json()}
+        assert "Perfil secreto do colega" not in nomes_admin
+        nomes_colega = {p["nome"] for p in
+                        como_colega.get("/api/perfis/exportar").json()}
+        assert nomes_colega == {"Perfil secreto do colega"}
+        nomes_robo = {p["nome"] for p in como_admin.get(
+            "/api/perfis/exportar",
+            headers={"X-Licerta-Robo": config.APP_SENHA}).json()}
+        assert "Perfil secreto do colega" in nomes_robo
+        errado = como_admin.get("/api/perfis/exportar",
+                                headers={"X-Licerta-Robo": "senha-errada"})
+        assert "Perfil secreto do colega" not in {p["nome"] for p in errado.json()}
+    finally:
+        s = Sessao()
+        try:
+            s.query(PerfilBusca).filter_by(
+                nome="Perfil secreto do colega").delete()
+            s.commit()
+        finally:
+            s.close()
+
+
+def test_tela_de_usuarios_nao_mostra_canais_nem_perfis(como_admin):
+    html = como_admin.get("/usuarios").text
+    assert "canais:" not in html and "perfil(is)" not in html
+
+
 def test_migracao_adota_orfaos_para_o_admin(memoria):
     from app.db import _adotar_orfaos
     adm = Usuario(nome="Adm", email="adm@x", senha_hash="h", papel="admin")
