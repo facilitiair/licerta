@@ -568,3 +568,11 @@ def test_portal_da_disputa_em_nome_humano():
     assert _filtro_portal(L("", "[LICITANET] - Aquisição")) == "Licitanet"
     assert _filtro_portal(L("https://novo.exemplo.gov.br/a")) ==         "novo.exemplo.gov.br"
     assert _filtro_portal(L("", "Aquisição")) == ""
+
+
+def test_titulo_sem_prefixo_do_portal():
+    from app.main import _filtro_sem_portal
+    assert _filtro_sem_portal("[Portal de Compras Públicas] - Futuro serviço")         == "Futuro serviço"
+    assert _filtro_sem_portal("[LICITANET]Aquisição") == "Aquisição"
+    assert _filtro_sem_portal("Sem prefixo") == "Sem prefixo"
+    assert _filtro_sem_portal(None) == ""

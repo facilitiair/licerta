@@ -184,6 +184,15 @@ templates.env.filters["quando"] = _filtro_quando
 templates.env.filters["dinheiro"] = _filtro_dinheiro
 templates.env.filters["sentenca"] = _filtro_sentenca
 templates.env.filters["resumir"] = _filtro_resumir
+
+
+def _filtro_sem_portal(texto):
+    """Tira o prefixo "[Portal X] - " do objeto: o portal já aparece no
+    seu lugar ("Disputa: ..."), e no título ele só empurra o assunto."""
+    return re.sub(r"^\s*\[[^\]]{1,60}\]\s*-?\s*", "", texto or "")
+
+
+templates.env.filters["sem_portal"] = _filtro_sem_portal
 templates.env.filters["numero_compra"] = _filtro_numero_compra
 templates.env.filters["fonte"] = _filtro_fonte
 templates.env.filters["portal"] = _filtro_portal
