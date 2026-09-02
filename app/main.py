@@ -94,6 +94,10 @@ from .texto import sentenca as _filtro_sentenca  # noqa: E402
 templates.env.filters["quando"] = _filtro_quando
 templates.env.filters["dinheiro"] = _filtro_dinheiro
 templates.env.filters["sentenca"] = _filtro_sentenca
+from .radar.alteracoes import _fmt as _filtro_mudanca  # noqa: E402
+# valor de alteração como gente lê: data em dd/mm, valor em R$
+templates.env.filters["mudanca"] = lambda valor, campo: _filtro_mudanca(
+    campo, valor or "")
 
 agendador = BackgroundScheduler(timezone=config.TZ)
 
@@ -501,17 +505,29 @@ async def painel(request: Request):
                                                     "vou_participar")))
                            | (PerfilMatch.favorito.is_(True)))
                    .distinct().limit(3).all())
-        if mudados:
-            nomes = "; ".join(
-                f"{l.municipio_nome or ''}/{l.uf or ''} — "
-                f"{_filtro_sentenca(l.objeto or '')[:60]}" for l in mudados)
+        # Um cartão POR edital, abrindo a página do próprio edital com o
+        # que mudou já escrito. Antes era um cartão só mandando para o
+        # funil — clique sem relação com o aviso (reclamação de 02/09).
+        from .radar.alteracoes import CAMPOS_VIGIADOS, _fmt
+        for l in mudados:
+            if len(acoes) >= 5:
+                break
+            mudancas = (s.query(LicitacaoAlteracao)
+                        .filter(LicitacaoAlteracao.licitacao_id == l.id,
+                                LicitacaoAlteracao.detectada_em >= corte_48h)
+                        .order_by(LicitacaoAlteracao.detectada_em.desc())
+                        .limit(3).all())
+            o_que = "; ".join(
+                f"{CAMPOS_VIGIADOS.get(a.campo, a.campo)}: "
+                f"{_fmt(a.campo, a.valor_antigo)[:40]} → "
+                f"{_fmt(a.campo, a.valor_novo)[:40]}" for a in mudancas)
             acoes.append({
                 "tom": "atencao", "icone": "file-diff",
-                "titulo": f"{len(mudados)} edital"
-                          f"{'is' if len(mudados) != 1 else ''} que você "
-                          "acompanha mudou",
-                "detalhe": nomes,
-                "rota": "/funil", "rotulo": "conferir"})
+                "titulo": "Edital que você acompanha mudou — "
+                          f"{l.municipio_nome or ''}/{l.uf or ''}",
+                "detalhe": (o_que + ". " if o_que else "")
+                           + _filtro_sentenca(l.objeto or "")[:90],
+                "rota": f"/licitacoes/{l.id}", "rotulo": "ver o que mudou"})
 
         # 4º — triagem do dia: só o que chegou nas últimas 24h E casa com
         # um perfil ativo (nunca o estoque acumulado)

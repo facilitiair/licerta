@@ -49,7 +49,8 @@
       {% for a in alteracoes %}
       <li>{{ a.detectada_em.strftime('%d/%m %H:%M') }} —
         <b>{{ rotulos_alteracao.get(a.campo, a.campo) }}</b>:
-        {{ a.valor_antigo[:120] }} → <b>{{ a.valor_novo[:120] }}</b></li>
+        {{ (a.valor_antigo|mudanca(a.campo))[:120] }} →
+        <b>{{ (a.valor_novo|mudanca(a.campo))[:120] }}</b></li>
       {% endfor %}
     </ul>
   {% endcall %}

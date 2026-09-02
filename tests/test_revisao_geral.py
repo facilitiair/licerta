@@ -408,3 +408,48 @@ def test_prompt_do_corretor_existe_e_e_neutro():
     from ia import cliente
     texto = cliente.carregar_prompt("peritos/perito-corretor")
     assert "mérito" in texto and "inteiro corrigido" in texto.lower()
+
+
+def test_cartao_de_edital_que_mudou_abre_o_proprio_edital(admin):
+    """O cartão 'edital que você acompanha mudou' mandava para o funil —
+    clique sem relação com o aviso. Agora abre o edital, dizendo o que
+    mudou."""
+    from app.config import agora
+    from app.db import LicitacaoAlteracao
+    s = Sessao()
+    try:
+        adm_id = (s.query(Usuario.id).filter_by(papel="admin")
+                  .order_by(Usuario.id).scalar())
+        perfil = PerfilBusca(nome="perfil-teste-mudanca", usuario_id=adm_id)
+        lic = Licitacao(numero_controle_pncp="teste-mudou-1-1/2026",
+                        objeto="Obra de teste que mudou", municipio_nome="X",
+                        uf="PI", data_encerramento_proposta="2099-12-01T09:00:00")
+        s.add_all([perfil, lic])
+        s.flush()
+        s.add(PerfilMatch(perfil_id=perfil.id, licitacao_id=lic.id,
+                          status="vou_participar"))
+        s.add(LicitacaoAlteracao(licitacao_id=lic.id, campo="situacao",
+                                 valor_antigo="Divulgada",
+                                 valor_novo="Suspensa", detectada_em=agora()))
+        s.commit()
+        ids = (perfil.id, lic.id)
+    finally:
+        s.close()
+    perfil_id, lic_id = ids
+    try:
+        html = admin.get("/").text
+        assert f'href="/licitacoes/{lic_id}"' in html
+        assert "situação: Divulgada → Suspensa" in html
+        assert "ver o que mudou" in html
+        assert 'href="/funil"' not in html.split("Edital que você acompanha")[1] \
+            .split("</a>")[0]
+    finally:
+        s = Sessao()
+        try:
+            s.query(LicitacaoAlteracao).filter_by(licitacao_id=lic_id).delete()
+            s.query(PerfilMatch).filter_by(licitacao_id=lic_id).delete()
+            s.query(Licitacao).filter_by(id=lic_id).delete()
+            s.query(PerfilBusca).filter_by(id=perfil_id).delete()
+            s.commit()
+        finally:
+            s.close()
