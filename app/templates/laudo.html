@@ -19,9 +19,12 @@
     {% if sou_admin %} · {{ laudo.modelo }} ·
       US$ {{ '%.4f' % (laudo.custo_usd or 0) }}{% endif %}</span>
   <span class="ml-auto flex gap-2">
+    <a href="/pericias/laudos/{{ laudo.id }}/baixar?formato=pdf" class="btn-sec"
+       style="min-height: 36px">
+      <i data-lucide="file-down" class="lucide"></i> PDF</a>
     <a href="/pericias/laudos/{{ laudo.id }}/baixar" class="btn-sec"
        style="min-height: 36px">
-      <i data-lucide="download" class="lucide"></i> Baixar em Word</a>
+      <i data-lucide="download" class="lucide"></i> Word</a>
     <button onclick="navigator.clipboard.writeText(document.getElementById('texto').innerText).then(() => this.innerText = 'Copiado')"
             class="btn-sec" style="min-height: 36px">
       <i data-lucide="copy" class="lucide"></i> Copiar</button>

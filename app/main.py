@@ -1455,7 +1455,8 @@ def licitacao_analisar(request: Request, lic_id: int, forcar: int = Form(0)):
         s.close()
 
 
-def _render_ficha(s, request, lic, ficha, analisando=False):
+def _render_ficha(s, request, lic, ficha, analisando=False,
+                  pente_fino=False):
     dados = _dados_ficha(ficha) if not analisando else None
     acompanho = (s.query(PerfilMatch).join(PerfilBusca)
                  .filter(PerfilMatch.licitacao_id == lic.id,
@@ -1464,8 +1465,65 @@ def _render_ficha(s, request, lic, ficha, analisando=False):
                  .count() > 0)
     return templates.TemplateResponse(request, "_ficha_edital.html", {
         "lic": lic, "ficha": ficha, "dados": dados, "analisando": analisando,
+        "pente_fino": pente_fino,
         "sou_admin": _sou_admin(request), "acompanho": acompanho,
         **_contexto_checklist(s, dados, lic)})
+
+
+@app.post("/licitacoes/{lic_id}/pente-fino", response_class=HTMLResponse)
+def licitacao_pente_fino(request: Request, lic_id: int):
+    """Releitura completa do edital sobre a ficha existente, em segundo
+    plano — o bloco da ficha se atualiza sozinho quando terminar."""
+    from .editais import analise as analise_mod
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        if not os.environ.get("ANTHROPIC_API_KEY", ""):
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">A análise por IA '
+                'está desligada nesta instalação.</div>')
+        ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
+        analise_mod.iniciar_em_fundo(lic_id, pente_fino=True)
+        return _render_ficha(s, request, lic, ficha, analisando=True,
+                             pente_fino=True)
+    finally:
+        s.close()
+
+
+@app.get("/licitacoes/{lic_id}/ficha/baixar")
+def licitacao_ficha_baixar(request: Request, lic_id: int,
+                           formato: str = "pdf"):
+    """A ficha como documento: PDF (padrão) ou Word."""
+    from .editais.relatorio import ficha_para_markdown
+    from .docx_export import MEDIA_DOCX, markdown_para_docx
+    from .pdf_export import MEDIA_PDF, markdown_para_pdf
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        ficha = (s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
+                 if lic else None)
+        dados = _dados_ficha(ficha)
+        if not (lic and dados):
+            return HTMLResponse("Ficha ainda não gerada.", status_code=404)
+        from .acompanhamento.prazos import prazos_da_sessao
+        from .documentos import checklist as checklist_mod
+        prazos = prazos_da_sessao(checklist_mod.data_da_sessao(dados, lic),
+                                  hoje())
+        if prazos and prazos["sessao_passou"]:
+            prazos = None
+        markdown = ficha_para_markdown(lic, dados, ficha, prazos)
+        nome = f"ficha-{lic.numero_controle_pncp}".replace("/", "-")
+        if formato == "docx":
+            return Response(markdown_para_docx(markdown), media_type=MEDIA_DOCX,
+                            headers={"Content-Disposition":
+                                     f'attachment; filename="{nome}.docx"'})
+        return Response(markdown_para_pdf(markdown), media_type=MEDIA_PDF,
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{nome}.pdf"'})
+    finally:
+        s.close()
 
 
 @app.get("/licitacoes/{lic_id}/ficha", response_class=HTMLResponse)
@@ -2136,6 +2194,12 @@ def pericia_laudo_baixar(request: Request, laudo_id: int,
             return Response(laudo.texto, media_type="text/markdown",
                             headers={"Content-Disposition":
                                      f'attachment; filename="laudo-{laudo.caso_id}.md"'})
+        if formato == "pdf":
+            from .pdf_export import MEDIA_PDF, markdown_para_pdf
+            return Response(markdown_para_pdf(laudo.texto),
+                            media_type=MEDIA_PDF,
+                            headers={"Content-Disposition": 'attachment; '
+                                     f'filename="laudo-{laudo.caso_id}.pdf"'})
         return Response(markdown_para_docx(laudo.texto),
                         media_type=MEDIA_DOCX,
                         headers={"Content-Disposition":
@@ -2187,6 +2251,12 @@ def parecer_baixar(request: Request, parecer_id: int, formato: str = "docx"):
             return Response(parecer.texto, media_type="text/markdown",
                             headers={"Content-Disposition":
                                      f'attachment; filename="{nome}"'})
+        if formato == "pdf":
+            from .pdf_export import MEDIA_PDF, markdown_para_pdf
+            return Response(markdown_para_pdf(parecer.texto),
+                            media_type=MEDIA_PDF,
+                            headers={"Content-Disposition": 'attachment; '
+                                     f'filename="parecer-{parecer.licitacao_id}.pdf"'})
         nome = f"parecer-{parecer.licitacao_id}.docx"
         return Response(markdown_para_docx(parecer.texto),
                         media_type=MEDIA_DOCX,
@@ -2292,6 +2362,12 @@ def minuta_baixar(request: Request, minuta_id: int, formato: str = "docx"):
             return Response(minuta.texto, media_type="text/markdown",
                             headers={"Content-Disposition":
                                      f'attachment; filename="{nome}"'})
+        if formato == "pdf":
+            from .pdf_export import MEDIA_PDF, markdown_para_pdf
+            return Response(markdown_para_pdf(minuta.texto),
+                            media_type=MEDIA_PDF,
+                            headers={"Content-Disposition": 'attachment; '
+                                     f'filename="minuta-{minuta.tipo}-{minuta.licitacao_id}.pdf"'})
         nome = f"minuta-{minuta.tipo}-{minuta.licitacao_id}.docx"
         return Response(markdown_para_docx(minuta.texto),
                         media_type=MEDIA_DOCX,

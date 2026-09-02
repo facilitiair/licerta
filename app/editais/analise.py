@@ -207,12 +207,14 @@ def em_andamento(lic_id):
         return lic_id in _em_andamento
 
 
-def _rodar_em_fundo(lic_id, forcar):
+def _rodar_em_fundo(lic_id, forcar, pente_fino=False):
     from ..db import Licitacao, Sessao
     s = Sessao()
     try:
         lic = s.get(Licitacao, lic_id)
-        if lic is not None:
+        if lic is not None and pente_fino:
+            pente_fino_da_ficha(s, lic)
+        elif lic is not None:
             analisar_edital(s, lic, forcar=forcar)
     except Exception:  # noqa: BLE001 — a ficha grava o erro; aqui só log
         log.exception("Análise em segundo plano da licitação %s falhou", lic_id)
@@ -222,15 +224,78 @@ def _rodar_em_fundo(lic_id, forcar):
             _em_andamento.discard(lic_id)
 
 
-def iniciar_em_fundo(lic_id, forcar=False):
-    """Dispara a análise numa thread. False se já há uma em andamento."""
+def iniciar_em_fundo(lic_id, forcar=False, pente_fino=False):
+    """Dispara a análise (ou o pente fino) numa thread. False se já há
+    uma em andamento para esta licitação."""
     with _trava:
         if lic_id in _em_andamento:
             return False
         _em_andamento.add(lic_id)
-    threading.Thread(target=_rodar_em_fundo, args=(lic_id, forcar),
-                     daemon=True).start()
+    threading.Thread(target=_rodar_em_fundo,
+                     args=(lic_id, forcar, pente_fino), daemon=True).start()
     return True
+
+
+VERSAO_PROMPT_PENTE_FINO = "ficha-pente-fino/1"
+
+
+def pente_fino_da_ficha(sessao_db, lic):
+    """Segunda leitura do edital inteiro, no modelo forte, sobre a ficha
+    que já existe: corrige, completa e registra o que mudou.
+
+    A pedido do dono do produto (02/09/2026): "reanalisar e passar o
+    pente fino outras vezes caso tenha deixado algo importante passar".
+    Cada passada fica registrada em `dados["revisoes"]` — o usuário vê o
+    que a releitura acrescentou, e o custo fica somado na ficha.
+    """
+    ficha = (sessao_db.query(EditalFicha)
+             .filter_by(licitacao_id=lic.id).first())
+    if not (ficha and ficha.ficha_json):
+        return analisar_edital(sessao_db, lic)
+    cliente.exigir_chave()
+    arquivos = (sessao_db.query(ArquivoEdital)
+                .filter_by(licitacao_id=lic.id).all())
+    texto, _ = extrair_texto_pdfs(arquivos)
+    if not texto:
+        ficha.erro = ("O pente fino precisa do texto do edital, e nem a "
+                      "leitura por imagem encontrou texto legível.")
+        sessao_db.commit()
+        return ficha
+    anterior = json.loads(ficha.ficha_json)
+    revisoes = anterior.pop("revisoes", []) or []
+    try:
+        resposta = cliente.chamar(
+            job="ficha_pente_fino",
+            prompt_sistema=cliente.carregar_prompt("ficha-pente-fino"),
+            mensagem=("FICHA DA PRIMEIRA LEITURA:\n"
+                      + json.dumps(anterior, ensure_ascii=False, indent=1)
+                      + "\n\n" + _mensagem(lic, texto)),
+            modelo=camadas.PERICIA, max_tokens=16000, json_estrito=True)
+        novo = json.loads(resposta)
+        achados = novo.pop("achados_do_pente_fino", None) or []
+        dados = _validar_ficha(json.dumps(novo, ensure_ascii=False))
+    except Exception:  # noqa: BLE001 — a ficha anterior continua valendo
+        log.exception("Pente fino da licitação %s falhou", lic.id)
+        ficha.erro = ("O pente fino não terminou desta vez. A ficha "
+                      "anterior continua valendo.")
+        sessao_db.commit()
+        return ficha
+    revisoes.append({"quando": agora().strftime("%d/%m/%Y %H:%M"),
+                     "achados": [str(a) for a in achados][:40]})
+    dados["revisoes"] = revisoes
+    ficha.ficha_json = json.dumps(dados, ensure_ascii=False)
+    ficha.erro = ""
+    ficha.modelo = f"{ficha.modelo or camadas.EXTRACAO} + pente fino "
+    ficha.modelo = ficha.modelo.replace(" + pente fino  + pente fino ",
+                                        " + pente fino ").strip()
+    ficha.versao_prompt = VERSAO_PROMPT_PENTE_FINO
+    ficha.custo_usd = round((ficha.custo_usd or 0)
+                            + _custo_da_ultima_chamada(), 4)
+    ficha.gerada_em = agora()
+    sessao_db.commit()
+    log.info("Pente fino da licitação %s: %s achado(s), US$ %.4f",
+             lic.id, len(achados), ficha.custo_usd)
+    return ficha
 
 
 def analisar_edital(sessao_db, lic, forcar=False):

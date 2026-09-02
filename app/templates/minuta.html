@@ -18,9 +18,10 @@
     {% if sou_admin %} · {{ minuta.modelo }} ·
       US$ {{ '%.4f' % (minuta.custo_usd or 0) }}{% endif %}</span>
   <span class="ml-auto flex gap-2">
-    <a href="/minutas/{{ minuta.id }}/baixar"
-       class="border border-blue-700 text-blue-700 px-3 py-1.5 rounded-lg
-              text-xs font-semibold hover:bg-blue-50"><i data-lucide="download" class="lucide"></i> Baixar em Word</a>
+    <a href="/minutas/{{ minuta.id }}/baixar?formato=pdf" class="btn-sec"
+       style="min-height: 36px"><i data-lucide="file-down" class="lucide"></i> PDF</a>
+    <a href="/minutas/{{ minuta.id }}/baixar" class="btn-sec"
+       style="min-height: 36px"><i data-lucide="download" class="lucide"></i> Word</a>
     <button onclick="navigator.clipboard.writeText(document.getElementById('texto').innerText).then(() => this.innerText = 'Copiado')"
             class="border border-slate-400 text-slate-600 px-3 py-1.5
                    rounded-lg text-xs font-semibold hover:bg-slate-50">

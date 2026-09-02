@@ -10,9 +10,15 @@
        hx-swap="outerHTML">
     <span class="inline-flex items-center gap-2 text-slate-600">
       <i data-lucide="loader-circle" class="lucide animate-spin"></i>
+      {% if pente_fino %}
+      Passando o pente fino: relendo o edital e os anexos inteiros no
+      modelo mais forte — leva alguns minutos. Esta parte da página
+      atualiza sozinha.
+      {% else %}
       Lendo o edital página por página — documento digitalizado leva
       alguns minutos. Esta parte da página atualiza sozinha; pode
-      continuar navegando.</span>
+      continuar navegando.
+      {% endif %}</span>
   </div>
 
 {% elif dados %}
@@ -30,12 +36,46 @@
         {{ ficha.gerada_em.strftime('%d/%m/%Y %H:%M') }}
         {% if sou_admin %} · {{ ficha.modelo }} ·
           US$ {{ '%.4f' % (ficha.custo_usd or 0) }}{% endif %}</span>
-      <button hx-post="/licitacoes/{{ lic.id }}/analisar" hx-vals='{"forcar": 1}'
-              hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
-              hx-disabled-elt="this"
-              hx-confirm="Refazer a ficha? Cada análise tem custo (centavos)."
-              class="ml-auto text-[11px] text-blue-700 underline">refazer</button>
+      <span class="ml-auto flex items-center gap-2 flex-wrap">
+        <!-- A ficha é documento: sai em PDF e Word (pedido de 02/09) -->
+        <a href="/licitacoes/{{ lic.id }}/ficha/baixar?formato=pdf"
+           class="btn-sec" style="min-height: 32px; font-size: var(--t-13)">
+          <i data-lucide="file-down" class="lucide"></i> PDF</a>
+        <a href="/licitacoes/{{ lic.id }}/ficha/baixar?formato=docx"
+           class="btn-sec" style="min-height: 32px; font-size: var(--t-13)">
+          <i data-lucide="file-down" class="lucide"></i> Word</a>
+        <button hx-post="/licitacoes/{{ lic.id }}/pente-fino"
+                hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-confirm="Passar o pente fino? O edital e os anexos são relidos inteiros pelo modelo mais forte, à procura do que a primeira leitura deixou passar. Leva alguns minutos e tem custo (em geral menos de 1 dólar)."
+                class="btn-sec" style="min-height: 32px; font-size: var(--t-13)">
+          <i data-lucide="search-check" class="lucide"></i> Passar o pente fino</button>
+        <button hx-post="/licitacoes/{{ lic.id }}/analisar" hx-vals='{"forcar": 1}'
+                hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-confirm="Refazer a ficha do zero? Cada análise tem custo (centavos)."
+                class="text-[11px] text-blue-700 underline">refazer</button>
+      </span>
     </div>
+    {% if dados.revisoes %}
+    <details class="card" open>
+      <summary class="cursor-pointer px-3 py-2 text-xs font-semibold">
+        Pente fino — {{ dados.revisoes|length }} passada{{ 's' if
+        dados.revisoes|length != 1 }}: o que a releitura acrescentou</summary>
+      <div class="text-xs px-3 pb-2 space-y-2">
+        {% for rev in dados.revisoes %}
+        <div><b>Passada {{ loop.index }} ({{ rev.quando }})</b>
+          {% if rev.achados %}
+          <ul class="list-disc ml-4 mt-0.5 space-y-0.5">
+            {% for a in rev.achados %}<li>{{ a }}</li>{% endfor %}
+          </ul>
+          {% else %}<span class="text-slate-500">— nada a acrescentar: a
+            ficha já estava completa.</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
 
     {% if dados.analise_incompleta %}
     {% call c.faixa('atencao', 'triangle-alert') %}
