@@ -206,13 +206,23 @@
       texto publicado — confira sempre no edital antes de decidir.</p>
   </div>
 
+{% elif lic.fonte != 'pncp' %}
+  <!-- Item do Mural: toda licitação tem de estar no PNCP (Lei 14.133).
+       A página procura o registro do portal sozinha ao abrir. -->
+  <div class="p-4 text-sm" hx-post="/licitacoes/{{ lic.id }}/localizar-pncp"
+       hx-trigger="load" hx-swap="innerHTML">
+    <span class="text-xs text-slate-500 inline-flex items-center gap-2">
+      <i data-lucide="loader-circle" class="lucide animate-spin"></i>
+      Localizando este certame no PNCP para trazer o edital...</span>
+  </div>
+
 {% elif ficha and ficha.erro %}
   <div class="p-4 text-sm space-y-2">
     {% call c.faixa('atencao', 'file-x') %}{{ ficha.erro }}{% endcall %}
     <button hx-post="/licitacoes/{{ lic.id }}/analisar" hx-vals='{"forcar": 1}'
             hx-target="#ficha{{ lic.id }}" hx-swap="outerHTML"
             hx-disabled-elt="this" class="btn-sec" style="min-height: 36px">
-      <i data-lucide="rotate-cw" class="lucide"></i> Tentar de novo
+      <i data-lucide="file-search" class="lucide"></i> Analisar edital
       <span class="htmx-indicator">— analisando (até 1 min)...</span></button>
   </div>
 

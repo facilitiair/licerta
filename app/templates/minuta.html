@@ -12,7 +12,7 @@
 <div class="flex items-center gap-3 flex-wrap mb-3">
   <h1 class="text-lg font-bold"><i data-lucide="scroll-text" class="lucide"></i> Minuta de {{ minuta.tipo }}</h1>
   <span class="text-xs text-slate-500">
-    {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }} —
+    {{ lic.modalidade_nome }} {{ lic|numero_compra }} —
     {{ lic.orgao_nome }} · gerada em
     {{ minuta.criada_em.strftime('%d/%m/%Y %H:%M') }}
     {% if sou_admin %} · {{ minuta.modelo }} ·

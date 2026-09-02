@@ -90,10 +90,60 @@ def _filtro_dinheiro(valor):
 
 
 from .texto import sentenca as _filtro_sentenca  # noqa: E402
+from .texto import resumir as _filtro_resumir  # noqa: E402
+
+
+def _filtro_numero_compra(lic):
+    """'020/2026' ou '90008/2026' — nunca '020/2026/None' (UI §7)."""
+    numero = (getattr(lic, "numero_compra", None) or "").strip()
+    ano = getattr(lic, "ano_compra", None)
+    if ano and not numero.endswith(f"/{ano}"):
+        return f"{numero}/{ano}" if numero else str(ano)
+    return numero
+
+
+PORTAIS = {
+    "portaldecompraspublicas": "Portal de Compras Públicas",
+    "compras.gov.br": "Compras.gov.br", "comprasnet": "Compras.gov.br",
+    "bll.org.br": "BLL Compras", "bllcompras": "BLL Compras",
+    "licitanet": "Licitanet", "bnc.org.br": "BNC Compras",
+    "bnccompras": "BNC Compras", "licitardigital": "Licitar Digital",
+    "bbmnet": "BBMNET", "novobbmnet": "BBMNET", "ammlicita": "AMM Licita",
+    "licitacoes-e": "Licitações-e (BB)", "licitacoes-e.com.br":
+    "Licitações-e (BB)", "compras.rs.gov.br": "Compras RS",
+    "bec.sp.gov.br": "BEC/SP", "publinexo": "Publinexo",
+    "licitamais": "Licita Mais Brasil", "dattacomp": "Dattacomp",
+    "sistemas.tce.pi.gov.br": "Mural de Licitações do TCE-PI",
+    "pncp.gov.br": "PNCP",
+}
+
+
+def _filtro_portal(lic):
+    """Onde a disputa acontece, em nome humano: pelo endereço do sistema
+    de origem ou pelo prefixo "[Portal X] -" do objeto. '' se não souber."""
+    from urllib.parse import urlparse
+    link = getattr(lic, "link_sistema_origem", "") or ""
+    host = urlparse(link).netloc.lower() if link else ""
+    for chave, nome in PORTAIS.items():
+        if chave in host:
+            return nome
+    m = re.match(r"^\s*\[([^\]]{2,40})\]", getattr(lic, "objeto", "") or "")
+    if m:
+        return m.group(1).strip().title()
+    return host.replace("www.", "") if host else ""
+
+
+def _filtro_fonte(lic):
+    """Nome humano da fonte do registro (UI §7: nada de id técnico)."""
+    return "Mural TCE-PI" if getattr(lic, "fonte", "") == "tcepi" else "PNCP"
 
 templates.env.filters["quando"] = _filtro_quando
 templates.env.filters["dinheiro"] = _filtro_dinheiro
 templates.env.filters["sentenca"] = _filtro_sentenca
+templates.env.filters["resumir"] = _filtro_resumir
+templates.env.filters["numero_compra"] = _filtro_numero_compra
+templates.env.filters["fonte"] = _filtro_fonte
+templates.env.filters["portal"] = _filtro_portal
 from .radar.alteracoes import _fmt as _filtro_mudanca  # noqa: E402
 # valor de alteração como gente lê: data em dd/mm, valor em R$
 templates.env.filters["mudanca"] = lambda valor, campo: _filtro_mudanca(
@@ -1393,6 +1443,44 @@ def licitacao_analisar(request: Request, lic_id: int, forcar: int = Form(0)):
             "lic": lic, "ficha": ficha, "dados": dados,
             "sou_admin": _sou_admin(request), "acompanho": acompanho,
             **_contexto_checklist(s, dados, lic)})
+    finally:
+        s.close()
+
+
+@app.post("/licitacoes/{lic_id}/localizar-pncp", response_class=HTMLResponse)
+def licitacao_localizar_pncp(request: Request, lic_id: int):
+    """Item do Mural TCE-PI procura o seu registro no PNCP.
+
+    Toda licitação tem de estar no PNCP (Lei 14.133). Quando o Mural sai
+    na frente, esta rota acha o certame no portal, transfere a triagem e
+    abre a página do PNCP — com documentos e ficha. Sem botão de "tentar
+    de novo": ou encontra agora, ou a coleta seguinte encontra sozinha.
+    """
+    from .radar.coleta import adotar_do_pncp
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic or lic.fonte == "pncp":
+            return HTMLResponse("")
+        try:
+            item = pncp_busca.localizar_correspondente(lic)
+        except Exception:  # noqa: BLE001 — portal fora do ar não é 500
+            log.exception("Busca do item %s no PNCP falhou", lic_id)
+            return HTMLResponse(
+                '<div class="faixa faixa-info text-xs">O PNCP não respondeu '
+                'agora. O radar confere de novo na próxima atualização e '
+                'esta página passa a mostrar os documentos do portal.</div>')
+        if not item:
+            return HTMLResponse(
+                '<div class="faixa faixa-info text-xs">Este certame ainda não '
+                'apareceu no PNCP com os mesmos dados — o Mural costuma sair '
+                'na frente. O radar confere a cada atualização e, quando o '
+                'PNCP publicar, esta página passa a ser a do PNCP, com '
+                'documentos e ficha.</div>')
+        nova = adotar_do_pncp(s, lic, item)
+        resposta = HTMLResponse("")
+        resposta.headers["HX-Redirect"] = f"/licitacoes/{nova.id}"
+        return resposta
     finally:
         s.close()
 

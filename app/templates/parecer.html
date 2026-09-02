@@ -13,7 +13,7 @@
 <div class="flex items-center gap-3 flex-wrap mb-3">
   <h1 class="text-lg font-bold">Parecer do analista</h1>
   <span class="text-xs text-slate-500">
-    {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }} —
+    {{ lic.modalidade_nome }} {{ lic|numero_compra }} —
     {{ lic.municipio_nome }}/{{ lic.uf }} · gerado em
     {{ parecer.criado_em.strftime('%d/%m/%Y %H:%M') }}
     {% if sou_admin %} · {{ parecer.modelo }} ·

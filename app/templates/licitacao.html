@@ -11,16 +11,22 @@
       <i data-lucide="arrow-left" class="lucide"></i> Voltar</a></p>
   <p class="text-xs text-slate-500 mb-1">
     <a href="/licitacoes" class="underline">Oportunidades</a> ·
-    {{ lic.modalidade_nome }} {{ lic.numero_compra }}/{{ lic.ano_compra }}
+    {{ lic.modalidade_nome }} {{ lic|numero_compra }}
     · {{ lic.municipio_nome or '' }}{{ '/' + lic.uf if lic.uf }}</p>
   <div class="flex items-start gap-3 flex-wrap">
     <h1 class="text-xl font-bold max-w-3xl" title="{{ lic.objeto or '' }}">
-      {{ (lic.objeto|sentenca)[:160] }}</h1>
-    <span class="ml-auto flex items-center gap-2">
-      {{ c.badge(lic.data_encerramento_proposta|quando,
+      {{ (lic.objeto|sentenca)|resumir(160) }}</h1>
+    <span class="ml-auto flex items-center gap-2 flex-wrap">
+      <!-- O que decide a agenda de quem disputa: QUANDO abre e ONDE -->
+      {{ c.badge('Abertura ' + (lic.data_encerramento_proposta|quando),
                  'critico' if acompanho and
                    (lic.data_encerramento_proposta or '')[:10] <= hoje_iso
                  else 'neutro', 'alarm-clock') }}
+      {% if lic|portal %}
+      <a href="{{ lic.link_sistema_origem or lic.link_pncp or '#' }}"
+         target="_blank" title="portal onde a disputa acontece">
+        {{ c.badge('Disputa: ' + (lic|portal), 'primario', 'globe') }}</a>
+      {% endif %}
       {% if lic.situacao %}{{ c.badge(lic.situacao) }}{% endif %}
     </span>
   </div>

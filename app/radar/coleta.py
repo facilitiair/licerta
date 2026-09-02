@@ -158,15 +158,34 @@ def e_duplicata_tcepi(item, chaves):
 
 
 def ibge_por_nome(sessao_db, uf="PI"):
-    """{nome normalizado -> código IBGE} dos municípios de uma UF.
+    """{nome normalizado -> (código IBGE, nome oficial)} de uma UF.
 
     O Mural não traz o código IBGE, e o filtro de município dos perfis
     compara códigos: sem este mapa, perfil com município escolhido
-    descartava o mural inteiro em silêncio.
+    descartava o mural inteiro em silêncio. O nome oficial vem junto
+    porque o Mural escreve sem acento ("Sao Juliao") e a tela repetia.
     """
-    return {normalizar(nome): codigo for codigo, nome in
+    return {normalizar(nome): (codigo, nome) for codigo, nome in
             sessao_db.query(Municipio.codigo_ibge, Municipio.nome)
             .filter(Municipio.uf == uf)}
+
+
+def _oficializar_municipio(item_ou_lic, ibge):
+    """Preenche código IBGE e nome oficial (com acento) a partir do mapa."""
+    e_dict = isinstance(item_ou_lic, dict)
+    nome = (item_ou_lic.get("municipio_nome") if e_dict
+            else item_ou_lic.municipio_nome)
+    achado = ibge.get(normalizar(nome or "")) if nome else None
+    if not achado:
+        return False
+    codigo, oficial = achado
+    if e_dict:
+        item_ou_lic["municipio_ibge"] = codigo
+        item_ou_lic["municipio_nome"] = oficial
+    else:
+        item_ou_lic.municipio_ibge = codigo
+        item_ou_lic.municipio_nome = oficial
+    return True
 
 
 def _coletar_tcepi(sessao_db, perfis, erros):
@@ -180,9 +199,8 @@ def _coletar_tcepi(sessao_db, perfis, erros):
         for item in coletar_mural(dias_futuro=config.DIAS_JANELA_FUTURA):
             if e_duplicata_tcepi(item, chaves):
                 continue
-            if item.get("municipio_nome") and not item.get("municipio_ibge"):
-                item["municipio_ibge"] = ibge.get(
-                    normalizar(item["municipio_nome"]))
+            if not item.get("municipio_ibge"):
+                _oficializar_municipio(item, ibge)
             _upsert(sessao_db, item)
             qtd += 1
         sessao_db.commit()
@@ -217,9 +235,8 @@ def reconciliar_tcepi(sessao_db):
             # nas duas fontes — nunca era testada.
             lic.municipio_nome = municipio_do_orgao(lic.orgao_nome)
             preenchidos += 1 if lic.municipio_nome else 0
-        if lic.municipio_nome and not lic.municipio_ibge:
-            lic.municipio_ibge = ibge.get(normalizar(lic.municipio_nome))
-            preenchidos += 1 if lic.municipio_ibge else 0
+        if not lic.municipio_ibge and _oficializar_municipio(lic, ibge):
+            preenchidos += 1
         if not chaves:
             continue
         item = {"objeto": lic.objeto, "municipio_nome": lic.municipio_nome,
@@ -237,6 +254,40 @@ def reconciliar_tcepi(sessao_db):
         log.info("Mural TCE-PI: %s duplicatas do PNCP removidas, "
                  "%s municípios preenchidos", removidas, preenchidos)
     return removidas
+
+
+def adotar_do_pncp(sessao_db, lic_mural, item):
+    """O certame do Mural vira o registro do PNCP, sem perder a triagem.
+
+    Cria (ou acha) a licitação do PNCP, transfere os casamentos do
+    usuário — status, favorito, anotação — e apaga a linha do Mural com
+    seus dependentes. Devolve a licitação do PNCP.
+    """
+    from .limpeza import apagar_licitacao
+    nova = _upsert(sessao_db, dict(item))
+    sessao_db.flush()
+    # A busca do portal vem magra (sem valor, às vezes sem datas): o que o
+    # Mural já sabia fica, até a coleta seguinte trazer o dado do PNCP.
+    for campo in ("municipio_ibge", "valor_total_estimado",
+                  "data_abertura_proposta", "data_encerramento_proposta",
+                  "link_sistema_origem"):
+        if getattr(nova, campo, None) is None and                 getattr(lic_mural, campo, None) is not None:
+            setattr(nova, campo, getattr(lic_mural, campo))
+    existentes = {m.perfil_id for m in nova.matches}
+    for m in list(lic_mural.matches):
+        if m.perfil_id in existentes:
+            continue
+        sessao_db.add(PerfilMatch(
+            perfil_id=m.perfil_id, licitacao_id=nova.id, status=m.status,
+            favorito=m.favorito, anotacao=m.anotacao, termos=m.termos,
+            lido=m.lido, notificado=True, data_match=m.data_match))
+    sessao_db.flush()
+    mural_id = lic_mural.id
+    apagar_licitacao(sessao_db, mural_id)
+    sessao_db.expunge(lic_mural)          # a linha já não existe
+    sessao_db.commit()
+    log.info("Item do Mural %s adotado pelo PNCP %s", mural_id, nova.id)
+    return nova
 
 
 def _coletar_atas(sessao_db, perfis, erros, sessao=None):

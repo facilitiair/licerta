@@ -17,7 +17,7 @@
     <span class="min-w-0">
       <span class="block font-semibold">Impugnação —
         {{ m.licitacao.modalidade_nome or 'Licitação' }}
-        {{ m.licitacao.numero_compra }}/{{ m.licitacao.ano_compra }}</span>
+        {{ m.licitacao|numero_compra }}</span>
       <span class="block text-xs text-slate-500 truncar"
             title="{{ m.licitacao.objeto or '' }}">
         {{ m.licitacao.municipio_nome or '' }}{{ '/' + m.licitacao.uf

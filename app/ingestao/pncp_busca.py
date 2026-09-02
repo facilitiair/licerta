@@ -96,6 +96,67 @@ def pesquisar(q="", uf="", status="abertas", pagina=1, tam_pagina=20,
             "itens": [_mapear(i) for i in dados.get("items") or []]}
 
 
+def _palavras_chave(objeto, quantas=6):
+    """As palavras mais informativas do objeto para a busca textual."""
+    curtas = {"de", "da", "do", "das", "dos", "para", "e", "em", "com", "a",
+              "o", "as", "os", "no", "na", "nos", "nas", "por", "ao", "à"}
+    palavras = [p for p in normalizar(objeto or "").split()
+                if len(p) > 2 and p not in curtas]
+    return " ".join(palavras[:quantas])
+
+
+def pontuar_correspondencia(lic, item):
+    """Quanto o item do PNCP parece ser o MESMO certame do Mural.
+
+    Município igual é obrigatório. Depois, qualquer um destes fecha:
+    valor estimado igual, número/ano da compra iguais, ou o começo do
+    objeto igual. Devolve 0 quando não é o mesmo.
+    """
+    if normalizar(item.get("municipio_nome") or "") != \
+            normalizar(getattr(lic, "municipio_nome", "") or ""):
+        return 0
+    pontos = 0
+    valor_lic, valor_item = (getattr(lic, "valor_total_estimado", None),
+                             item.get("valor_total_estimado"))
+    if valor_lic and valor_item and abs(float(valor_lic) - float(valor_item)) < 1:
+        pontos += 3
+    numero = (getattr(lic, "numero_compra", "") or "")
+    digitos = "".join(c for c in numero.split("/")[0] if c.isdigit()).lstrip("0")
+    numero_item = "".join(c for c in (item.get("numero_compra") or "")
+                          if c.isdigit()).lstrip("0")
+    ano_lic = numero.split("/")[-1] if "/" in numero else ""
+    if digitos and digitos == numero_item and (
+            not ano_lic or str(item.get("ano_compra") or "") == ano_lic):
+        pontos += 2
+    a = normalizar(getattr(lic, "objeto", "") or "")[:80]
+    b = normalizar(item.get("objeto") or "")
+    b = b.split("] - ", 1)[-1][:80] if b.startswith("[") else b[:80]
+    if a and a == b:
+        pontos += 2
+    return pontos
+
+
+def localizar_correspondente(lic):
+    """Procura no PNCP o certame que o Mural TCE-PI publicou.
+
+    Toda licitação da Lei 14.133 tem de estar no PNCP; o Mural costuma
+    sair antes. Devolve o item mapeado (pronto para o upsert) ou None.
+    """
+    municipios = None
+    achados = buscar_opcoes("municipios", lic.municipio_nome or "", limite=3)
+    if achados:
+        municipios = [a["id"] for a in achados]
+    resultado = pesquisar(q=_palavras_chave(lic.objeto), ufs=["PI"],
+                          municipios=municipios, status="todas",
+                          tam_pagina=20, ordenacao="relevancia")
+    melhor, nota = None, 0
+    for item in resultado["itens"]:
+        p = pontuar_correspondencia(lic, item)
+        if p > nota:
+            melhor, nota = item, p
+    return melhor if nota >= 2 else None
+
+
 def _mapear(i):
     objeto = (i.get("description") or "").strip()
     return {

@@ -453,3 +453,118 @@ def test_cartao_de_edital_que_mudou_abre_o_proprio_edital(admin):
             s.commit()
         finally:
             s.close()
+
+
+# ------------------------------------------- tela da licitação (mural TCE-PI)
+def test_sentenca_respeita_abreviacoes_e_resumir_corta_em_palavra():
+    from app.texto import resumir, sentenca
+    assert sentenca("P. M. DE SAO JULIAO") == "P. M. de sao juliao"
+    assert sentenca("CONTRATAÇÃO DE EMPRESA. AQUISIÇÃO DE PEÇAS (SRP)") == \
+        "Contratação de empresa. Aquisição de peças (SRP)"
+    longo = "Contratação de empresa para manutenção de aparelhos e reposição"
+    assert resumir(longo, 40) == "Contratação de empresa para manutenção…"
+    assert resumir("curto", 40) == "curto"
+
+
+def test_numero_da_compra_nunca_mostra_none():
+    from app.main import _filtro_numero_compra
+
+    class L:
+        def __init__(self, n, a):
+            self.numero_compra, self.ano_compra = n, a
+    assert _filtro_numero_compra(L("020/2026", None)) == "020/2026"
+    assert _filtro_numero_compra(L("90008", 2026)) == "90008/2026"
+    assert _filtro_numero_compra(L(None, None)) == ""
+
+
+def test_mural_ganha_codigo_ibge_e_nome_oficial(sessao_memoria):
+    from app.db import Municipio
+    from app.radar.coleta import _oficializar_municipio, ibge_por_nome
+    s = sessao_memoria
+    s.add(Municipio(codigo_ibge="2209906", nome="São Julião", uf="PI"))
+    s.commit()
+    item = {"municipio_nome": "Sao Juliao", "municipio_ibge": None}
+    assert _oficializar_municipio(item, ibge_por_nome(s))
+    assert item == {"municipio_nome": "São Julião", "municipio_ibge": "2209906"}
+    assert not _oficializar_municipio({"municipio_nome": "Nárnia"},
+                                      ibge_por_nome(s))
+
+
+def test_pagina_de_item_do_mural_fala_a_lingua_certa(admin):
+    """'Nº no PNCP' e 'Compra: 020/2026/None' num item do Mural TCE-PI;
+    botão 'Tentar de novo' de leitura que nunca vai dar certo."""
+    s = Sessao()
+    try:
+        lic = s.query(Licitacao).filter_by(fonte="tcepi").first()
+        lic_id = lic.id if lic else None
+    finally:
+        s.close()
+    if not lic_id:
+        pytest.skip("banco local sem item do mural")
+    html = admin.get(f"/licitacoes/{lic_id}").text
+    assert "Nº no Mural TCE-PI" in html
+    assert "/None" not in html
+    assert "Tentar de novo" not in html
+    assert "Localizando este certame no PNCP" in html
+    assert "Abertura" in html
+
+
+def test_correspondencia_mural_pncp_exige_municipio_e_mais_um_sinal():
+    from app.ingestao.pncp_busca import pontuar_correspondencia
+
+    class L:
+        municipio_nome = "Sao Juliao"
+        valor_total_estimado = 181370.0
+        numero_compra = "020/2026"
+        objeto = ("Contratação de empresa para prestação de serviços de "
+                  "manutenção e instalação de aparelho de refrigeração")
+    item_certo = {"municipio_nome": "São Julião", "valor_total_estimado":
+                  181370.0, "numero_compra": "20", "ano_compra": 2026,
+                  "objeto": "[Portal de Compras Públicas] - " + L.objeto}
+    outro_municipio = dict(item_certo, municipio_nome="Teresina")
+    so_municipio = {"municipio_nome": "São Julião", "valor_total_estimado":
+                    5.0, "numero_compra": "99", "ano_compra": 2026,
+                    "objeto": "Merenda escolar"}
+    assert pontuar_correspondencia(L(), item_certo) >= 2
+    assert pontuar_correspondencia(L(), outro_municipio) == 0
+    assert pontuar_correspondencia(L(), so_municipio) == 0
+
+
+def test_item_do_mural_adotado_pelo_pncp_leva_a_triagem(sessao_memoria):
+    from app.radar.coleta import adotar_do_pncp
+    s = sessao_memoria
+    u = Usuario(nome="U", email="u@x", senha_hash="h")
+    s.add(u)
+    s.flush()
+    perfil = PerfilBusca(nome="P", usuario_id=u.id)
+    s.add(perfil)
+    s.flush()
+    mural = Licitacao(numero_controle_pncp="TCEPI-1", fonte="tcepi",
+                      objeto="Obra", municipio_nome="São Julião", uf="PI",
+                      municipio_ibge="2209906")
+    s.add(mural)
+    s.flush()
+    s.add(PerfilMatch(perfil_id=perfil.id, licitacao_id=mural.id,
+                      status="vou_participar", anotacao="ligar amanhã"))
+    s.commit()
+    item = {"numero_controle_pncp": "x-1-20/2026", "fonte": "pncp",
+            "objeto": "Obra", "objeto_norm": "obra", "municipio_nome":
+            "São Julião", "uf": "PI", "link_pncp": "https://pncp/x"}
+    nova = adotar_do_pncp(s, mural, item)
+    assert nova.fonte == "pncp" and nova.municipio_ibge == "2209906"
+    assert s.query(Licitacao).filter_by(fonte="tcepi").count() == 0
+    m = s.query(PerfilMatch).one()
+    assert (m.licitacao_id, m.status, m.anotacao) ==         (nova.id, "vou_participar", "ligar amanhã")
+
+
+def test_portal_da_disputa_em_nome_humano():
+    from app.main import _filtro_portal
+
+    class L:
+        def __init__(self, link, objeto=""):
+            self.link_sistema_origem, self.objeto = link, objeto
+    assert _filtro_portal(L("https://www.portaldecompraspublicas.com.br/x"))         == "Portal de Compras Públicas"
+    assert _filtro_portal(L("https://bllcompras.com/Process")) == "BLL Compras"
+    assert _filtro_portal(L("", "[LICITANET] - Aquisição")) == "Licitanet"
+    assert _filtro_portal(L("https://novo.exemplo.gov.br/a")) ==         "novo.exemplo.gov.br"
+    assert _filtro_portal(L("", "Aquisição")) == ""

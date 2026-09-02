@@ -6,21 +6,37 @@
             class="text-xs text-slate-500 underline">Recolher</button></p>
   {% endif %}
   <div class="grid sm:grid-cols-2 gap-x-8 gap-y-1">
-    <p><b>Nº no PNCP:</b> {{ lic.numero_controle_pncp }}</p>
+    <p><b>Nº no {{ lic|fonte }}:</b> {{ lic.numero_controle_pncp }}</p>
     {% if lic.processo %}<p><b>Processo:</b> {{ lic.processo }}</p>{% endif %}
-    <p><b>Compra:</b> {{ lic.numero_compra }}/{{ lic.ano_compra }}</p>
+    <p><b>Compra:</b> {{ lic|numero_compra }}</p>
     <p class="truncar" title="{{ lic.orgao_nome or '' }}"><b>Órgão:</b>
       {{ lic.orgao_nome|sentenca }}</p>
     {% if lic.unidade_nome %}<p class="truncar"
       title="{{ lic.unidade_nome }}"><b>Unidade:</b>
       {{ lic.unidade_nome|sentenca }}</p>{% endif %}
     <p><b>Local:</b> {{ lic.municipio_nome }}/{{ lic.uf }}</p>
+    {% if lic|portal %}
+    <p><b>Disputa no portal:</b>
+      {% if lic.link_sistema_origem %}<a href="{{ lic.link_sistema_origem }}"
+        target="_blank" class="text-blue-700 underline">{{ lic|portal }}</a>
+      {% else %}{{ lic|portal }}{% endif %}</p>
+    {% endif %}
     <p><b>Publicado:</b> {{ lic.data_publicacao_pncp|quando }}</p>
-    <p><b>Propostas de:</b> {{ lic.data_abertura_proposta|quando }}</p>
-    <p><b>até:</b> {{ lic.data_encerramento_proposta|quando }}</p>
+    {% if lic.fonte == 'tcepi' or (lic.data_abertura_proposta
+          and lic.data_abertura_proposta == lic.data_encerramento_proposta) %}
+    <!-- No Mural a sessão É o prazo: uma data só, sem "de X até X" -->
+    <p><b>Abertura da sessão:</b>
+      <b>{{ lic.data_encerramento_proposta|quando }}</b></p>
+    {% else %}
+    <p><b>Propostas:</b> de {{ lic.data_abertura_proposta|quando }}
+      até <b>{{ lic.data_encerramento_proposta|quando }}</b>
+      (abertura da sessão)</p>
+    {% endif %}
     <p><b>SRP:</b> {{ 'sim' if lic.srp else 'não' }}</p>
     <p><b>Situação no portal:</b> {{ lic.situacao or 'não informada' }}</p>
-    <p><b>No radar desde:</b> {{ lic.coletado_em.strftime('%d/%m %H:%M') }}</p>
+    <!-- coletado_em é renovado a cada coleta: é "atualizado", não "desde" -->
+    <p><b>Atualizado no radar:</b>
+      {{ lic.coletado_em.strftime('%d/%m %H:%M') if lic.coletado_em }}</p>
     {% if lic.valor_total_estimado %}
     <p><b>Valor estimado:</b>
        {{ 'R$ {:,.2f}'.format(lic.valor_total_estimado).replace(',', 'X').replace('.', ',').replace('X', '.') }}</p>
