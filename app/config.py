@@ -16,8 +16,9 @@ CAMINHO_DB = os.path.join(PASTA_DADOS, "radar.db")
 # próximo deploy — inclusive a APP_SENHA, e sem senha o painel fica ABERTO na
 # internet, mostrando o token do Telegram e a senha do e-mail.
 CAMINHO_ENV = os.path.join(PASTA_DADOS, ".env")
-load_dotenv(os.path.join(RAIZ, ".env"))
-load_dotenv(CAMINHO_ENV, override=True)
+# interpolate=False: senha com "${" é senha, não referência a outra variável.
+load_dotenv(os.path.join(RAIZ, ".env"), interpolate=False)
+load_dotenv(CAMINHO_ENV, override=True, interpolate=False)
 
 
 def _inteiro(valor, padrao, minimo, maximo):
@@ -46,8 +47,23 @@ def _hora(valor, padrao):
     return h, m
 
 
+def _fuso_valido(valor, padrao):
+    """Nome de fuso IANA que existe; senão o padrão.
+
+    `agora()` já tolerava um fuso inválido, mas o agendador não: um
+    `TZ=Brasil` editado à mão derrubava o app na importação.
+    """
+    try:
+        ZoneInfo(str(valor or ""))
+        return valor
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        logging.getLogger("radar.config").warning(
+            "Fuso '%s' desconhecido; usando %s", valor, padrao)
+        return padrao
+
+
 # Versão do produto — bump manual a cada leva de mudanças relevante.
-VERSAO = "0.26.2"
+VERSAO = "0.27.0"
 
 
 class Config:
@@ -56,11 +72,13 @@ class Config:
     TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
     EMAIL_ATIVO = os.environ.get("EMAIL_ATIVO", "false").lower() == "true"
     SMTP_HOST = os.environ.get("SMTP_HOST", "")
-    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587") or 587)
+    # Campo de texto livre na tela: "587a" gravado derrubava o boot inteiro.
+    SMTP_PORT = _inteiro(os.environ.get("SMTP_PORT"), 587, 1, 65535)
     SMTP_USER = os.environ.get("SMTP_USER", "")
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
     EMAIL_DESTINO = os.environ.get("EMAIL_DESTINO", "")
-    TZ = os.environ.get("TZ", "America/Fortaleza")
+    TZ = _fuso_valido(os.environ.get("TZ", "America/Fortaleza"),
+                      "America/Fortaleza")
     # Cookie só por HTTPS. Ligado quando o app está publicado (o Railway
     # sempre serve por HTTPS); desligado em rede local, onde é http://.
     COOKIE_SEGURO = bool(os.environ.get("RAILWAY_PUBLIC_DOMAIN")
@@ -79,7 +97,8 @@ class Config:
     # disco 100% = até gravar o .env falhava com erro 500.
     EDITAIS_CACHE_MB = _inteiro(os.environ.get("EDITAIS_CACHE_MB"),
                                 1024, 100, 100_000)
-    DIAS_JANELA_FUTURA = int(os.environ.get("DIAS_JANELA_FUTURA", "90") or 90)
+    DIAS_JANELA_FUTURA = _inteiro(os.environ.get("DIAS_JANELA_FUTURA"),
+                                  90, 1, 3650)
     # Endereço público do app — usado no rodapé "Ver todas" dos alertas.
     # No Railway, RAILWAY_PUBLIC_DOMAIN já vem preenchido automaticamente.
     APP_URL = (os.environ.get("APP_URL")

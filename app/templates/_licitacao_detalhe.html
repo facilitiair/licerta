@@ -109,6 +109,9 @@
       </select>
     </label>
     <label class="flex items-center gap-1 pb-1.5">
+      <!-- checkbox desmarcado não viaja no formulário: o marcador diz à
+           rota que o campo existe, para o "desmarcar" valer. -->
+      <input type="hidden" name="favorito_enviado" value="1">
       <input type="checkbox" name="favorito" {{ 'checked' if m.favorito }}>
       <i data-lucide="star" class="lucide text-amber-500"></i> favorito
     </label>

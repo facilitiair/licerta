@@ -16,7 +16,7 @@ from datetime import timedelta
 
 from ..config import PASTA_DADOS, config, hoje as hoje_local
 from ..db import (ArquivoEdital, Ata, ColetaLog, EditalFicha, Licitacao,
-                  LicitacaoAlteracao, Minuta, PerfilMatch, engine)
+                  LicitacaoAlteracao, Minuta, Parecer, PerfilMatch, engine)
 
 log = logging.getLogger("radar.limpeza")
 
@@ -37,10 +37,38 @@ def _ids_intocados(sessao_db, corte_iso):
                        | (PerfilMatch.anotacao != "")
                        | (PerfilMatch.status != "novo")))
     ids -= {i for (i,) in tocados}
-    com_minuta = (sessao_db.query(Minuta.licitacao_id)
-                  .filter(Minuta.licitacao_id.in_(ids)))
-    ids -= {i for (i,) in com_minuta}
+    # Minuta e parecer custaram dinheiro e são trabalho do usuário: a
+    # licitação deles fica (sem isto o parecer ficava órfão e /pareceres
+    # caía com erro para todo mundo).
+    for modelo in (Minuta, Parecer):
+        com_peca = (sessao_db.query(modelo.licitacao_id)
+                    .filter(modelo.licitacao_id.in_(ids)))
+        ids -= {i for (i,) in com_peca}
     return ids
+
+
+def tem_trabalho_humano(sessao_db, lic):
+    """Alguém mexeu nesta licitação? (triagem, favorito, anotação, peça)"""
+    if any(m.anotacao or m.favorito or m.status != "novo"
+           for m in lic.matches):
+        return True
+    return any(sessao_db.query(modelo.id).filter_by(licitacao_id=lic.id)
+               .first() is not None for modelo in (Minuta, Parecer))
+
+
+def apagar_licitacao(sessao_db, lic_id):
+    """Apaga a licitação com tudo que depende dela — linha e arquivos."""
+    # arquivos físicos primeiro — linha sem arquivo é recuperável,
+    # arquivo sem linha é lixo eterno no volume
+    pasta = os.path.join(PASTA_DADOS, "editais", str(lic_id))
+    if os.path.isdir(pasta):
+        shutil.rmtree(pasta, ignore_errors=True)
+    for modelo in (ArquivoEdital, EditalFicha, LicitacaoAlteracao,
+                   PerfilMatch):
+        sessao_db.query(modelo).filter_by(licitacao_id=lic_id).delete(
+            synchronize_session=False)
+    sessao_db.query(Licitacao).filter_by(id=lic_id).delete(
+        synchronize_session=False)
 
 
 def limpar(sessao_db, hoje=None, vacuum=True):
@@ -51,15 +79,7 @@ def limpar(sessao_db, hoje=None, vacuum=True):
     ids = _ids_intocados(sessao_db, corte)
     contadores = {"licitacoes": 0, "atas": 0, "logs": 0}
     for lic_id in ids:
-        # arquivos físicos primeiro — linha sem arquivo é recuperável,
-        # arquivo sem linha é lixo eterno no volume
-        pasta = os.path.join(PASTA_DADOS, "editais", str(lic_id))
-        if os.path.isdir(pasta):
-            shutil.rmtree(pasta, ignore_errors=True)
-        for modelo in (ArquivoEdital, EditalFicha, LicitacaoAlteracao,
-                       PerfilMatch):
-            sessao_db.query(modelo).filter_by(licitacao_id=lic_id).delete()
-        sessao_db.query(Licitacao).filter_by(id=lic_id).delete()
+        apagar_licitacao(sessao_db, lic_id)
         contadores["licitacoes"] += 1
         if contadores["licitacoes"] % 500 == 0:
             sessao_db.commit()            # lotes: não segurar o banco

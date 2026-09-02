@@ -475,7 +475,10 @@ def _migrar_para_multiusuario():
             return
         if not config.APP_SENHA:
             return          # instalação nova: a tela /registrar cria o admin
-        email = (config.EMAIL_DESTINO or "").strip() or "admin@radar.local"
+        # Só o primeiro endereço, em minúsculas: o login compara em
+        # minúsculas e "Paulo@Gmail.com" nunca casaria.
+        email = ((config.EMAIL_DESTINO or "").split(",")[0].strip().lower()
+                 or "admin@radar.local")
         admin = Usuario(
             nome="Administrador", email=email,
             senha_hash=gerar_hash(config.APP_SENHA), papel="admin",

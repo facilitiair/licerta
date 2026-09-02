@@ -32,15 +32,18 @@ CAMPOS = ["nome", "ativo", "ufs", "municipios_ibge", "modalidades",
 PERFIL_SISTEMA = "⭐ Salvos da pesquisa"
 
 
-def exportar_perfis(sessao_db):
+def exportar_perfis(sessao_db, usuario_id=None):
     """Os perfis como dicionários de configuração (para /api/perfis/exportar).
 
     Vai junto o e-mail do dono: no multiusuário, o robô do e-mail precisa
-    saber de quem é cada perfil para avisar a pessoa certa.
+    saber de quem é cada perfil para avisar a pessoa certa. Com
+    `usuario_id`, só os perfis daquela conta.
     """
-    perfis = (sessao_db.query(PerfilBusca)
-              .filter(PerfilBusca.nome != PERFIL_SISTEMA)
-              .order_by(PerfilBusca.nome).all())
+    consulta = (sessao_db.query(PerfilBusca)
+                .filter(PerfilBusca.nome != PERFIL_SISTEMA))
+    if usuario_id is not None:
+        consulta = consulta.filter(PerfilBusca.usuario_id == usuario_id)
+    perfis = consulta.order_by(PerfilBusca.nome).all()
     resultado = []
     for p in perfis:
         d = {c: getattr(p, c) for c in CAMPOS}

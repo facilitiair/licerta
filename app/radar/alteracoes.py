@@ -53,7 +53,12 @@ def detectar(lic, item):
                 continue
             mudancas.append((campo, f"{atual}", f"{novo}"))
         else:
-            if str(novo).strip() == str(atual).strip():
+            novo_s, atual_s = str(novo).strip(), str(atual).strip()
+            if campo.startswith("data_"):
+                # A busca ao vivo manda "2026-09-16T08:59" e a coleta
+                # "2026-09-16T08:59:00": mesmo instante, não é prorrogação
+                novo_s, atual_s = novo_s[:16], atual_s[:16]
+            if novo_s == atual_s:
                 continue
             mudancas.append((campo, str(atual), str(novo)))
     return mudancas
@@ -144,11 +149,22 @@ def avisar_alteracoes(sessao_db=None, host=None):
             por_lic.setdefault(a.licitacao_id, []).append(a)
         interessados = _interessados(sessao, list(por_lic))
         avisos = 0
-        entregues = set()
+        # Licitações que ALGUM interessado ainda não recebeu: ficam
+        # pendentes. Antes, o Telegram de um usuário entregar já marcava a
+        # alteração como avisada para todos — o colega nunca ficava sabendo.
+        pendentes_de_alguem = set()
         for usuario, lic_ids in interessados.items():
             grupo = [(por_lic[i][0].licitacao, por_lic[i])
                      for i in sorted(lic_ids) if i in por_lic]
             if not grupo:
+                continue
+            tem_canal = ((usuario.receber_telegram and usuario.telegram_chat_id)
+                         or (usuario.receber_email and usuario.email_alertas)
+                         or (usuario.receber_push and usuario.assinaturas_push))
+            if not tem_canal:
+                # Nada a esperar: sem canal, "tentar de novo" seria eterno
+                log.warning("Usuário %s acompanha edital que mudou mas não "
+                            "tem canal de aviso ativo", usuario.email)
                 continue
             texto = _montar_mensagem(grupo, host)
             ok = False
@@ -167,16 +183,14 @@ def avisar_alteracoes(sessao_db=None, host=None):
                     log.exception("Push de alteração falhou")
             if ok:
                 avisos += 1
-                entregues.update(lic_ids)
             else:
+                pendentes_de_alguem.update(lic_ids)
                 log.warning("Aviso de alteração ao usuário %s falhou em todos "
                             "os canais; fica para o próximo ciclo",
                             usuario.email)
         agora_ = agora_local()
-        sem_interessado = set(por_lic) - set().union(
-            *interessados.values()) if interessados else set(por_lic)
         for lic_id, alts in por_lic.items():
-            if lic_id in entregues or lic_id in sem_interessado:
+            if lic_id not in pendentes_de_alguem:
                 for a in alts:
                     a.avisada = True
                     a.detectada_em = a.detectada_em or agora_

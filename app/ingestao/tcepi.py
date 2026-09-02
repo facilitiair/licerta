@@ -169,7 +169,12 @@ def coletar_mural(dias_retro=7, dias_futuro=90):
         "tvPrincipal:ug_input": "",
     })
     m_total = RE_ROWCOUNT.search(xml)
-    total = int(m_total.group(1)) if m_total else 0
+    if not m_total:
+        # Sem o contador, "zero itens" seria silêncio — e o vigia só nota
+        # captura zerada quando o PNCP também zera (AGENTS.md regra 9).
+        raise RuntimeError("Mural TCE-PI: contador de linhas não encontrado "
+                           "(site mudou?)")
+    total = int(m_total.group(1))
     primeiro = 0
     while primeiro < total:
         xml_pag = _post_ajax(sessao, viewstate, {

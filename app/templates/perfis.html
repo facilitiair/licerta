@@ -9,8 +9,9 @@
 {% if enviado %}
 <p class="mb-4 text-sm rounded-lg px-3 py-2
    {{ 'bg-green-100 text-green-800' if enviado == 'sim' else 'bg-slate-100 text-slate-700' }}">
-  {{ '<i data-lucide="check" class="lucide"></i> Alerta enviado — confira o Telegram.' if enviado == 'sim'
-     else 'Nada novo para enviar neste alerta agora.' }}</p>
+  {% if enviado == 'sim' %}<i data-lucide="check" class="lucide"></i>
+    Alerta enviado — confira seus canais de aviso.
+  {% else %}Nada novo para enviar neste alerta agora.{% endif %}</p>
 {% endif %}
 <div class="space-y-3">
   {% for p in perfis %}

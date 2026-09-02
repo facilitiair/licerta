@@ -21,7 +21,7 @@
       <span class="block text-xs text-slate-500 truncar"
             title="{{ m.licitacao.objeto or '' }}">
         {{ m.licitacao.municipio_nome or '' }}{{ '/' + m.licitacao.uf
-        if m.licitacao.uf }} · {{ (m.licitacao.objeto|sentenca)[:80] }}</span>
+        if m.licitacao.uf }} · {{ ((m.licitacao.objeto if m.licitacao else '')|sentenca)[:80] }}</span>
     </span>
     <span class="ml-auto flex items-center gap-2 shrink-0">
       {{ c.badge('rascunho', 'atencao') }}

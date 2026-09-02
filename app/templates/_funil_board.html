@@ -53,7 +53,7 @@
                             'descartado': 'hover:bg-slate-100 text-slate-500'} %}
           {% for destino in ['novo', 'analisando', 'vou_participar', 'descartado'] %}
             {% if destino != col.status %}
-            <button hx-post="/funil/mover/{{ m.id }}/{{ destino }}"
+            <button hx-post="/funil/mover/{{ m.id }}/{{ destino }}?perfil_id={{ perfil_id or 0 }}"
                     hx-target="#board" hx-swap="innerHTML"
                     class="border border-slate-200 rounded-lg px-2 py-1
                            font-medium transition-colors

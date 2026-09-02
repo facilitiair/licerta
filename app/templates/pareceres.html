@@ -23,7 +23,7 @@
         if p.licitacao.uf }}</span>
       <span class="block text-xs text-slate-500 truncar"
             title="{{ p.licitacao.objeto or '' }}">
-        {{ (p.licitacao.objeto|sentenca)[:90] }}</span>
+        {{ ((p.licitacao.objeto if p.licitacao else '')|sentenca)[:90] }}</span>
     </span>
     <span class="ml-auto flex items-center gap-2 shrink-0">
       <span class="text-[11px] text-slate-400">

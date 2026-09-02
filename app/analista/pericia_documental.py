@@ -17,7 +17,7 @@ from ..db import CasoPericial, DocumentoCaso, LaudoPericial, Sessao
 from ..documentos.checklist import tipo_do_conteudo
 from ..editais.analise import _custo_da_ultima_chamada
 from .exame import examinar_pdf
-from .parecer import LIMITE_POR_DOCUMENTO, ParecerIndevido
+from .parecer import LIMITE_POR_DOCUMENTO, ParecerIndevido, e_pdf
 from .pericia import _chamar as _chamar_pericia
 
 log = logging.getLogger("radar.analista")
@@ -32,8 +32,7 @@ _trava = threading.Lock()
 
 def _texto_documento(doc):
     caminho = os.path.join(PASTA_DADOS, doc.caminho_local or "")
-    if not (doc.caminho_local and caminho.lower().endswith(".pdf")
-            and os.path.exists(caminho)):
+    if not (doc.caminho_local and os.path.exists(caminho) and e_pdf(caminho)):
         return None
     try:
         from pypdf import PdfReader
@@ -73,6 +72,12 @@ def gerar_laudo(sessao_db, caso, usuario=None):
     caderno, exames = montar_caderno(sessao_db, caso)
     legiveis = [d for d in caderno
                 if "sem texto legível" not in d["texto_extraido"]]
+    if not legiveis:
+        # Sem texto não há perícia: seguir adiante gastava síntese e
+        # revisão (os modelos mais caros) para um laudo vazio.
+        raise ParecerIndevido(
+            "Nenhum documento do caderno tem texto legível — envie PDFs "
+            "com texto (não digitalização em imagem) ou passe OCR antes.")
     custos = []
     contexto = {"titulo": caso.titulo, "observacao": caso.observacao,
                 "parte_examinada": "concorrente"}
@@ -156,10 +161,7 @@ def gerar_laudo(sessao_db, caso, usuario=None):
             and "VEREDITO: aprovado\n" not in revisao + "\n":
         texto = cliente.chamar(
             job="laudo_correcao",
-            prompt_sistema=("Você aplica correções pontuais de revisão a "
-                           "um laudo, sem mudar o mérito nem acrescentar "
-                           "conteúdo. Devolva o laudo inteiro corrigido, "
-                           "e nada além dele."),
+            prompt_sistema=cliente.carregar_prompt("peritos/perito-corretor"),
             mensagem=("LAUDO:\n\n" + texto
                       + "\n\nPARECER DE REVISÃO:\n\n" + revisao),
             modelo=camadas.GERACAO, max_tokens=16000)

@@ -160,7 +160,7 @@
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(assinatura.toJSON()),
       });
-      res.textContent = r.ok ? '<i data-lucide="check" class="lucide"></i> Aparelho ativado! Toque em Enviar teste.'
+      res.textContent = r.ok ? 'Aparelho ativado! Toque em Enviar teste.'
                              : 'Não consegui registrar. Tente de novo.';
     } catch (e) {
       res.textContent = 'Falhou: ' + e.message;

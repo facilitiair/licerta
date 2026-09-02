@@ -35,11 +35,20 @@ class ParecerIndevido(RuntimeError):
     explica o que fazer antes."""
 
 
+def e_pdf(caminho):
+    """PDF pelo conteúdo, não pela extensão: celular e WhatsApp mandam
+    "certidao" sem ".pdf", e o documento sumia da perícia como ilegível."""
+    try:
+        with open(caminho, "rb") as f:
+            return f.read(5).startswith(b"%PDF")
+    except OSError:
+        return False
+
+
 def _texto_documento(doc):
     """Texto de um PDF do dossiê (melhor esforço; imagem = None)."""
     caminho = os.path.join(PASTA_DADOS, doc.caminho_local or "")
-    if not (doc.caminho_local and caminho.lower().endswith(".pdf")
-            and os.path.exists(caminho)):
+    if not (doc.caminho_local and os.path.exists(caminho) and e_pdf(caminho)):
         return None
     try:
         from pypdf import PdfReader

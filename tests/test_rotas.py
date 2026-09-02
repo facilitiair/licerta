@@ -293,9 +293,10 @@ def test_env_preserva_chaves_que_a_tela_nao_conhece(tmp_path, monkeypatch):
                        encoding="utf-8")
     monkeypatch.setattr(envcfg, "CAMINHO_ENV", str(caminho))
     envcfg.salvar({"HORA_COLETA": "05:00"})
-    conteudo = caminho.read_text(encoding="utf-8")
-    assert "APP_URL=https://radar.exemplo.com" in conteudo
-    assert "HORA_COLETA=05:00" in conteudo
+    from dotenv import dotenv_values
+    lido = dotenv_values(str(caminho), interpolate=False)
+    assert lido["APP_URL"] == "https://radar.exemplo.com"
+    assert lido["HORA_COLETA"] == "05:00"
 
 
 def test_campo_de_segredo_em_branco_mantem_o_valor(tmp_path, monkeypatch):
@@ -309,7 +310,8 @@ def test_campo_de_segredo_em_branco_mantem_o_valor(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "APP_SENHA", "senha-secreta")
     envcfg.salvar({"APP_SENHA": "", "HORA_ALERTA": "08:00"})
     assert config.APP_SENHA == "senha-secreta"
-    assert "APP_SENHA=senha-secreta" in caminho.read_text(encoding="utf-8")
+    from dotenv import dotenv_values
+    assert dotenv_values(str(caminho), interpolate=False)["APP_SENHA"] ==         "senha-secreta"
 
 
 def test_login_funciona_mesmo_sem_poder_gravar_o_segredo(monkeypatch):

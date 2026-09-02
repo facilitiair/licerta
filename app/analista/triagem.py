@@ -89,6 +89,8 @@ def sugerir_triagem(sessao_db, usuario_id, agora_=None):
             continue
         por_id = {m.id: m for m in lote}
         for s in sugestoes:
+            if not isinstance(s, dict):
+                continue           # item fora do formato: ignorado, não 500
             m = por_id.get(s.get("id"))
             sugestao = (s.get("sugestao") or "").strip().lower()
             if m is None or sugestao not in SUGESTOES_VALIDAS:

@@ -1,7 +1,7 @@
 """Tela /config: grava o .env e aplica as mudanças sem reiniciar o app."""
 import os
 
-from .config import CAMINHO_ENV, _hora, _inteiro, config
+from .config import CAMINHO_ENV, _fuso_valido, _hora, _inteiro, config
 
 # Chaves editáveis pela interface, na ordem em que aparecem no arquivo
 CHAVES = ["APP_SENHA", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
@@ -35,6 +35,18 @@ def valores_atuais():
 
 SEGREDOS = {"APP_SENHA", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD",
             "ANTHROPIC_API_KEY"}
+
+
+def _citar(valor):
+    """Valor pronto para o .env: entre aspas duplas, com escape.
+
+    Sem aspas, uma senha com ' ou " invalidava a linha (e o leitor
+    engolia as seguintes até a próxima aspa), " #" cortava o resto e
+    ${x} sumia por interpolação — tudo em silêncio, só no reinício
+    seguinte. O leitor em config.py carrega sem interpolar, então o valor
+    volta byte a byte.
+    """
+    return '"' + valor.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _outras_chaves():
@@ -85,13 +97,33 @@ def salvar(novos):
         if not novo and c in SEGREDOS:
             continue
         valores[c] = novo
+    # Números, horários e fuso entram no arquivo já validados: um "587a"
+    # ou "Brasil" gravado cru passava pela tela e derrubava o app no
+    # próximo reinício (mesma classe do "06:99" de antes).
+    valores["SMTP_PORT"] = str(_inteiro(valores["SMTP_PORT"], 587, 1, 65535))
+    valores["DIAS_JANELA_FUTURA"] = str(
+        _inteiro(valores["DIAS_JANELA_FUTURA"], 90, 1, 3650))
+    valores["HORAS_ENTRE_COLETAS"] = str(
+        _inteiro(valores["HORAS_ENTRE_COLETAS"], 3, 1, 24))
+    valores["HORA_COLETA"] = "%02d:%02d" % _hora(valores["HORA_COLETA"],
+                                                 (6, 0))
+    valores["HORA_ALERTA"] = "%02d:%02d" % _hora(valores["HORA_ALERTA"],
+                                                 (7, 0))
+    valores["TZ"] = _fuso_valido(valores["TZ"], config.TZ)
     guardadas = _outras_chaves()
-    with open(CAMINHO_ENV, "w", encoding="utf-8") as f:
+    # Escreve num arquivo ao lado e troca de uma vez: abrir o .env com "w"
+    # zerava o arquivo ANTES de escrever, e com o disco cheio (31/08/2026)
+    # sobrava um .env vazio — senha, token e chaves sumiam no reinício.
+    temporario = CAMINHO_ENV + ".tmp"
+    with open(temporario, "w", encoding="utf-8") as f:
         f.write("# Gerado pela tela /config da Licerta\n")
         for chave in CHAVES:
-            f.write(f"{chave}={valores[chave]}\n")
+            f.write(f"{chave}={_citar(valores[chave])}\n")
         for chave, valor in guardadas.items():
             f.write(f"{chave}={valor}\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temporario, CAMINHO_ENV)
 
     # Aplica em memória (sem reiniciar)
     config.APP_SENHA = valores["APP_SENHA"]
@@ -99,20 +131,14 @@ def salvar(novos):
     config.TELEGRAM_CHAT_ID = valores["TELEGRAM_CHAT_ID"]
     config.EMAIL_ATIVO = valores["EMAIL_ATIVO"].lower() == "true"
     config.SMTP_HOST = valores["SMTP_HOST"]
-    try:
-        config.SMTP_PORT = int(valores["SMTP_PORT"] or 587)
-    except ValueError:
-        config.SMTP_PORT = 587
+    config.SMTP_PORT = int(valores["SMTP_PORT"])
     config.SMTP_USER = valores["SMTP_USER"]
     config.SMTP_PASSWORD = valores["SMTP_PASSWORD"]
     config.EMAIL_DESTINO = valores["EMAIL_DESTINO"]
+    config.TZ = valores["TZ"]
     config.HORA_COLETA = _hora(valores["HORA_COLETA"], (6, 0))
-    config.HORAS_ENTRE_COLETAS = _inteiro(valores["HORAS_ENTRE_COLETAS"],
-                                          3, 1, 24)
+    config.HORAS_ENTRE_COLETAS = int(valores["HORAS_ENTRE_COLETAS"])
     config.HORA_ALERTA = _hora(valores["HORA_ALERTA"], (7, 0))
-    try:
-        config.DIAS_JANELA_FUTURA = int(valores["DIAS_JANELA_FUTURA"] or 90)
-    except ValueError:
-        config.DIAS_JANELA_FUTURA = 90
+    config.DIAS_JANELA_FUTURA = int(valores["DIAS_JANELA_FUTURA"])
     os.environ["ANTHROPIC_API_KEY"] = valores["ANTHROPIC_API_KEY"]
     return valores

@@ -440,7 +440,10 @@ async def painel(request: Request):
                             Licitacao.data_encerramento_proposta >= hoje)
                     .order_by(Licitacao.data_encerramento_proposta))
         for m in disputas.limit(5):
-            dias = _dias_ate(m.licitacao.data_encerramento_proposta) or 99
+            dias = _dias_ate(m.licitacao.data_encerramento_proposta)
+            if dias is None:
+                continue      # data ilegível: não é urgência nem barreira
+            # (0 = fecha hoje; "or 99" aqui sumia com a mais urgente)
             if dias > 3 or len(acoes) >= 3:
                 break
             lic = m.licitacao
@@ -977,23 +980,36 @@ async def perfil_duplicar(request: Request, perfil_id: int):
 
 
 @app.get("/api/perfis/exportar")
-async def perfis_exportar():
+async def perfis_exportar(request: Request):
     """Configuração dos perfis em JSON, para o robô do e-mail e o PC puxarem.
 
     É o que mantém os três bancos (Railway, Actions, PC) com os MESMOS
     critérios: este app é a fonte da verdade e os outros sincronizam daqui.
-    Protegida pelo login como tudo mais.
+    O administrador (que é quem o robô usa) recebe todos; qualquer outra
+    conta recebe só os seus — palavras-chave e e-mail dos colegas não são
+    dela (AGENTS.md regra 6).
     """
     s = Sessao()
     try:
-        return sincronizar.exportar_perfis(s)
+        return sincronizar.exportar_perfis(
+            s, usuario_id=None if _sou_admin(request) else eu(request).id)
     finally:
         s.close()
 
 
 @app.post("/perfis/{perfil_id}/enviar")
-def perfil_enviar_agora(perfil_id: int):
+def perfil_enviar_agora(request: Request, perfil_id: int):
     """Botão 'Enviar agora': dispara este alerta fora da agenda."""
+    s = Sessao()
+    try:
+        perfil = s.get(PerfilBusca, perfil_id)
+        meu = bool(perfil and perfil.usuario_id == eu(request).id)
+    finally:
+        s.close()
+    if not meu:
+        # Disparar o alerta de outra conta mexeria nos canais e na
+        # triagem dela — mesma trava de toggle/duplicar/excluir.
+        return RedirectResponse("/perfis", status_code=303)
     enviados = alerta_mod.enviar_alertas_devidos(perfil_id=perfil_id)
     return RedirectResponse(f"/perfis?enviado={'sim' if enviados else 'vazio'}",
                             status_code=303)
@@ -1060,13 +1076,26 @@ ORDENACAO_PADRAO = "uf_asc"     # todos os estados: lista em ordem alfabética
 POR_PAGINA = 50
 
 
-def _consulta_licitacoes(s, filtros):
-    """Monta a consulta a partir dos filtros da tela (também usada na exportação)."""
+def _consulta_licitacoes(s, filtros, usuario_id):
+    """Monta a consulta a partir dos filtros da tela (também usada na exportação).
+
+    Triagem (perfil e status) é dado de cliente: o perfil pedido na URL só
+    vale se for do usuário logado, e o filtro por status sem perfil junta
+    apenas os casamentos DELE (AGENTS.md regra 6). Sem isso, a lista e a
+    exportação entregavam a triagem de outra conta.
+    """
     consulta = s.query(Licitacao)
-    # entradas numéricas vindas da URL: ignora silenciosamente o que não for número
+    # entradas numéricas vindas da URL: ignora silenciosamente o que não for
+    # número — ou o que não cabe no inteiro do SQLite (20 dígitos dava 500)
     for campo in ("perfil_id", "modalidade"):
-        if filtros.get(campo) and not str(filtros[campo]).isdigit():
+        valor = str(filtros.get(campo) or "")
+        if valor and not (valor.isdigit() and len(valor) <= 18):
             filtros[campo] = ""
+    if filtros.get("perfil_id"):
+        dono = s.query(PerfilBusca.id).filter_by(
+            id=int(filtros["perfil_id"]), usuario_id=usuario_id).first()
+        if not dono:
+            filtros["perfil_id"] = ""
     if filtros.get("perfil_id"):
         consulta = consulta.join(
             PerfilMatch, (PerfilMatch.licitacao_id == Licitacao.id) &
@@ -1080,7 +1109,10 @@ def _consulta_licitacoes(s, filtros):
     elif filtros.get("status"):
         consulta = (consulta.join(PerfilMatch,
                                   PerfilMatch.licitacao_id == Licitacao.id)
-                    .filter(PerfilMatch.status == filtros["status"]).distinct())
+                    .join(PerfilBusca, PerfilBusca.id == PerfilMatch.perfil_id)
+                    .filter(PerfilMatch.status == filtros["status"],
+                            PerfilBusca.usuario_id == usuario_id)
+                    .distinct())
     if filtros.get("uf"):
         consulta = consulta.filter(Licitacao.uf == filtros["uf"])
     if filtros.get("municipio"):
@@ -1129,7 +1161,7 @@ def licitacoes_lista(request: Request, pagina: int = 1):
             filtros["data_ini"] = agora().strftime("%Y-%m-%d")
             filtros["data_fim"] = (agora()
                                    + timedelta(days=30)).strftime("%Y-%m-%d")
-        consulta = _consulta_licitacoes(s, filtros)
+        consulta = _consulta_licitacoes(s, filtros, eu(request).id)
         total = consulta.count()
         linhas = consulta.offset((pagina - 1) * POR_PAGINA).limit(POR_PAGINA).all()
         # Status/favorito por licitação, para as badges (quando há perfil filtrado)
@@ -1203,7 +1235,10 @@ def _contexto_detalhe(s, request, lic, perfil_id=0):
                 .filter(PerfilMatch.licitacao_id == lic.id,
                         PerfilBusca.usuario_id == eu(request).id))
     if perfil_id:
-        consulta = consulta.filter_by(perfil_id=perfil_id)
+        # filter_by aqui apontaria para PerfilBusca (o último join) e
+        # estourava com "perfis_busca has no property perfil_id" — 500 ao
+        # expandir qualquer linha da lista filtrada por perfil.
+        consulta = consulta.filter(PerfilMatch.perfil_id == perfil_id)
     matches = consulta.all()
     for m in matches:                # abrir o detalhe marca como lido
         m.lido = True
@@ -1341,13 +1376,21 @@ def licitacao_baixar_docs(request: Request, lic_id: int):
         lic = s.get(Licitacao, lic_id)
         if not lic:
             return HTMLResponse("Licitação não encontrada.", status_code=404)
-        baixar_arquivos(s, lic)
+        aviso = ""
+        try:
+            baixar_arquivos(s, lic)
+        except Exception:  # noqa: BLE001 — PNCP fora do ar não é 500 nosso
+            log.exception("Falha ao buscar documentos da licitação %s", lic_id)
+            s.rollback()
+            aviso = ("Não conseguimos buscar os documentos agora. "
+                     "Tente de novo em instantes.")
         arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
         # busca_feita corta o gatilho automático do parcial: sem ele, uma
         # licitação sem documento re-dispararia a busca em loop.
         return templates.TemplateResponse(request, "_arquivos.html",
                                           {"lic": lic, "arquivos": arquivos,
-                                           "busca_feita": True})
+                                           "busca_feita": True,
+                                           "aviso": aviso})
     finally:
         s.close()
 
@@ -1358,7 +1401,7 @@ async def arquivo_download(arquivo_id: int):
     s = Sessao()
     try:
         arq = s.get(ArquivoEdital, arquivo_id)
-        if not arq:
+        if not arq or not arq.caminho_local:
             return HTMLResponse("Arquivo não encontrado.", status_code=404)
         caminho = os.path.join(PASTA_DADOS, arq.caminho_local)
         if not os.path.exists(caminho):
@@ -1405,6 +1448,7 @@ async def atas_lista(request: Request, q: str = "", adesao: str = "",
 @app.post("/matches/{match_id}", response_class=HTMLResponse)
 async def match_atualizar(request: Request, match_id: int,
                           status: str = Form(None), favorito: str = Form(None),
+                          favorito_enviado: str = Form(None),
                           anotacao: str = Form(None)):
     s = Sessao()
     try:
@@ -1415,7 +1459,9 @@ async def match_atualizar(request: Request, match_id: int,
             return HTMLResponse("Match não encontrado.", status_code=404)
         if status in ("novo", "analisando", "vou_participar", "descartado"):
             m.status = status
-        if favorito is not None:
+        # Checkbox desmarcado não é enviado pelo navegador: sem o marcador
+        # do formulário, desmarcar "favorito" nunca pegava.
+        if favorito is not None or favorito_enviado is not None:
             m.favorito = favorito == "on"
         if anotacao is not None:
             m.anotacao = anotacao
@@ -1429,7 +1475,8 @@ async def match_atualizar(request: Request, match_id: int,
 def licitacoes_exportar(request: Request, formato: str = "csv"):
     s = Sessao()
     try:
-        linhas = _consulta_licitacoes(s, _filtros_da_request(request)).all()
+        linhas = _consulta_licitacoes(s, _filtros_da_request(request),
+                                      eu(request).id).all()
         if formato == "xlsx":
             return Response(
                 gerar_xlsx(linhas),
@@ -1591,7 +1638,13 @@ async def pesquisar_salvar(request: Request):
     s = Sessao()
     try:
         from .radar.coleta import _upsert
-        lic = _upsert(s, item)
+        lic = s.query(Licitacao).filter_by(numero_controle_pncp=numero).first()
+        if lic is None:
+            lic = _upsert(s, item)
+        # Já no radar: só entra no funil. O índice de busca do PNCP escreve
+        # objeto e datas de outro jeito, e "atualizar" com ele gerava
+        # alteração falsa ("encerramento 16/09 08:59 → 16/09 08:59") e
+        # aviso de mudança que não houve.
         s.commit()
         perfil = _perfil_pesquisa_manual(s, eu(request))
         existe = s.query(PerfilMatch).filter_by(
@@ -1695,6 +1748,49 @@ FAIXA_PREMIUM = ('<div class="faixa faixa-atencao text-xs">Este recurso é '
                  'conta para ativar.</div>')
 
 
+# ------------------------------------------------------- uploads (comum)
+LIMITE_UPLOAD_MB = 40
+
+
+class UploadGrande(ValueError):
+    """Arquivo acima do teto — recusado antes de ocupar memória ou disco."""
+
+
+async def _gravar_upload(arquivo, caminho, limite_mb=LIMITE_UPLOAD_MB):
+    """Grava o upload em blocos, com teto de tamanho.
+
+    `await arquivo.read()` carregava o arquivo INTEIRO na memória (um PDF
+    de 1 GB derruba o processo) e gravava sem teto no volume — que já
+    encheu uma vez (31/08/2026). Estourou o teto ou o disco: o parcial é
+    removido e a exceção sobe para quem chamou avisar o usuário.
+    """
+    teto = limite_mb * 1024 * 1024
+    gravados = 0
+    try:
+        with open(caminho, "wb") as f:
+            while True:
+                bloco = await arquivo.read(1024 * 1024)
+                if not bloco:
+                    break
+                gravados += len(bloco)
+                if gravados > teto:
+                    raise UploadGrande(arquivo.filename or "")
+                f.write(bloco)
+    except (UploadGrande, OSError):
+        try:
+            os.remove(caminho)
+        except OSError:
+            pass
+        raise
+
+
+def _aviso_disco_cheio():
+    log.exception("Gravação de upload falhou (disco cheio ou sem escrita?)")
+    return ("Não conseguimos guardar os arquivos agora — o espaço da "
+            "instalação pode ter acabado. Avise o administrador e tente "
+            "de novo em instantes.")
+
+
 # ------------------------------------------------------ perito documental
 @app.get("/pericias", response_class=HTMLResponse)
 def pericias_lista(request: Request, aviso: str = ""):
@@ -1771,12 +1867,13 @@ async def pericia_docs_upload(request: Request, caso_id: int,
             return HTMLResponse("Caso não encontrado.", status_code=404)
         ja_tem = s.query(DocumentoCaso).filter_by(caso_id=caso.id).count()
         pasta = os.path.join(PASTA_CASOS, str(caso.id))
-        adicionados = 0
+        adicionados = sem_espaco = grandes = 0
         for arquivo in (arquivos or []):
             if not (arquivo and arquivo.filename):
                 continue
             if ja_tem + adicionados >= MAX_DOCS_POR_CASO:
-                break
+                sem_espaco += 1
+                continue
             os.makedirs(pasta, exist_ok=True)
             seguro = re.sub(r"[^\w.\-]+", "_",
                             arquivo.filename).strip("_")[:80]
@@ -1785,15 +1882,32 @@ async def pericia_docs_upload(request: Request, caso_id: int,
             s.add(doc)
             s.flush()
             caminho = os.path.join(pasta, f"{doc.id}-{seguro}")
-            with open(caminho, "wb") as f:
-                f.write(await arquivo.read())
+            try:
+                await _gravar_upload(arquivo, caminho)
+            except UploadGrande:
+                s.delete(doc)
+                grandes += 1
+                continue
+            except OSError:
+                s.rollback()
+                return RedirectResponse(
+                    f"/pericias/{caso.id}?aviso={quote(_aviso_disco_cheio())}",
+                    status_code=303)
             doc.caminho_local = os.path.relpath(caminho, PASTA_DADOS)
             adicionados += 1
         s.commit()
-        aviso = (f"{adicionados} documento(s) no caderno."
-                 if adicionados else
-                 "Nenhum arquivo chegou — selecione os arquivos antes "
-                 "de enviar.")
+        partes = []
+        if adicionados:
+            partes.append(f"{adicionados} documento(s) no caderno.")
+        if sem_espaco:
+            # Antes o "break" silencioso dizia "nenhum arquivo chegou"
+            partes.append(f"O caderno já tem {MAX_DOCS_POR_CASO} documentos: "
+                          f"{sem_espaco} arquivo(s) não entraram.")
+        if grandes:
+            partes.append(f"{grandes} arquivo(s) acima de {LIMITE_UPLOAD_MB} MB "
+                          "foram recusados.")
+        aviso = " ".join(partes) or ("Nenhum arquivo chegou — selecione os "
+                                     "arquivos antes de enviar.")
         return RedirectResponse(
             f"/pericias/{caso.id}?aviso={quote(aviso)}", status_code=303)
     finally:
@@ -1979,8 +2093,12 @@ def licitacao_minuta(request: Request, lic_id: int):
                      if isinstance(e, SemChaveIA) and _sou_admin(request)
                      else "")
             return HTMLResponse(
-                f'<div class="text-xs bg-amber-50 border border-amber-300 '
-                f'text-amber-900 rounded-lg px-3 py-2">📜 {corpo}{extra}</div>')
+                f'<div class="faixa faixa-atencao text-xs">{corpo}{extra}</div>')
+        except Exception:  # noqa: BLE001 — IA fora do ar não é 500 mudo
+            log.exception("Minuta da licitação %s falhou", lic_id)
+            return HTMLResponse(
+                '<div class="faixa faixa-atencao text-xs">A minuta não '
+                'terminou desta vez. Tente de novo em instantes.</div>')
         # htmx segue para a página da minuta pronta
         resposta = HTMLResponse("")
         resposta.headers["HX-Redirect"] = f"/minutas/{minuta.id}"
@@ -2090,7 +2208,7 @@ async def documentos_upload(request: Request,
     from .documentos.checklist import tipo_sugerido
     s = Sessao()
     try:
-        adicionados = com_validade = 0
+        adicionados = com_validade = grandes = 0
         for arquivo in (arquivos or []):
             if not (arquivo and arquivo.filename):
                 continue
@@ -2107,8 +2225,17 @@ async def documentos_upload(request: Request,
             seguro = re.sub(r"[^\w.\-]+", "_",
                             arquivo.filename).strip("_")[:80]
             caminho = os.path.join(PASTA_DOCUMENTOS, f"{doc.id}-{seguro}")
-            with open(caminho, "wb") as f:
-                f.write(await arquivo.read())
+            try:
+                await _gravar_upload(arquivo, caminho)
+            except UploadGrande:
+                s.delete(doc)
+                grandes += 1
+                continue
+            except OSError:
+                s.rollback()
+                return RedirectResponse(
+                    f"/documentos?aviso={quote(_aviso_disco_cheio())}",
+                    status_code=303)
             doc.caminho_local = os.path.relpath(caminho, PASTA_DADOS)
             if not doc.validade:
                 doc.validade = validades_mod.sugerir_validade(
@@ -2124,17 +2251,21 @@ async def documentos_upload(request: Request,
             com_validade += 1 if doc.validade else 0
             adicionados += 1
         s.commit()
+        recusa = (f" {grandes} arquivo(s) acima de {LIMITE_UPLOAD_MB} MB "
+                  "foram recusados." if grandes else "")
         if not adicionados:
             # Sem isso o clique no botão com o campo vazio recarregava a
             # página em silêncio — "não aconteceu nada" era o sintoma real.
-            aviso = ("Nenhum arquivo chegou — use “Escolher arquivos” "
+            aviso = (recusa.strip() or
+                     "Nenhum arquivo chegou — use “Escolher arquivos” "
                      "e confira se os nomes aparecem ao lado antes de enviar.")
             return RedirectResponse(f"/documentos?aviso={quote(aviso)}",
                                     status_code=303)
         aviso = (f"{adicionados} documento{'s' if adicionados != 1 else ''} "
                  f"adicionado{'s' if adicionados != 1 else ''}, "
                  f"{com_validade} com validade lida automaticamente — "
-                 "confira o tipo e a validade de cada um antes de confiar.")
+                 "confira o tipo e a validade de cada um antes de confiar."
+                 + recusa)
         return RedirectResponse(f"/documentos?aviso={quote(aviso)}",
                                 status_code=303)
     finally:
@@ -2161,8 +2292,8 @@ async def documento_salvar(request: Request, doc_id: int,
     try:
         doc = s.get(DocumentoEmpresa, doc_id)
         if doc:
-            doc.nome = (nome or doc.nome).strip()[:120]
-            doc.tipo = (tipo or doc.tipo).strip()[:60]
+            doc.nome = (nome.strip() or doc.nome)[:120]
+            doc.tipo = (tipo.strip() or doc.tipo)[:60]
             nova = _data_ou_nada(validade)
             if nova != doc.validade:
                 doc.validade = nova
@@ -2478,9 +2609,20 @@ async def push_chave():
     return {"chave": push_mod.chave_publica()}
 
 
+async def _json_objeto(request: Request):
+    """Corpo JSON como dicionário — ou None se não for JSON de objeto."""
+    try:
+        dados = await request.json()
+    except ValueError:
+        return None
+    return dados if isinstance(dados, dict) else None
+
+
 @app.post("/api/push/assinar")
 async def push_assinar(request: Request):
-    dados = await request.json()
+    dados = await _json_objeto(request)
+    if dados is None:
+        return Response(status_code=400)
     endpoint = (dados.get("endpoint") or "")[:2000]
     chaves = dados.get("keys") or {}
     if not (endpoint.startswith("https://") and chaves.get("p256dh")
@@ -2507,7 +2649,9 @@ async def push_assinar(request: Request):
 
 @app.post("/api/push/remover")
 async def push_remover(request: Request):
-    dados = await request.json()
+    dados = await _json_objeto(request)
+    if dados is None:
+        return Response(status_code=400)
     s = Sessao()
     try:
         (s.query(PushAssinatura)

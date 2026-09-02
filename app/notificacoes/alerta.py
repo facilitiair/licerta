@@ -250,9 +250,12 @@ def montar_mensagem_perfil(sessao_db, perfil, matches, host=None, urgente=False)
     host = host or config.APP_URL
     hoje = agora_local().strftime("%d/%m/%Y")
     por_lic = {m.licitacao_id: m for m in matches}
-    lics = ordenar_licitacoes([m.licitacao for m in matches], perfil.ordenacao)
+    lics = ordenar_licitacoes([m.licitacao for m in matches],
+                              "encerramento_asc" if urgente
+                              else perfil.ordenacao)
     incluidas = lics[:LIMITE_POR_PERFIL]
-    cabecalho = ("⏰ FECHA HOJE — " if urgente else "📡 ") + f"{perfil.nome} — {hoje}"
+    cabecalho = (("⏰ PRAZO FECHANDO — " if urgente else "📡 ")
+                 + f"{perfil.nome} — {hoje}")
     partes = [cabecalho,
               f"{len(incluidas)} oportunidade"
               f"{'s' if len(incluidas) != 1 else ''} com proposta em aberto\n"]
@@ -378,21 +381,47 @@ def proximo_horario_previsto(perfil, agora):
     return anterior + timedelta(days=1)
 
 
-def tem_urgencia(perfil, enviaveis, agora):
-    """Alguma destas oportunidades fecha antes do próximo alerta programado?
+JANELA_URGENCIA = timedelta(hours=24)
+
+
+def urgentes(perfil, enviaveis, agora):
+    """As oportunidades que fecham antes do próximo alerta programado.
 
     Sem esta saída, um edital de prazo curto morria em silêncio: a coleta das
     9h achava uma dispensa que encerrava às 17h do mesmo dia, o alerta diário
     já tinha saído às 7h, e no dia seguinte ela era descartada como vencida e
     marcada como avisada — sem nunca ter sido enviada. A coleta de 3 em 3
     horas não adianta nada se o aviso só sai amanhã.
+
+    A janela tem teto de 24h: num perfil semanal ou mensal, "antes do
+    próximo alerta" abrangia quase tudo, e cada coleta disparava um
+    "prazo fechando" para editais com semanas de prazo — a frequência que
+    o usuário escolheu deixava de valer.
     """
-    limite = proximo_horario_previsto(perfil, agora).strftime("%Y-%m-%dT%H:%M")
+    proximo = min(proximo_horario_previsto(perfil, agora),
+                  agora + JANELA_URGENCIA)
+    limite = proximo.strftime("%Y-%m-%dT%H:%M")
+    achados = []
     for m in enviaveis:
         fim = (m.licitacao.data_encerramento_proposta or "").replace(" ", "T")
         if fim and (fim[:16] if len(fim) > 10 else fim + "T23:59") < limite:
-            return True
-    return False
+            achados.append(m)
+    return achados
+
+
+def tem_urgencia(perfil, enviaveis, agora):
+    """Alguma destas oportunidades fecha antes do próximo alerta programado?"""
+    return bool(urgentes(perfil, enviaveis, agora))
+
+
+def dono_sem_canal(perfil):
+    """O perfil tem dono e o dono não ativou canal nenhum de aviso."""
+    dono = getattr(perfil, "usuario", None)
+    if dono is None:
+        return False
+    return not ((dono.receber_telegram and dono.telegram_chat_id)
+                or (dono.receber_email and dono.email_alertas)
+                or (dono.receber_push and dono.assinaturas_push))
 
 
 def despachar_canais(sessao_db, perfil, texto, quantidade, urgente, host=None):
@@ -412,7 +441,7 @@ def despachar_canais(sessao_db, perfil, texto, quantidade, urgente, host=None):
         ok_email = enviar_email(texto, destino=dono.email_alertas)
     if dono.receber_push:
         from .push import enviar_push
-        titulo = ("⏰ Fecha hoje: " if urgente else "📡 ") + perfil.nome
+        titulo = ("⏰ Prazo fechando: " if urgente else "📡 ") + perfil.nome
         corpo = (f"{quantidade} oportunidade"
                  f"{'s' if quantidade != 1 else ''} nova"
                  f"{'s' if quantidade != 1 else ''} — toque para abrir")
@@ -438,6 +467,21 @@ def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None,
     enviaveis, vencidos, fora = separar_pendentes(perfil, pendentes, agora)
     for m in vencidos:
         m.notificado = True
+    if urgente:
+        # Só o que está fechando: com 25 pendentes ordenadas por valor, a
+        # urgente ficava fora dos 10 da mensagem e saíam 10 não urgentes
+        # como "prazo fechando" — repetindo a cada 10 minutos.
+        enviaveis = urgentes(perfil, enviaveis, agora)
+    if enviaveis and dono_sem_canal(perfil):
+        # Sem canal não há o que tentar: antes o job remontava a mensagem
+        # (com chamadas ao PNCP) a cada 10 minutos, para sempre. As
+        # novidades ficam pendentes e saem quando um canal for ativado.
+        log.warning("Alerta '%s': o dono (%s) não tem nenhum canal de aviso "
+                    "ativo — ative um em Minha conta", perfil.nome,
+                    perfil.usuario.email)
+        perfil.ultimo_envio = agora
+        sessao_db.commit()
+        return False, 0
     if not enviaveis:
         perfil.ultimo_envio = agora        # ciclo cumprido, mesmo sem novidade
         sessao_db.commit()

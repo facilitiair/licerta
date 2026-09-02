@@ -6,8 +6,13 @@ REM
 REM Por que nao usa mais "push --force-with-lease": o "git fetch" logo antes
 REM atualiza a referencia que a trava confere, entao a trava sempre passava e
 REM o push apagava os commits que o robo da nuvem tinha feito na madrugada.
-REM Agora o HEAD e reposicionado sobre o remoto mantendo o SEU banco, e o
-REM push vira um avanco normal: nada some do historico.
+REM
+REM Por que nao usa "reset --soft": ele movia o HEAD para o remoto mas
+REM mantinha o INDICE antigo do PC, e o commit seguinte levava a arvore
+REM velha inteira - codigo novo que so existia na nuvem era desfeito em
+REM silencio (aconteceu em 31/08/2026, 4 commits revertidos). O reset sem
+REM modo (mixed) zera o indice para o remoto e so o banco entra no commit;
+REM arquivos alterados no PC ficam como estavam, fora do commit.
 cd /d "%~dp0"
 
 REM Primeiro puxa do site os perfis mais novos (o site e o lugar de editar).
@@ -17,7 +22,7 @@ python -m app.sincronizar
 git fetch origin main
 if errorlevel 1 goto falhou
 
-git reset --soft origin/main
+git reset -q origin/main
 if errorlevel 1 goto falhou
 
 git add data/radar.db

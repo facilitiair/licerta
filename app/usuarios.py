@@ -65,7 +65,9 @@ def usuario_do_token(token, segredo):
         esperada = _assinatura(usuario.id, validade, segredo,
                                usuario.senha_hash)
         return usuario if hmac.compare_digest(assinatura, esperada) else None
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
+        # TypeError: cookie com caractere fora do ASCII — sem isto virava
+        # 500 em toda página em vez de "faça login de novo".
         return None
 
 

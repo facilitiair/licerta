@@ -9,6 +9,7 @@ periciais herdadas da prática:
 2. Exigência sem correspondência clara sai como "conferir manualmente" —
    nunca como "não tem". O mapa é mapa, não fonte.
 """
+import re
 import unicodedata
 from datetime import datetime
 
@@ -81,25 +82,45 @@ def tipo_do_conteudo(texto):
     return None
 
 
+def _tem_palavra(palavra, plano):
+    """Casa por palavra inteira: "iss" não pode pegar "emissão", nem
+    "cat" pegar "categoria", nem "uniao" pegar "reunião" — cada um
+    virava veredito de um documento que não tinha nada a ver."""
+    return re.search(rf"(?<![a-z0-9]){re.escape(palavra)}(?![a-z0-9])",
+                     plano) is not None
+
+
 def tipo_sugerido(exigencia):
     """Qual tipo de documento do dossiê esta exigência provavelmente pede."""
     plano = _norm(exigencia)
     for palavras, tipo in REGRAS:
-        if any(p in plano for p in palavras):
+        if any(_tem_palavra(p, plano) for p in palavras):
             return tipo
     return None
 
 
+def _data(bruto):
+    try:
+        return datetime.strptime(str(bruto)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
 def data_da_sessao(ficha_dados, lic):
     """A data que vale para aferir validade: sessão da ficha, senão o
-    encerramento de propostas do portal, senão hoje (pior aproximação)."""
-    bruto = ((ficha_dados.get("datas") or {}).get("sessao_abertura")
-             if ficha_dados else None) or \
-        getattr(lic, "data_encerramento_proposta", None) or ""
-    try:
-        return datetime.strptime(bruto[:10], "%Y-%m-%d").date()
-    except ValueError:
-        return None
+    encerramento de propostas do portal, senão None (o chamador usa hoje).
+
+    Cada candidata é tentada por sua vez: uma data da ficha fora do ISO
+    ("20/09/2026") não pode derrubar a do portal. E se o portal diz que as
+    propostas fecham DEPOIS da sessão da ficha, a ficha envelheceu (prazo
+    prorrogado) — vale o portal, senão o checklist dizia "sessão passou".
+    """
+    da_ficha = _data((ficha_dados.get("datas") or {}).get("sessao_abertura")
+                     if ficha_dados else None)
+    do_portal = _data(getattr(lic, "data_encerramento_proposta", None))
+    if da_ficha and do_portal and do_portal > da_ficha:
+        return do_portal
+    return da_ficha or do_portal
 
 
 def avaliar(ficha_dados, lic, documentos, hoje=None):

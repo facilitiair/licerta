@@ -202,10 +202,7 @@ def gerar_pericia(sessao_db, lic, usuario=None, hoje=None):
             and "VEREDITO: aprovado\n" not in revisao + "\n":
         texto = cliente.chamar(
             job="pericia_correcao",
-            prompt_sistema=("Você aplica correções pontuais de revisão a "
-                           "um parecer, sem mudar o mérito, a estrutura "
-                           "nem acrescentar conteúdo novo. Devolva o "
-                           "parecer inteiro corrigido, e nada além dele."),
+            prompt_sistema=cliente.carregar_prompt("peritos/perito-corretor"),
             mensagem=("PARECER:\n\n" + texto
                       + "\n\nPARECER DE REVISÃO A APLICAR:\n\n" + revisao),
             modelo=camadas.GERACAO, max_tokens=16000)

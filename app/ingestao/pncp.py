@@ -39,8 +39,11 @@ def _get(sessao, url, params):
         try:
             time.sleep(PAUSA)
             resp = sessao.get(url, params=params, timeout=TIMEOUT)
-            if resp.status_code == 429:
-                raise requests.HTTPError("429 rate limit", response=resp)
+            # 429 e 5xx são passageiros: sem repetir aqui, um 502 na
+            # página 63 descartava o resto da modalidade até o próximo ciclo
+            if resp.status_code == 429 or resp.status_code >= 500:
+                raise requests.HTTPError(
+                    f"{resp.status_code} {resp.reason}", response=resp)
             return resp
         except (requests.RequestException, requests.HTTPError) as e:
             if tentativa == TENTATIVAS:

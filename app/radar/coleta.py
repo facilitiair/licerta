@@ -6,7 +6,8 @@ from datetime import datetime
 import requests
 
 from ..config import agora, config
-from ..db import Ata, ColetaLog, Licitacao, PerfilBusca, PerfilMatch, Sessao
+from ..db import (Ata, ColetaLog, Licitacao, Municipio, PerfilBusca,
+                  PerfilMatch, Sessao)
 from ..editais.arquivos import baixar_arquivos
 from .alteracoes import avisar_alteracoes, registrar as registrar_alteracoes
 from .matcher import licitacao_casa_perfil, normalizar, texto_casa
@@ -31,22 +32,30 @@ def coleta_em_andamento():
 
 
 def _combinacoes(perfis):
-    """União dos perfis ativos: UFs distintas × modalidades distintas.
-    Se algum perfil pedir Brasil inteiro (ufs vazio), consulta sem `uf`."""
-    ufs, modalidades, brasil_inteiro = set(), set(), False
+    """As consultas (uf, modalidade) que os perfis ativos pedem, sem repetir.
+
+    Cada perfil contribui com as SUAS ufs × as SUAS modalidades. A união
+    "todas as UFs × todas as modalidades" de antes multiplicava: um perfil
+    Brasil × [pregão, credenciamento] mais um perfil PI × todas virava
+    Brasil × 13 modalidades — 11 varreduras nacionais que ninguém pediu,
+    coleta de 51 min e timeouts (31/08/2026). Quando um perfil pede o
+    Brasil inteiro numa modalidade, as consultas por UF dessa modalidade
+    ficam redundantes e saem.
+    """
+    combos = set()
+    ufs = set()
     for p in perfis:
-        if p.ufs:
-            ufs.update(p.ufs)
-        else:
-            brasil_inteiro = True
-        modalidades.update(p.modalidades or MODALIDADES.keys())
-    lista_ufs = [None] if brasil_inteiro else sorted(ufs)
-    combos = [(uf, m) for uf in lista_ufs for m in sorted(modalidades)]
+        for uf in (p.ufs or [None]):
+            for m in (p.modalidades or MODALIDADES.keys()):
+                combos.add((uf, m))
+        ufs.update(p.ufs or [])
+    nacionais = {m for uf, m in combos if uf is None}
+    combos = {(uf, m) for uf, m in combos if uf is None or m not in nacionais}
     # Com o Mural TCE-PI ativo, o PI é varrido em TODAS as modalidades:
     # barato (uma UF) e essencial para deduplicar o mural contra o PNCP
-    if not brasil_inteiro and "PI" in ufs:
-        combos += [("PI", m) for m in MODALIDADES if m not in modalidades]
-    return combos
+    if "PI" in ufs:
+        combos |= {("PI", m) for m in MODALIDADES if m not in nacionais}
+    return sorted(combos, key=lambda c: (c[0] or "", c[1]))
 
 
 def _upsert(sessao_db, item):
@@ -148,16 +157,32 @@ def e_duplicata_tcepi(item, chaves):
     return False
 
 
+def ibge_por_nome(sessao_db, uf="PI"):
+    """{nome normalizado -> código IBGE} dos municípios de uma UF.
+
+    O Mural não traz o código IBGE, e o filtro de município dos perfis
+    compara códigos: sem este mapa, perfil com município escolhido
+    descartava o mural inteiro em silêncio.
+    """
+    return {normalizar(nome): codigo for codigo, nome in
+            sessao_db.query(Municipio.codigo_ibge, Municipio.nome)
+            .filter(Municipio.uf == uf)}
+
+
 def _coletar_tcepi(sessao_db, perfis, erros):
     """Mural TCE-PI (melhor esforço): só roda se algum perfil cobrir o PI."""
     if not any(not p.ufs or "PI" in p.ufs for p in perfis):
         return
     chaves = chaves_dedup_pncp(sessao_db)
+    ibge = ibge_por_nome(sessao_db)
     qtd = 0
     try:
         for item in coletar_mural(dias_futuro=config.DIAS_JANELA_FUTURA):
             if e_duplicata_tcepi(item, chaves):
                 continue
+            if item.get("municipio_nome") and not item.get("municipio_ibge"):
+                item["municipio_ibge"] = ibge.get(
+                    normalizar(item["municipio_nome"]))
             _upsert(sessao_db, item)
             qtd += 1
         sessao_db.commit()
@@ -180,9 +205,9 @@ def reconciliar_tcepi(sessao_db):
     Só apaga o que o usuário ainda não tocou: linha com anotação, favorito ou
     status movido no funil fica onde está, mesmo duplicada.
     """
+    from .limpeza import apagar_licitacao, tem_trabalho_humano
     chaves = chaves_dedup_pncp(sessao_db)
-    if not chaves:
-        return 0
+    ibge = ibge_por_nome(sessao_db)
     removidas = preenchidos = 0
     for lic in sessao_db.query(Licitacao).filter(Licitacao.fonte == "tcepi").all():
         if not lic.municipio_nome:
@@ -192,15 +217,20 @@ def reconciliar_tcepi(sessao_db):
             # nas duas fontes — nunca era testada.
             lic.municipio_nome = municipio_do_orgao(lic.orgao_nome)
             preenchidos += 1 if lic.municipio_nome else 0
+        if lic.municipio_nome and not lic.municipio_ibge:
+            lic.municipio_ibge = ibge.get(normalizar(lic.municipio_nome))
+            preenchidos += 1 if lic.municipio_ibge else 0
+        if not chaves:
+            continue
         item = {"objeto": lic.objeto, "municipio_nome": lic.municipio_nome,
                 "valor_total_estimado": lic.valor_total_estimado}
         if not e_duplicata_tcepi(item, chaves):
             continue
-        tocada = any(m.anotacao or m.favorito or m.status != "novo"
-                     for m in lic.matches)
-        if tocada:
+        if tem_trabalho_humano(sessao_db, lic):
             continue
-        sessao_db.delete(lic)
+        # Apaga com os dependentes (ficha, arquivos, alterações, pasta):
+        # o delete solto deixava ficha e PDFs órfãos no volume.
+        apagar_licitacao(sessao_db, lic.id)
         removidas += 1
     if removidas or preenchidos:
         sessao_db.commit()
