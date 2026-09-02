@@ -216,16 +216,22 @@ def _para_iso(bruto):
         return None
 
 
-def texto_do_pdf(caminho_relativo):
-    """Texto das primeiras páginas de um PDF do dossiê ('' se não der)."""
+def texto_do_pdf(caminho_relativo, paginas_ocr=2):
+    """Texto das primeiras páginas de um PDF do dossiê ('' se não der).
+
+    Certidão digitalizada não tem camada de texto: aí a leitura é por
+    visão (ia/ocr), só das primeiras páginas — tipo e validade moram na
+    capa, e o upload precisa responder rápido.
+    """
+    from app.analista.parecer import e_pdf
     caminho = os.path.join(PASTA_DADOS, caminho_relativo or "")
-    if not (caminho_relativo and caminho.lower().endswith(".pdf")
-            and os.path.exists(caminho)):
+    if not (caminho_relativo and os.path.exists(caminho) and e_pdf(caminho)):
         return ""
     try:
-        from pypdf import PdfReader
-        return "\n".join((p.extract_text() or "")
-                         for p in PdfReader(caminho).pages[:5])
+        from ia import ocr
+        texto, _ = ocr.texto_do_pdf(caminho, max_paginas=paginas_ocr,
+                                    job="ocr_dossie", max_paginas_nativo=5)
+        return texto
     except Exception:  # noqa: BLE001 — sugestão é cortesia
         return ""
 

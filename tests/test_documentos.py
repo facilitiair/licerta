@@ -131,7 +131,8 @@ def test_sugestao_de_validade_em_pdf(tmp_path, monkeypatch):
     monkeypatch.setattr("pypdf.PdfReader",
                         lambda *a, **k: type("R", (), {"pages": [type(
                             "P", (), {"extract_text": lambda self:
-                                      "Certidão VÁLIDA ATÉ 05/09/2026 ..."})()
+                                      "Certidão VÁLIDA ATÉ 05/09/2026 ..."
+                                      + " texto da certidão" * 20})()
                         ]})())
     monkeypatch.setattr("app.documentos.validades.PASTA_DADOS",
                         str(tmp_path))

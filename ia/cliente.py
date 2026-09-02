@@ -128,6 +128,54 @@ def chamar(job, prompt_sistema, mensagem, modelo=None, max_tokens=16000,
                        f"{TENTATIVAS} tentativas: {ultima_falha}")
 
 
+def chamar_visao(job, prompt_sistema, imagens, mensagem, modelo=None,
+                 max_tokens=16000, media_type="image/jpeg"):
+    """Chamada com IMAGENS (OCR de página digitalizada). Custo logado.
+
+    `imagens` são bytes (JPEG por padrão); vão em base64 antes do texto,
+    como a API pede. Mesmo tratamento de erro e de repetição de `chamar`.
+    """
+    import base64
+    exigir_chave()
+    chave = os.environ.get("ANTHROPIC_API_KEY", "")
+    modelo = modelo or camadas.OCR
+    conteudo = [{"type": "image",
+                 "source": {"type": "base64", "media_type": media_type,
+                            "data": base64.standard_b64encode(img).decode()}}
+                for img in imagens]
+    conteudo.append({"type": "text", "text": mensagem})
+    ultima_falha = None
+    for tentativa in range(1, TENTATIVAS + 1):
+        inicio = time.monotonic()
+        resposta = requests.post(API_URL, timeout=300, headers={
+            "x-api-key": chave,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }, json={
+            "model": modelo,
+            "max_tokens": max_tokens,
+            "thinking": {"type": "disabled"},
+            "system": prompt_sistema,
+            "messages": [{"role": "user", "content": conteudo}],
+        })
+        if resposta.status_code == 429 or resposta.status_code >= 500:
+            ultima_falha = f"API {resposta.status_code}"
+            time.sleep(5 * tentativa)
+            continue
+        if resposta.status_code >= 400:
+            raise RuntimeError(f"Chamada de IA '{job}' recusada (HTTP "
+                               f"{resposta.status_code}): "
+                               f"{resposta.text[:300]}")
+        dados = resposta.json()
+        uso = dados.get("usage") or {}
+        _registrar_custo(job, modelo, uso.get("input_tokens", 0),
+                         uso.get("output_tokens", 0),
+                         time.monotonic() - inicio)
+        return "".join(b.get("text", "") for b in dados.get("content") or [])
+    raise RuntimeError(f"Chamada de IA '{job}' falhou após "
+                       f"{TENTATIVAS} tentativas: {ultima_falha}")
+
+
 def _extrair_json(texto):
     """Aceita a resposta com ou sem cerca de código em volta do JSON."""
     texto = texto.strip()

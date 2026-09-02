@@ -51,9 +51,11 @@ def _texto_documento(doc):
     if not (doc.caminho_local and os.path.exists(caminho) and e_pdf(caminho)):
         return None
     try:
-        from pypdf import PdfReader
-        texto = "\n".join((p.extract_text() or "")
-                          for p in PdfReader(caminho).pages[:20])
+        from ia import ocr
+        # Digitalização não é "ilegível": a página vira imagem e o modelo
+        # a transcreve (cache ao lado do PDF; pago uma vez só).
+        texto, _ = ocr.texto_do_pdf(caminho, max_paginas=30, job="ocr_dossie",
+                                    max_paginas_nativo=20)
         texto = texto.strip()
         return texto[:LIMITE_POR_DOCUMENTO] if len(texto) >= 100 else None
     except Exception:  # noqa: BLE001 — dossiê ilegível vira "não verificado"

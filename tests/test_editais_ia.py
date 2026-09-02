@@ -115,10 +115,11 @@ def test_sem_chave_explica_em_vez_de_quebrar(sessao, lic, monkeypatch):
 
 
 def test_pdf_escaneado_vira_erro_legivel(sessao, lic, ia_dublada, monkeypatch):
+    # nem o texto nativo nem a leitura por imagem acharam texto
     monkeypatch.setattr(analise, "extrair_texto_pdfs", lambda arqs: ("", []))
     ficha = analise.analisar_edital(sessao, lic)
-    assert not ficha.ficha_json and "escaneados" in ficha.erro
-    assert ia_dublada["chamadas"] == 0     # não paga IA por imagem
+    assert not ficha.ficha_json and "leitura por imagem" in ficha.erro
+    assert ia_dublada["chamadas"] == 0     # não paga a ficha sem texto
 
 
 def test_sem_arquivo_no_disco_diz_a_verdade(sessao, lic, ia_dublada,

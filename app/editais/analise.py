@@ -13,6 +13,7 @@ Orquestra: PDFs já baixados → texto → extração estruturada via LLM →
 import json
 import logging
 import os
+import threading
 
 from ia import camadas, cliente
 
@@ -38,9 +39,11 @@ from ia.cliente import SemChaveIA  # noqa: E402,F401
 
 def extrair_texto_pdfs(arquivos):
     """Texto dos PDFs baixados, com cabeçalho por arquivo. Devolve (texto,
-    lidos): PDF escaneado (imagem, sem camada de texto) conta como não lido.
+    lidos). PDF escaneado (só imagem) é transcrito por visão (ia/ocr) —
+    só conta como não lido se nem assim houver texto.
     """
     from pypdf import PdfReader
+    from ia import ocr
     partes, lidos = [], []
     tamanho = 0
     for arq in arquivos:
@@ -56,9 +59,15 @@ def extrair_texto_pdfs(arquivos):
             texto = "\n".join(paginas).strip()
         except Exception as e:  # noqa: BLE001 — um PDF corrompido não trava o resto
             log.warning("PDF ilegível %s: %s", arq.caminho_local, e)
-            continue
-        if len(texto) < 200:
-            continue        # escaneado ou vazio: só imagem, nada a extrair
+            texto = ""
+        if ocr.pdf_precisa_de_ocr(texto):
+            try:
+                texto = ocr.transcrever_pdf(caminho, job="ocr_edital")
+            except Exception as e:  # noqa: BLE001 — OCR falhou: segue sem ele
+                log.warning("OCR de %s falhou: %s", arq.caminho_local, e)
+                texto = ""
+        if not texto.strip():
+            continue        # nem imagem legível: nada a extrair
         partes.append(f"===== ARQUIVO: {arq.titulo or ''} ({arq.tipo or ''}) "
                       f"=====\n{texto}")
         lidos.append(arq)
@@ -164,6 +173,66 @@ def _motivo_sem_texto(lic):
             "\"Sistema de origem\" desta página.")
 
 
+def precisa_de_ocr(arquivos):
+    """Algum PDF deste edital exige leitura por imagem AINDA não feita?
+
+    Decide se a análise cabe no clique (texto nativo: 20–60 s) ou vai para
+    segundo plano (páginas digitalizadas: minutos de transcrição).
+    """
+    from pypdf import PdfReader
+    from ia import ocr
+    for arq in arquivos:
+        caminho = os.path.join(PASTA_DADOS, arq.caminho_local or "")
+        if not (arq.caminho_local and os.path.exists(caminho)):
+            continue
+        if os.path.exists(caminho + ocr.SUFIXO_CACHE):
+            continue                     # já transcrito: é instantâneo
+        try:
+            nativo = "".join((p.extract_text() or "")
+                             for p in PdfReader(caminho).pages[:3])
+        except Exception:  # noqa: BLE001
+            continue
+        if ocr.pdf_precisa_de_ocr(nativo):
+            return True
+    return False
+
+
+# Análises longas (OCR) em andamento — uma por licitação, como na perícia.
+_em_andamento = set()
+_trava = threading.Lock()
+
+
+def em_andamento(lic_id):
+    with _trava:
+        return lic_id in _em_andamento
+
+
+def _rodar_em_fundo(lic_id, forcar):
+    from ..db import Licitacao, Sessao
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if lic is not None:
+            analisar_edital(s, lic, forcar=forcar)
+    except Exception:  # noqa: BLE001 — a ficha grava o erro; aqui só log
+        log.exception("Análise em segundo plano da licitação %s falhou", lic_id)
+    finally:
+        s.close()
+        with _trava:
+            _em_andamento.discard(lic_id)
+
+
+def iniciar_em_fundo(lic_id, forcar=False):
+    """Dispara a análise numa thread. False se já há uma em andamento."""
+    with _trava:
+        if lic_id in _em_andamento:
+            return False
+        _em_andamento.add(lic_id)
+    threading.Thread(target=_rodar_em_fundo, args=(lic_id, forcar),
+                     daemon=True).start()
+    return True
+
+
 def analisar_edital(sessao_db, lic, forcar=False):
     """Gera (ou devolve) a ficha estruturada de uma licitação.
 
@@ -205,8 +274,9 @@ def analisar_edital(sessao_db, lic, forcar=False):
     if not texto:
         ficha.erro = ("Não deu para ler o edital: "
                       + (_motivo_sem_texto(lic) if not _no_disco(arquivos)
-                         else "os PDFs parecem escaneados (só imagem). Abra "
-                              "o documento pelo link e leia manualmente."))
+                         else "nem a leitura por imagem encontrou texto "
+                              "nos PDFs. Abra o documento pelo link e "
+                              "confira se as páginas estão legíveis."))
         ficha.ficha_json = ""
         ficha.gerada_em = agora()
         sessao_db.commit()

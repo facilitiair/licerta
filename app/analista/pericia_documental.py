@@ -35,9 +35,11 @@ def _texto_documento(doc):
     if not (doc.caminho_local and os.path.exists(caminho) and e_pdf(caminho)):
         return None
     try:
-        from pypdf import PdfReader
-        texto = "\n".join((p.extract_text() or "")
-                          for p in PdfReader(caminho).pages[:30]).strip()
+        from ia import ocr
+        # Caderno de concorrente costuma vir digitalizado: visão, com cache
+        texto, _ = ocr.texto_do_pdf(caminho, max_paginas=40,
+                                    job="ocr_caderno", max_paginas_nativo=30)
+        texto = texto.strip()
         return texto[:LIMITE_POR_DOCUMENTO] if len(texto) >= 100 else None
     except Exception:  # noqa: BLE001 — ilegível vira "não verificado"
         return None
@@ -76,8 +78,8 @@ def gerar_laudo(sessao_db, caso, usuario=None):
         # Sem texto não há perícia: seguir adiante gastava síntese e
         # revisão (os modelos mais caros) para um laudo vazio.
         raise ParecerIndevido(
-            "Nenhum documento do caderno tem texto legível — envie PDFs "
-            "com texto (não digitalização em imagem) ou passe OCR antes.")
+            "Nenhum documento do caderno tem texto legível, nem pela leitura "
+            "por imagem — confira se as páginas estão nítidas e inteiras.")
     custos = []
     contexto = {"titulo": caso.titulo, "observacao": caso.observacao,
                 "parte_examinada": "concorrente"}

@@ -1418,31 +1418,69 @@ def licitacao_analisar(request: Request, lic_id: int, forcar: int = Form(0)):
     segundos e o htmx segura o botão com o indicador. Ficha é ativo global
     (1× por edital) — quem clicar depois recebe a mesma, sem custo novo.
     """
+    from .editais import analise as analise_mod
     s = Sessao()
     try:
         lic = s.get(Licitacao, lic_id)
         if not lic:
             return HTMLResponse("Licitação não encontrada.", status_code=404)
-        try:
-            ficha = analisar_edital(s, lic, forcar=bool(forcar))
-        except SemChaveIA as e:
-            aviso = escape(str(e))
+        if not os.environ.get("ANTHROPIC_API_KEY", ""):
+            aviso = escape("A análise por IA está desligada: falta a chave "
+                           "da API (ANTHROPIC_API_KEY). O administrador "
+                           "configura em /config.")
             extra = (' <a href="/config" class="underline">Abrir '
                      'configurações</a>' if _sou_admin(request) else "")
             return HTMLResponse(
                 f'<div id="ficha{lic_id}" class="border border-indigo-200 '
                 f'rounded-xl bg-indigo-50/40 p-4 text-xs text-slate-600">'
                 f'🧠 {aviso}{extra}</div>')
-        dados = _dados_ficha(ficha)
-        acompanho = (s.query(PerfilMatch).join(PerfilBusca)
-                     .filter(PerfilMatch.licitacao_id == lic_id,
-                             PerfilBusca.usuario_id == eu(request).id,
-                             PerfilMatch.status == "vou_participar")
-                     .count() > 0)
-        return templates.TemplateResponse(request, "_ficha_edital.html", {
-            "lic": lic, "ficha": ficha, "dados": dados,
-            "sou_admin": _sou_admin(request), "acompanho": acompanho,
-            **_contexto_checklist(s, dados, lic)})
+        arquivos = s.query(ArquivoEdital).filter_by(licitacao_id=lic_id).all()
+        ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
+        pronta = bool(ficha and ficha.ficha_json and not forcar)
+        if not pronta and (analise_mod.em_andamento(lic_id)
+                           or analise_mod.precisa_de_ocr(arquivos)):
+            # Edital digitalizado: a transcrição por imagem leva minutos.
+            # Vai para segundo plano e a página se atualiza sozinha.
+            analise_mod.iniciar_em_fundo(lic_id, forcar=bool(forcar))
+            return _render_ficha(s, request, lic, ficha, analisando=True)
+        try:
+            ficha = analisar_edital(s, lic, forcar=bool(forcar))
+        except SemChaveIA as e:
+            return HTMLResponse(
+                f'<div id="ficha{lic_id}" class="border border-indigo-200 '
+                f'rounded-xl bg-indigo-50/40 p-4 text-xs text-slate-600">'
+                f'🧠 {escape(str(e))}</div>')
+        return _render_ficha(s, request, lic, ficha)
+    finally:
+        s.close()
+
+
+def _render_ficha(s, request, lic, ficha, analisando=False):
+    dados = _dados_ficha(ficha) if not analisando else None
+    acompanho = (s.query(PerfilMatch).join(PerfilBusca)
+                 .filter(PerfilMatch.licitacao_id == lic.id,
+                         PerfilBusca.usuario_id == eu(request).id,
+                         PerfilMatch.status == "vou_participar")
+                 .count() > 0)
+    return templates.TemplateResponse(request, "_ficha_edital.html", {
+        "lic": lic, "ficha": ficha, "dados": dados, "analisando": analisando,
+        "sou_admin": _sou_admin(request), "acompanho": acompanho,
+        **_contexto_checklist(s, dados, lic)})
+
+
+@app.get("/licitacoes/{lic_id}/ficha", response_class=HTMLResponse)
+def licitacao_ficha(request: Request, lic_id: int):
+    """O bloco da ficha no estado atual — é o que a página consulta
+    enquanto uma análise longa (edital digitalizado) roda em segundo plano."""
+    from .editais import analise as analise_mod
+    s = Sessao()
+    try:
+        lic = s.get(Licitacao, lic_id)
+        if not lic:
+            return HTMLResponse("Licitação não encontrada.", status_code=404)
+        ficha = s.query(EditalFicha).filter_by(licitacao_id=lic_id).first()
+        return _render_ficha(s, request, lic, ficha,
+                             analisando=analise_mod.em_andamento(lic_id))
     finally:
         s.close()
 

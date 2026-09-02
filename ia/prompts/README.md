@@ -21,6 +21,7 @@ empresa está no texto: o cliente entra sempre como dado.
 | `peritos/perito-atestados.md` | documentos/pecas — perícia de qualificação técnica | 3 · sob demanda |
 | `peritos/leitor-caderno.md` | documentos/ — extração estruturada de lotes de PDF | 2 · extração |
 | `peritos/conferente-pre-envio.md` | documentos/ — portão final antes do envio | 3 · sob demanda |
+| `ocr-pagina.md` | ia/ocr — transcrição fiel de página digitalizada (visão) | 2 · extração (cache por arquivo) |
 | `peritos/perito-corretor.md` | analista/ — aplica as correções do revisor ao parecer/laudo, sem reabrir o mérito | 3 · sob demanda |
 
 Apoio em `ia/referencias/` (consumido como `{{base_juridica}}`):

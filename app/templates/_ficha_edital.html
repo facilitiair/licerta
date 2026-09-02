@@ -2,7 +2,20 @@
 <div id="ficha{{ lic.id }}" class="card"
      style="border-color: var(--cor-primaria-borda);
             background: var(--cor-primaria-suave)">
-{% if dados %}
+{% if analisando %}
+  <!-- Edital digitalizado: as páginas viram imagem e o modelo as
+       transcreve — minutos, não segundos. A página pergunta sozinha. -->
+  <div class="p-4 text-sm" hx-get="/licitacoes/{{ lic.id }}/ficha"
+       hx-trigger="every 6s" hx-target="#ficha{{ lic.id }}"
+       hx-swap="outerHTML">
+    <span class="inline-flex items-center gap-2 text-slate-600">
+      <i data-lucide="loader-circle" class="lucide animate-spin"></i>
+      Lendo o edital página por página — documento digitalizado leva
+      alguns minutos. Esta parte da página atualiza sozinha; pode
+      continuar navegando.</span>
+  </div>
+
+{% elif dados %}
   <div class="p-4 space-y-3 text-sm">
     {% if ficha.erro %}
     <!-- Regerar falhou: a ficha anterior continua valendo, mas a pessoa

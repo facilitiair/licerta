@@ -14,6 +14,9 @@ GERACAO = "claude-sonnet-5"
 # Perícia (parecer completo): o modelo forte — análise que orienta a
 # decisão de participar merece o melhor cérebro disponível.
 PERICIA = "claude-opus-4-8"
+# OCR de página digitalizada: o modelo enxerga a imagem e transcreve.
+# Fidelidade em números, datas e CNPJs importa mais que o preço da página.
+OCR = "claude-sonnet-5"
 
 # Preço por milhão de tokens (entrada, saída) — para o log de custo.
 # Atualizar junto com os modelos acima.
