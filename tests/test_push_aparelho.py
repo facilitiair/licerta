@@ -335,3 +335,51 @@ def test_service_worker_e_manifesto_tem_o_que_o_aparelho_precisa(admin):
     assert any(i.get("purpose") == "maskable" for i in manifesto["icons"])
     for arquivo in ("badge-96.png", "icone-maskable-512.png"):
         assert admin.get(f"/static/{arquivo}").status_code == 200
+
+
+def test_assinatura_vapid_e_aceita_pela_pywebpush(monkeypatch, tmp_path):
+    """Regressão: o PEM como string era rejeitado pela pywebpush 2.x e todo
+    aviso morria no servidor ('Nenhum aparelho ativado' com 4 aparelhos).
+    Com curl=True a biblioteca assina de verdade e não toca a rede."""
+    import pywebpush
+    monkeypatch.setattr(push, "CAMINHO_CHAVE", str(tmp_path / "vapid.pem"))
+    push._vapid = None
+    monkeypatch.setattr(config, "EMAIL_DESTINO", "x@y")   # inválido p/ VAPID
+    chamadas = []
+
+    def real_sem_rede(**kw):
+        chamadas.append(kw)
+        return pywebpush.webpush(curl=True, **kw)
+    monkeypatch.setattr(push, "webpush", real_sem_rede)
+
+    # Chave do aparelho de verdade (ponto válido da curva P-256)
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    ponto = ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+
+    class Assinatura:
+        endpoint = "https://fcm.googleapis.com/fcm/send/abc"
+        p256dh = base64.urlsafe_b64encode(ponto).decode().rstrip("=")
+        auth = "tBHItJI5svbpez7KI4CCXg"
+
+    class Consulta:
+        def filter_by(self, **k):
+            return self
+
+        def all(self):
+            return [Assinatura()]
+
+    class Sessao:
+        def query(self, *a):
+            return Consulta()
+
+        def commit(self):
+            pass
+
+    assert push.enviar_push(Sessao(), _Dono(), "t", "c") == 1
+    assert chamadas[0]["vapid_claims"]["sub"] == f"mailto:{push.CONTATO_PADRAO}"
+    assert push._claims("https://x.y/z")["sub"] == f"mailto:{push.CONTATO_PADRAO}"
+    monkeypatch.setattr(config, "EMAIL_DESTINO", "dono@empresa.com.br")
+    assert push._claims("https://x.y/z")["sub"] == "mailto:dono@empresa.com.br"

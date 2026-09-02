@@ -15,6 +15,7 @@ oportunidade" dele, como um app de verdade faz.
 import json
 import logging
 import os
+import re
 import time
 
 from py_vapid import Vapid02, b64urlencode
@@ -63,8 +64,16 @@ def chave_publica():
     return b64urlencode(bruto)
 
 
+# O 'sub' do VAPID é um contato para o serviço de push; py_vapid recusa
+# e-mail sem domínio com ponto ("x@y") e o envio morre sem chegar à rede.
+_EMAIL_ACEITO = re.compile(r"^[^@\s]+@[\w%-]+(\.[\w%-]+)+$")
+CONTATO_PADRAO = "admin@licerta.local"
+
+
 def _claims(endpoint):
-    email = config.EMAIL_DESTINO or "admin@radar.local"
+    email = (config.EMAIL_DESTINO or "").strip()
+    if not _EMAIL_ACEITO.match(email):
+        email = CONTATO_PADRAO
     origem = "/".join(endpoint.split("/")[:3])
     return {"sub": f"mailto:{email}", "aud": origem}
 
@@ -159,7 +168,10 @@ def enviar_push(sessao_db, usuario, titulo, corpo, url="/", tag=None,
                 subscription_info={"endpoint": a.endpoint,
                                    "keys": {"p256dh": a.p256dh, "auth": a.auth}},
                 data=json.dumps(aviso, ensure_ascii=False),
-                vapid_private_key=_instancia().private_pem().decode(),
+                # O objeto Vapid, não o PEM: a pywebpush 2.x lê str como
+                # chave crua em base64url e rejeitava o PEM ("Could not
+                # deserialize key data") — nenhum aviso saía do servidor.
+                vapid_private_key=_instancia(),
                 vapid_claims=_claims(a.endpoint),
                 # Urgente vale por um dia (o prazo é curto); o resto, três —
                 # o celular desligado no fim de semana ainda recebe.
