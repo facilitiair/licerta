@@ -347,7 +347,8 @@ def test_alerta_urgente_so_leva_as_urgentes(monkeypatch):
         folgadas.append(m)
     enviados = {}
 
-    def despachar(sessao_db, p, texto, quantidade, urg, host=None):
+    def despachar(sessao_db, p, texto, quantidade, urg, host=None,
+                  itens=None):
         enviados["texto"], enviados["qtd"] = texto, quantidade
         return True, False, False
     monkeypatch.setattr(alerta, "despachar_canais", despachar)

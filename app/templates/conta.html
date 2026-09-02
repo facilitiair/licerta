@@ -45,20 +45,87 @@
       </label>
     </div>
     <p class="text-xs text-slate-500">A notificação aparece na tela do celular
-      ou do computador, como as dos apps do governo — mesmo com o navegador
-      fechado. No iPhone, primeiro use "Adicionar à Tela de Início".</p>
+      ou do computador, como as dos apps do governo — mesmo com o site
+      fechado. Cada oportunidade chega com o resumo, o prazo e o valor, e
+      abre direto na página dela.</p>
+
     <div class="flex items-center gap-3 flex-wrap text-sm">
+      <button type="button" id="btnInstalar" hidden
+              class="border border-blue-700 text-blue-700 px-3 py-1.5
+                     rounded-lg font-semibold hover:bg-blue-50">
+        <i data-lucide="download" class="lucide"></i> Instalar o app no aparelho</button>
       <button type="button" id="btnAtivarPush"
               class="border border-blue-700 text-blue-700 px-3 py-1.5
                      rounded-lg font-semibold hover:bg-blue-50">
-        <i data-lucide="bell" class="lucide"></i> Ativar neste aparelho</button>
+        <i data-lucide="bell" class="lucide"></i> Ativar avisos neste aparelho</button>
       <span hx-post="/conta/testar/push" hx-target="#resPush" hx-swap="innerHTML"
             class="border border-slate-300 px-3 py-1.5 rounded-lg cursor-pointer
                    hover:bg-slate-50">Enviar teste</span>
       <span class="text-xs text-slate-500">{{ aparelhos_push }} aparelho(s)
         ativado(s)</span>
     </div>
+    <p id="dicaIphone" hidden class="text-xs text-slate-600 bg-slate-50 border
+       border-slate-200 rounded-lg px-3 py-2">No iPhone os avisos só chegam
+      com o app instalado: no Safari, toque em Compartilhar e depois em
+      "Adicionar à Tela de Início". Abra a Licerta pelo ícone novo e volte
+      aqui para ativar.</p>
     <span id="resPush" class="text-sm"></span>
+
+    <div class="border-t border-slate-200 pt-3 grid sm:grid-cols-2 gap-x-6
+                gap-y-3 text-sm">
+      <div class="space-y-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase
+                  tracking-wide">O que avisa</p>
+        {% for chave, rotulo in push_assuntos %}
+        {% if chave != 'sistema' or usuario.papel == 'admin' %}
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="assunto_{{ chave }}"
+                 {{ 'checked' if chave in push_prefs.assuntos }}>
+          {{ rotulo }}</label>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <div class="space-y-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase
+                  tracking-wide">Como avisa</p>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="push_som"
+                 {{ 'checked' if push_prefs.som }}>
+          Com som e vibração</label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="push_fixar_prazo"
+                 {{ 'checked' if push_prefs.fixar_prazo }}>
+          Prazo fechando fica na tela até eu tocar</label>
+        <label class="flex items-center gap-2 flex-wrap">
+          <input type="checkbox" name="push_noturno"
+                 {{ 'checked' if push_prefs.noturno }}>
+          Sem som das
+          <select name="push_noturno_de"
+                  class="border border-slate-300 rounded-lg px-2 py-1">
+            {% for h in range(24) %}
+            <option value="{{ h }}" {{ 'selected' if h == push_prefs.noturno_de }}>{{ '%02d' % h }}h</option>
+            {% endfor %}
+          </select>
+          às
+          <select name="push_noturno_ate"
+                  class="border border-slate-300 rounded-lg px-2 py-1">
+            {% for h in range(24) %}
+            <option value="{{ h }}" {{ 'selected' if h == push_prefs.noturno_ate }}>{{ '%02d' % h }}h</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="space-y-1 pt-1">
+          <label class="flex items-center gap-2">
+            <input type="radio" name="push_formato" value="detalhado"
+                   {{ 'checked' if push_prefs.detalhado }}>
+            Um aviso por oportunidade (até 5, depois um resumo)</label>
+          <label class="flex items-center gap-2">
+            <input type="radio" name="push_formato" value="resumo"
+                   {{ 'checked' if not push_prefs.detalhado }}>
+            Só um resumo com a quantidade</label>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
@@ -172,6 +239,26 @@
 </div>
 
 <script>
+  // Instalar o app: o navegador (Chrome/Edge no Android e no PC) só
+  // oferece a pergunta quando ainda não está instalado — aí o botão aparece.
+  const btnInstalar = document.getElementById('btnInstalar');
+  function mostrarInstalar(){ if (window.__instalarLicerta) btnInstalar.hidden = false; }
+  mostrarInstalar();
+  document.addEventListener('licerta:instalavel', mostrarInstalar);
+  btnInstalar.addEventListener('click', async () => {
+    const pergunta = window.__instalarLicerta;
+    if (!pergunta) return;
+    pergunta.prompt();
+    const { outcome } = await pergunta.userChoice;
+    if (outcome === 'accepted') { btnInstalar.hidden = true; window.__instalarLicerta = null; }
+  });
+  // iPhone/iPad fora do app instalado: explica o caminho, que é manual
+  const ehIos = /iPhone|iPad|iPod/.test(navigator.userAgent)
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const instalado = window.matchMedia('(display-mode: standalone)').matches
+                    || navigator.standalone === true;
+  if (ehIos && !instalado) document.getElementById('dicaIphone').hidden = false;
+
   // Push: pede a permissão, assina com a chave desta instalação e registra
   async function ativarPush(){
     const res = document.getElementById('resPush');
@@ -186,16 +273,32 @@
                           'nas configurações do navegador.'; return;
       }
       const {chave} = await (await fetch('/api/push/chave')).json();
-      const assinatura = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64paraBytes(chave),
-      });
+      // Assinatura antiga com outra chave (instalação reconfigurada) faz o
+      // subscribe falhar — sai dela primeiro e assina de novo.
+      const existente = await reg.pushManager.getSubscription();
+      let assinatura = null;
+      try {
+        assinatura = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64paraBytes(chave),
+        });
+      } catch (erro) {
+        if (!existente) throw erro;
+        await existente.unsubscribe();
+        assinatura = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64paraBytes(chave),
+        });
+      }
       const r = await fetch('/api/push/assinar', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(assinatura.toJSON()),
       });
       res.textContent = r.ok ? 'Aparelho ativado! Toque em Enviar teste.'
                              : 'Não consegui registrar. Tente de novo.';
+      if (r.ok && !document.querySelector('input[name=receber_push]').checked) {
+        document.querySelector('input[name=receber_push]').checked = true;
+      }
     } catch (e) {
       res.textContent = 'Falhou: ' + e.message;
     }
@@ -208,5 +311,19 @@
   }
   document.getElementById('btnAtivarPush')
           .addEventListener('click', ativarPush);
+  // Aparelho já autorizado: renova a assinatura em silêncio a cada visita,
+  // para o endereço não envelhecer e o aviso parar de chegar sem ninguém saber.
+  (async () => {
+    try {
+      if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+      const reg = await navigator.serviceWorker.ready;
+      const atual = await reg.pushManager.getSubscription();
+      if (!atual) return;
+      await fetch('/api/push/assinar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(atual.toJSON()),
+      });
+    } catch (e) { /* silencioso: é só manutenção */ }
+  })();
 </script>
 {% endblock %}

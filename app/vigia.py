@@ -226,9 +226,11 @@ def _avisar_admins(sessao_db, texto, resumo=""):
         if adm.receber_push:
             try:
                 chegou |= push.enviar_push(
-                    sessao_db, adm, "🩺 Saúde do radar",
-                    resumo or "O radar precisa da sua atenção — toque para ver",
-                    url=config.APP_URL + "/logs") > 0
+                    sessao_db, adm, "O sistema precisa da sua atenção",
+                    resumo or "Algo parou de funcionar como devia. "
+                    "Toque para ver o diagnóstico.",
+                    url=config.APP_URL + "/logs", tag="saude",
+                    acao="Ver diagnóstico", assunto="sistema") > 0
             except Exception:  # noqa: BLE001 — push nunca derruba o vigia
                 log.exception("Push do vigia falhou")
     if not chegou:

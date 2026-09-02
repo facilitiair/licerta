@@ -96,8 +96,9 @@ def _avisar_dono(sessao, usuario, texto, resumo):
     if usuario.receber_push:
         try:
             chegou |= push.enviar_push(
-                sessao, usuario, "📄 Validade do dossiê", resumo,
-                url=config.APP_URL + "/documentos") > 0
+                sessao, usuario, "Certidão vencendo no dossiê", resumo,
+                url=config.APP_URL + "/documentos", tag="dossie",
+                acao="Ver dossiê", assunto="dossie") > 0
         except Exception:  # noqa: BLE001 — push nunca derruba o aviso
             log.exception("Push de validade falhou")
     return chegou

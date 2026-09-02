@@ -45,6 +45,16 @@ class Usuario(Base):
     email_alertas = Column(String, default="", nullable=False)
     receber_email = Column(Boolean, default=True, nullable=False)
     receber_push = Column(Boolean, default=True, nullable=False)
+    # Como o aviso chega no aparelho (tela Minha conta → Avisos no aparelho)
+    push_som = Column(Boolean, default=True, nullable=False)      # som/vibração
+    push_detalhado = Column(Boolean, default=True, nullable=False) # 1 por edital
+    push_fixar_prazo = Column(Boolean, default=True, nullable=False)  # fica na tela
+    push_noturno = Column(Boolean, default=False, nullable=False)  # silêncio à noite
+    push_noturno_de = Column(Integer, default=22, nullable=False)
+    push_noturno_ate = Column(Integer, default=7, nullable=False)
+    # Assuntos que avisam, separados por vírgula (vazio = nenhum)
+    push_assuntos = Column(String, default="oportunidades,prazos,alteracoes,"
+                           "dossie,sistema", nullable=False)
     criado_em = Column(DateTime, default=agora, nullable=False)
     perfis = relationship("PerfilBusca", back_populates="usuario")
     assinaturas_push = relationship("PushAssinatura", back_populates="usuario",
@@ -406,7 +416,15 @@ def _migrar():
         "perfil_matches": [("termos", "TEXT DEFAULT ''"),
                            ("sugestao", "TEXT DEFAULT ''"),
                            ("sugestao_motivo", "TEXT DEFAULT ''")],
-        "usuarios": [("plano", "TEXT DEFAULT 'padrao'")],
+        "usuarios": [("plano", "TEXT DEFAULT 'padrao'"),
+                     ("push_som", "BOOLEAN DEFAULT 1"),
+                     ("push_detalhado", "BOOLEAN DEFAULT 1"),
+                     ("push_fixar_prazo", "BOOLEAN DEFAULT 1"),
+                     ("push_noturno", "BOOLEAN DEFAULT 0"),
+                     ("push_noturno_de", "INTEGER DEFAULT 22"),
+                     ("push_noturno_ate", "INTEGER DEFAULT 7"),
+                     ("push_assuntos", "TEXT DEFAULT "
+                      "'oportunidades,prazos,alteracoes,dossie,sistema'")],
         "empresa_dados": [("usuario_id", "INTEGER")],
         "perfis_busca": [("modo_busca", "TEXT DEFAULT 'ou'"),
                          ("situacoes", "TEXT DEFAULT '[]'"),

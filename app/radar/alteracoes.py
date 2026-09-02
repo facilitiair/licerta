@@ -128,6 +128,45 @@ def _montar_mensagem(alteracoes_por_lic, host=None):
     return "\n".join(partes)
 
 
+LIMITE_PUSH = 5
+
+
+def _push_alteracoes(sessao, usuario, grupo, host=None):
+    """Um aviso por edital alterado (até LIMITE_PUSH), abrindo na página dele.
+
+    O texto diz O QUE mudou ("Encerramento: 04/09 → 11/09"), que é o que
+    a pessoa precisa saber antes de decidir se abre agora.
+    """
+    from ..notificacoes.push import enviar_push
+    from ..texto import resumir, sentenca
+    base = (host or config.APP_URL).rstrip("/")
+    chegou = False
+    for lic, alts in grupo[:LIMITE_PUSH]:
+        onde = "/".join(p for p in (lic.municipio_nome, lic.uf) if p)
+        titulo = "Edital que você acompanha mudou"
+        if onde:
+            titulo += f" · {sentenca(onde)}"
+        mudancas = "; ".join(
+            f"{CAMPOS_VIGIADOS.get(a.campo, a.campo)}: "
+            f"{_fmt(a.campo, a.valor_antigo)} → {_fmt(a.campo, a.valor_novo)}"
+            for a in alts[:3])
+        corpo = "\n".join(p for p in (
+            resumir(sentenca((lic.objeto or "").strip()), 100), mudancas) if p)
+        chegou |= enviar_push(sessao, usuario, titulo, corpo,
+                              url=f"{base}/licitacoes/{lic.id}",
+                              tag=f"alteracao-{lic.id}",
+                              acao="Ver o que mudou", assunto="alteracoes") > 0
+    sobra = len(grupo) - LIMITE_PUSH
+    if sobra > 0:
+        chegou |= enviar_push(
+            sessao, usuario, f"E mais {sobra} editais mudaram",
+            "Outros editais que você acompanha tiveram alteração. "
+            "Toque para ver a lista.",
+            url=f"{base}/licitacoes", tag="alteracoes", acao="Ver lista",
+            assunto="alteracoes") > 0
+    return chegou
+
+
 def avisar_alteracoes(sessao_db=None, host=None):
     """Despacha as alterações pendentes a quem acompanha. Devolve nº de avisos.
 
@@ -175,10 +214,7 @@ def avisar_alteracoes(sessao_db=None, host=None):
                 ok |= alerta.enviar_email(texto, destino=usuario.email_alertas)
             if usuario.receber_push:
                 try:
-                    ok |= push.enviar_push(
-                        sessao, usuario, "✏️ Edital que você acompanha mudou",
-                        f"{len(grupo)} edital(is) com alteração — toque para ver",
-                        url=(host or config.APP_URL) + "/licitacoes") > 0
+                    ok |= _push_alteracoes(sessao, usuario, grupo, host)
                 except Exception:  # noqa: BLE001 — push nunca derruba o aviso
                     log.exception("Push de alteração falhou")
             if ok:

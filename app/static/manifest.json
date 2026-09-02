@@ -1,14 +1,19 @@
 {
+  "id": "/",
   "name": "Licerta",
   "short_name": "Licerta",
   "description": "Licerta — plataforma de licitações públicas: radar, alertas e análise",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#1d4ed8",
   "theme_color": "#1d4ed8",
   "lang": "pt-BR",
+  "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/static/icone-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/static/icone-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/static/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

@@ -8,6 +8,24 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/static/icone-192.png">
   <link rel="apple-touch-icon" href="/static/icone-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Licerta">
+  <script>
+    // O app no aparelho: o service worker vale para o site inteiro (senão
+    // o aviso só chega a quem passou por Minha conta) e a pergunta de
+    // instalar do navegador fica guardada para o botão em Minha conta.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    window.__instalarLicerta = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      window.__instalarLicerta = e;
+      document.dispatchEvent(new Event('licerta:instalavel'));
+    });
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { theme: { extend: {

@@ -61,3 +61,46 @@ def resumir(texto, limite=160):
         return texto
     corte = texto[:limite].rsplit(" ", 1)[0].rstrip(" ,;:-—(")
     return (corte or texto[:limite]) + "…"
+
+
+# ----------------------------------------------------------- datas e valores
+# Vivem aqui (e não só como filtro Jinja) porque a notificação no celular
+# fala a mesma língua da tela: "Encerra qui 04/09 09:00 · R$ 1,6 mi".
+DIAS_CURTOS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def quando(iso, hoje=None):
+    """Data ISO como gente lê (UI §6): 'hoje 08:00', 'amanhã', 'qui 04/09'."""
+    from datetime import datetime
+
+    from .config import agora
+    if not iso:
+        return ""
+    try:
+        dia, hora = iso[:10], iso[11:16]
+        alvo = datetime.strptime(dia, "%Y-%m-%d").date()
+        hoje_ = hoje or agora().date()
+        dif = (alvo - hoje_).days
+        if dif == 0:
+            rotulo = "hoje"
+        elif dif == 1:
+            rotulo = "amanhã"
+        elif 1 < dif <= 6:
+            rotulo = f"{DIAS_CURTOS[alvo.weekday()]} {alvo.strftime('%d/%m')}"
+        else:
+            rotulo = alvo.strftime("%d/%m") + ("" if alvo.year == hoje_.year
+                                               else alvo.strftime("/%Y"))
+        return f"{rotulo} {hora}".strip() if hora else rotulo
+    except (ValueError, TypeError):
+        return iso
+
+
+def dinheiro(valor):
+    """'R$ 1,6 mi', 'R$ 182 mil'; sem valor = vazio (UI §6)."""
+    if not valor:
+        return ""
+    if valor >= 1_000_000:
+        return f"R$ {valor / 1_000_000:.1f} mi".replace(".", ",")
+    if valor >= 1_000:
+        return f"R$ {valor / 1_000:.0f} mil"
+    return f"R$ {valor:.0f}"

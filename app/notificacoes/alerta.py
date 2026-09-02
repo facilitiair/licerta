@@ -17,10 +17,12 @@ from ..config import agora as agora_local
 from ..config import config
 from ..db import PerfilBusca, PerfilMatch, Sessao
 from ..radar.matcher import esta_vigente, ordenar_licitacoes
+from ..texto import dinheiro, quando, resumir, sentenca
 
 log = logging.getLogger("radar.alerta")
 
 LIMITE_POR_PERFIL = 10
+LIMITE_PUSH = 5             # avisos no aparelho por alerta; o resto vira um resumo
 LIMITE_OBJETO = 180
 LIMITE_TELEGRAM = 4096
 
@@ -424,12 +426,89 @@ def dono_sem_canal(perfil):
                 or (dono.receber_push and dono.assinaturas_push))
 
 
-def despachar_canais(sessao_db, perfil, texto, quantidade, urgente, host=None):
+def resumo_push(lic, urgente=False):
+    """Título e texto do aviso no aparelho para UMA oportunidade.
+
+    Como nos apps do governo: o título diz o que aconteceu e onde; o
+    texto traz o objeto e os dois números que decidem se vale abrir —
+    quando encerra e quanto vale.
+    """
+    onde = "/".join(p for p in (lic.municipio_nome, lic.uf) if p)
+    titulo = ("Prazo fechando" if urgente else "Nova oportunidade")
+    if onde:
+        titulo += f" · {sentenca(onde)}"
+    linhas = [resumir(sentenca((lic.objeto or "").strip()), 120)]
+    detalhes = []
+    encerra = quando(lic.data_encerramento_proposta)
+    if encerra:
+        detalhes.append(f"Encerra {encerra}")
+    valor = dinheiro(lic.valor_total_estimado)
+    if valor:
+        detalhes.append(valor)
+    if lic.modalidade_nome:
+        detalhes.append(sentenca(lic.modalidade_nome))
+    if detalhes:
+        linhas.append(" · ".join(detalhes))
+    return titulo, "\n".join(l for l in linhas if l)
+
+
+def _push_por_oportunidade(sessao_db, dono, perfil, lics, urgente, host):
+    """Um aviso por oportunidade (até LIMITE_PUSH) + um resumo do excedente.
+
+    True se algum aparelho recebeu algum aviso. A `tag` por edital faz o
+    "prazo fechando" substituir o "nova oportunidade" do mesmo edital em
+    vez de empilhar os dois na bandeja.
+    """
+    from .push import enviar_push
+    base = (host or config.APP_URL).rstrip("/")
+    chegou = False
+    for lic in lics[:LIMITE_PUSH]:
+        titulo, corpo = resumo_push(lic, urgente)
+        chegou |= enviar_push(sessao_db, dono, titulo, corpo,
+                              url=f"{base}/licitacoes/{lic.id}",
+                              tag=f"oportunidade-{lic.id}", urgente=urgente,
+                              acao="Ver oportunidade",
+                              assunto="prazos" if urgente else "oportunidades") > 0
+    sobra = len(lics) - LIMITE_PUSH
+    if sobra > 0:
+        plural = "s" if sobra != 1 else ""
+        chegou |= enviar_push(
+            sessao_db, dono, f"E mais {sobra} em {perfil.nome}",
+            f"{sobra} outra{plural} oportunidade{plural} nova{plural} "
+            "casaram com este perfil. Toque para ver a lista.",
+            url=f"{base}/licitacoes?perfil_id={perfil.id}",
+            tag=f"perfil-{perfil.id}", acao="Ver lista",
+            assunto="prazos" if urgente else "oportunidades") > 0
+    return chegou
+
+
+def _push_resumo(sessao_db, dono, perfil, quantidade, urgente, host):
+    """Um aviso só, com a contagem — para quem prefere resumo."""
+    from .push import enviar_push
+    plural = "s" if quantidade != 1 else ""
+    titulo = (("Prazo fechando" if urgente else "Novas oportunidades")
+              + f" · {perfil.nome}")
+    corpo = (f"{quantidade} oportunidade{plural} nova{plural}. "
+             "Toque para ver.")
+    return enviar_push(sessao_db, dono, titulo, corpo,
+                       url=f"{(host or config.APP_URL).rstrip('/')}"
+                           f"/licitacoes?perfil_id={perfil.id}",
+                       tag=f"perfil-{perfil.id}", urgente=urgente,
+                       acao="Ver lista",
+                       assunto="prazos" if urgente else "oportunidades") > 0
+
+
+def despachar_canais(sessao_db, perfil, texto, quantidade, urgente, host=None,
+                     itens=None):
     """Entrega pelos canais do DONO do perfil: Telegram, e-mail e push.
 
     Multiusuário: cada pessoa recebe pelos canais que configurou na tela
     Minha conta. Perfil sem dono (instalação antiga, antes da migração) cai
     nos canais globais do .env, como sempre foi.
+
+    `itens` são as licitações da mensagem: com elas o push sai UM POR
+    OPORTUNIDADE, abrindo direto na página dela. Sem elas (chamada antiga)
+    sai o aviso-resumo de sempre.
     """
     dono = getattr(perfil, "usuario", None)
     if dono is None:
@@ -440,14 +519,14 @@ def despachar_canais(sessao_db, perfil, texto, quantidade, urgente, host=None):
     if dono.receber_email and dono.email_alertas:
         ok_email = enviar_email(texto, destino=dono.email_alertas)
     if dono.receber_push:
-        from .push import enviar_push
-        titulo = ("⏰ Prazo fechando: " if urgente else "📡 ") + perfil.nome
-        corpo = (f"{quantidade} oportunidade"
-                 f"{'s' if quantidade != 1 else ''} nova"
-                 f"{'s' if quantidade != 1 else ''} — toque para abrir")
+        from .push import preferencias
         try:
-            ok_push = enviar_push(sessao_db, dono, titulo, corpo,
-                                  url=(host or config.APP_URL) + "/") > 0
+            if itens and preferencias(dono)["detalhado"]:
+                ok_push = _push_por_oportunidade(sessao_db, dono, perfil,
+                                                 list(itens), urgente, host)
+            else:
+                ok_push = _push_resumo(sessao_db, dono, perfil, quantidade,
+                                       urgente, host)
         except Exception:  # noqa: BLE001 — push nunca derruba o alerta
             log.exception("Falha no push do alerta '%s'", perfil.nome)
     return ok_tg, ok_email, ok_push
@@ -491,7 +570,8 @@ def enviar_alerta_perfil(sessao_db, perfil, host=None, agora=None,
     texto, incluidos = montar_mensagem_perfil(sessao_db, perfil, enviaveis,
                                               host, urgente=urgente)
     ok_telegram, ok_email, ok_push = despachar_canais(
-        sessao_db, perfil, texto, len(incluidos), urgente, host)
+        sessao_db, perfil, texto, len(incluidos), urgente, host,
+        itens=[m.licitacao for m in incluidos])
     if not (ok_telegram or ok_email or ok_push):
         sessao_db.commit()                 # ao menos grava os vencidos
         return False, 0

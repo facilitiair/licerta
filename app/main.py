@@ -53,42 +53,8 @@ templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 
-DIAS_CURTOS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
-
-
-def _filtro_quando(iso):
-    """Data ISO como gente lê (UI §6): 'hoje 08:00', 'amanhã', 'qui 04/09'."""
-    if not iso:
-        return ""
-    try:
-        dia, hora = iso[:10], iso[11:16]
-        alvo = datetime.strptime(dia, "%Y-%m-%d").date()
-        hoje_ = agora().date()
-        dif = (alvo - hoje_).days
-        if dif == 0:
-            rotulo = "hoje"
-        elif dif == 1:
-            rotulo = "amanhã"
-        elif 1 < dif <= 6:
-            rotulo = f"{DIAS_CURTOS[alvo.weekday()]} {alvo.strftime('%d/%m')}"
-        else:
-            rotulo = alvo.strftime("%d/%m") + ("" if alvo.year == hoje_.year
-                                               else alvo.strftime("/%Y"))
-        return f"{rotulo} {hora}".strip() if hora else rotulo
-    except (ValueError, TypeError):
-        return iso
-
-
-def _filtro_dinheiro(valor):
-    if not valor:
-        return ""           # ausência de valor = célula vazia (UI §6)
-    if valor >= 1_000_000:
-        return f"R$ {valor / 1_000_000:.1f} mi".replace(".", ",")
-    if valor >= 1_000:
-        return f"R$ {valor / 1_000:.0f} mil"
-    return f"R$ {valor:.0f}"
-
-
+from .texto import dinheiro as _filtro_dinheiro  # noqa: E402
+from .texto import quando as _filtro_quando  # noqa: E402
 from .texto import sentenca as _filtro_sentenca  # noqa: E402
 from .texto import resumir as _filtro_resumir  # noqa: E402
 
@@ -2792,6 +2758,8 @@ def conta(request: Request, bemvindo: int = 0, salvo: int = 0):
         aparelhos = len(usuario.assinaturas_push)
         return templates.TemplateResponse(request, "conta.html", {
             "usuario": usuario, "aparelhos_push": aparelhos,
+            "push_assuntos": push_mod.ASSUNTOS,
+            "push_prefs": push_mod.preferencias(usuario),
             "empresa": dados_empresa(s, usuario.id),
             "bemvindo": bemvindo, "salvo": salvo,
             "bot": _nome_do_bot(),
@@ -2813,10 +2781,28 @@ async def conta_salvar(request: Request):
         usuario.receber_telegram = form.get("receber_telegram") == "on"
         usuario.receber_email = form.get("receber_email") == "on"
         usuario.receber_push = form.get("receber_push") == "on"
+        # Como o aviso chega no aparelho
+        usuario.push_som = form.get("push_som") == "on"
+        usuario.push_detalhado = form.get("push_formato", "detalhado") != "resumo"
+        usuario.push_fixar_prazo = form.get("push_fixar_prazo") == "on"
+        usuario.push_noturno = form.get("push_noturno") == "on"
+        usuario.push_noturno_de = _hora_valida(form.get("push_noturno_de"), 22)
+        usuario.push_noturno_ate = _hora_valida(form.get("push_noturno_ate"), 7)
+        usuario.push_assuntos = ",".join(
+            chave for chave, _ in push_mod.ASSUNTOS
+            if form.get(f"assunto_{chave}") == "on")
         s.commit()
         return RedirectResponse("/conta?salvo=1", status_code=303)
     finally:
         s.close()
+
+
+def _hora_valida(valor, padrao):
+    try:
+        hora = int(valor)
+    except (TypeError, ValueError):
+        return padrao
+    return hora if 0 <= hora <= 23 else padrao
 
 
 @app.post("/conta/senha", response_class=HTMLResponse)
@@ -2973,8 +2959,10 @@ def conta_testar(request: Request, canal: str):
                                   "sair só pela rotina diária.")
         if canal == "push":
             entregues = push_mod.enviar_push(
-                s, usuario, "📡 Licerta",
-                "Teste: os avisos no aparelho estão funcionando ✅", url="/")
+                s, usuario, "Avisos ativados neste aparelho",
+                "É assim que você vai saber de uma oportunidade nova, de um "
+                "prazo fechando ou de uma certidão vencendo. Toque para abrir.",
+                url=config.APP_URL + "/", tag="teste")
             return _resposta_html(entregues > 0,
                                   f"Enviado para {entregues} aparelho(s).",
                                   "Nenhum aparelho ativado ainda — toque em "
@@ -3011,6 +2999,12 @@ async def push_assinar(request: Request):
         return Response(status_code=400)
     s = Sessao()
     try:
+        # O aparelho trocou de endereço sozinho (pushsubscriptionchange):
+        # o antigo morre aqui, senão fica na lista como aparelho fantasma.
+        anterior = dados.get("anterior")
+        if isinstance(anterior, str) and anterior and anterior != endpoint:
+            (s.query(PushAssinatura).filter_by(endpoint=anterior)
+             .delete())
         existente = (s.query(PushAssinatura)
                      .filter_by(endpoint=endpoint).first())
         if existente:

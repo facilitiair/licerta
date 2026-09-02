@@ -63,7 +63,7 @@ def _fuso_valido(valor, padrao):
 
 
 # Versão do produto — bump manual a cada leva de mudanças relevante.
-VERSAO = "0.30.3"
+VERSAO = "0.31.0"
 
 
 class Config:
