@@ -19,6 +19,43 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+    // Aparelho já autorizado: confere a cada visita se a assinatura ainda
+    // bate com a chave do servidor e refaz em silêncio quando não bate
+    // (chave trocada = 403 em todo aviso, sem ninguém perceber).
+    (async () => {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)
+            || typeof Notification === 'undefined'
+            || Notification.permission !== 'granted') return;
+        const reg = await navigator.serviceWorker.ready;
+        const {chave} = await (await fetch('/api/push/chave')).json();
+        const paraB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const paraBytes = (b64) => {
+          const s = (b64 + '='.repeat((4 - b64.length % 4) % 4))
+            .replace(/-/g, '+').replace(/_/g, '/');
+          return Uint8Array.from([...atob(s)].map(c => c.charCodeAt(0)));
+        };
+        let atual = await reg.pushManager.getSubscription();
+        let anterior = null;
+        const chaveAtual = atual && atual.options && atual.options.applicationServerKey
+          ? paraB64(atual.options.applicationServerKey) : null;
+        if (atual && chaveAtual !== chave) {
+          anterior = atual.endpoint;
+          await atual.unsubscribe();
+          atual = null;
+        }
+        if (!atual) {
+          atual = await reg.pushManager.subscribe({
+            userVisibleOnly: true, applicationServerKey: paraBytes(chave),
+          });
+        }
+        await fetch('/api/push/assinar', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(Object.assign(atual.toJSON(), {anterior})),
+        });
+      } catch (e) { /* manutenção silenciosa */ }
+    })();
     window.__instalarLicerta = null;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();

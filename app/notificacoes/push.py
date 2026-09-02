@@ -44,15 +44,33 @@ _vapid = None
 
 
 def _instancia():
+    """A chave VAPID desta instalação, estável entre reinícios.
+
+    Arquivo ausente: nasce e é gravado. Arquivo corrompido (aconteceu em
+    produção quando o disco lotou e o PEM ficou truncado): é REGRAVADO
+    com chave nova — antes o app gerava uma chave só na memória a cada
+    reinício, e todo aparelho cadastrado passava a receber 403 do serviço
+    de push, para sempre. Aparelhos antigos reassinam sozinhos ao abrir o
+    site (base.html compara a chave e refaz a assinatura).
+    """
     global _vapid
-    if _vapid is None:
+    if _vapid is not None:
+        return _vapid
+    if os.path.exists(CAMINHO_CHAVE):
         try:
-            _vapid = Vapid02.from_file(CAMINHO_CHAVE)  # cria e salva se faltar
-        except Exception:  # noqa: BLE001 — sem escrita: chave só em memória
-            log.warning("Sem escrita em %s; chave push vale até reiniciar "
-                        "(os aparelhos precisarão ativar de novo)", CAMINHO_CHAVE)
-            _vapid = Vapid02()
-            _vapid.generate_keys()
+            _vapid = Vapid02.from_file(CAMINHO_CHAVE)
+            return _vapid
+        except Exception as e:  # noqa: BLE001 — PEM truncado/corrompido
+            log.warning("Chave push em %s ilegível (%s); gerando outra — os "
+                        "aparelhos reassinam ao abrir o site", CAMINHO_CHAVE, e)
+    _vapid = Vapid02()
+    _vapid.generate_keys()
+    try:
+        os.makedirs(os.path.dirname(CAMINHO_CHAVE) or ".", exist_ok=True)
+        _vapid.save_key(CAMINHO_CHAVE)
+    except Exception as e:  # noqa: BLE001 — sem escrita: vale até reiniciar
+        log.warning("Sem escrita em %s (%s); chave push vale até reiniciar",
+                    CAMINHO_CHAVE, e)
     return _vapid
 
 
@@ -182,6 +200,13 @@ def enviar_push(sessao_db, usuario, titulo, corpo, url="/", tag=None,
             codigo = getattr(getattr(e, "response", None), "status_code", None)
             if codigo in (404, 410):
                 log.info("Aparelho saiu (%s); removendo a assinatura", codigo)
+                sessao_db.delete(a)
+            elif codigo in (401, 403):
+                # Assinatura feita com outra chave VAPID: nunca mais vai
+                # funcionar com esta. Sai da lista; o aparelho refaz a
+                # assinatura sozinho na próxima visita ao site.
+                log.warning("Aparelho com chave antiga (%s); removendo a "
+                            "assinatura para ser refeita", codigo)
                 sessao_db.delete(a)
             else:
                 log.warning("Push falhou (%s): %s", codigo, e)

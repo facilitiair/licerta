@@ -311,19 +311,5 @@
   }
   document.getElementById('btnAtivarPush')
           .addEventListener('click', ativarPush);
-  // Aparelho já autorizado: renova a assinatura em silêncio a cada visita,
-  // para o endereço não envelhecer e o aviso parar de chegar sem ninguém saber.
-  (async () => {
-    try {
-      if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
-      const reg = await navigator.serviceWorker.ready;
-      const atual = await reg.pushManager.getSubscription();
-      if (!atual) return;
-      await fetch('/api/push/assinar', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(atual.toJSON()),
-      });
-    } catch (e) { /* silencioso: é só manutenção */ }
-  })();
 </script>
 {% endblock %}

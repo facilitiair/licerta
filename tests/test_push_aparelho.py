@@ -383,3 +383,64 @@ def test_assinatura_vapid_e_aceita_pela_pywebpush(monkeypatch, tmp_path):
     assert push._claims("https://x.y/z")["sub"] == f"mailto:{push.CONTATO_PADRAO}"
     monkeypatch.setattr(config, "EMAIL_DESTINO", "dono@empresa.com.br")
     assert push._claims("https://x.y/z")["sub"] == "mailto:dono@empresa.com.br"
+
+
+def test_chave_vapid_corrompida_e_regravada_e_fica_estavel(monkeypatch, tmp_path):
+    """Produção: PEM truncado pelo disco cheio → chave nova a cada reinício
+    → 403 em todo aparelho. Agora o arquivo ruim é substituído e a chave
+    seguinte lida do disco é a mesma."""
+    caminho = tmp_path / "vapid_privada.pem"
+    caminho.write_text("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMG\n",
+                       encoding="utf-8")                      # truncado
+    monkeypatch.setattr(push, "CAMINHO_CHAVE", str(caminho))
+    push._vapid = None
+    publica = push.chave_publica()
+    assert len(publica) > 60
+    push._vapid = None                                        # "reinício"
+    assert push.chave_publica() == publica
+    assert "BEGIN PRIVATE KEY" in caminho.read_text(encoding="utf-8")
+    assert len(caminho.read_text(encoding="utf-8")) > 100
+
+
+def test_aparelho_com_chave_antiga_sai_da_lista(monkeypatch, tmp_path):
+    from pywebpush import WebPushException
+    monkeypatch.setattr(push, "CAMINHO_CHAVE", str(tmp_path / "v.pem"))
+    push._vapid = None
+    apagados = []
+
+    class Resposta:
+        status_code = 403
+
+    class Assinatura:
+        endpoint = "https://fcm.googleapis.com/fcm/send/velho"
+        p256dh = "p"
+        auth = "a"
+
+    class Consulta:
+        def filter_by(self, **k):
+            return self
+
+        def all(self):
+            return [Assinatura()]
+
+    class Sessao:
+        def query(self, *a):
+            return Consulta()
+
+        def delete(self, obj):
+            apagados.append(obj.endpoint)
+
+        def commit(self):
+            pass
+
+    def recusa(**kw):
+        raise WebPushException("Push failed: 403 Forbidden", response=Resposta())
+    monkeypatch.setattr(push, "webpush", recusa)
+    assert push.enviar_push(Sessao(), _Dono(), "t", "c") == 0
+    assert apagados == ["https://fcm.googleapis.com/fcm/send/velho"]
+
+
+def test_toda_pagina_refaz_a_assinatura_quando_a_chave_muda(admin):
+    html = admin.get("/").text
+    assert "applicationServerKey" in html and "anterior" in html
+    assert "/api/push/chave" in html
